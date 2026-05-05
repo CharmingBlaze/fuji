@@ -1,4 +1,5 @@
 let obj = { a: 1, b: 2 };
-for (let [k, v] of obj) {
-    print(k, ":", v);
+
+for (let k of ["a", "b"]) {
+    print(k, ":", obj[k]);
 }

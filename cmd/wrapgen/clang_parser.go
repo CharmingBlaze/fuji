@@ -80,7 +80,14 @@ func (cp *ClangParser) parseHeaderWithClang(headerPath string) (*API, error) {
 	astFile := filepath.Join(cp.tempDir, "ast.txt")
 
 	// Run clang to generate AST dump; -isystem picks up portable headers next to the toolchain.
-	args := fujihome.ClangWrappedArgs("-Xclang", "-ast-dump", "-fsyntax-only", headerPath)
+	var inc []string
+	for _, d := range cp.config.IncludePaths {
+		d = strings.TrimSpace(d)
+		if d != "" {
+			inc = append(inc, "-I", d)
+		}
+	}
+	args := fujihome.ClangWrappedArgs(append(inc, "-Xclang", "-ast-dump", "-fsyntax-only", headerPath)...)
 	cmd := exec.Command(fujihome.Clang(), args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {

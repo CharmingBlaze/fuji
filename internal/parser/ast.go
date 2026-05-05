@@ -317,6 +317,15 @@ type TemplateExpr struct {
 func (e *TemplateExpr) exprNode()      {}
 func (e *TemplateExpr) String() string { return "template" }
 
+// SpreadExpr appears inside array literals (`[...xs]`).
+type SpreadExpr struct {
+	Token lexer.Token
+	Expr  Expr
+}
+
+func (e *SpreadExpr) exprNode()      {}
+func (e *SpreadExpr) String() string { return "…" }
+
 type TupleExpr struct {
 	Token    lexer.Token
 	Elements []Expr
@@ -398,9 +407,10 @@ func (e *FuncExpr) exprNode()      {}
 func (e *FuncExpr) String() string { return "func-expr" }
 
 type IndexExpr struct {
-	Token  lexer.Token
-	Object Expr
-	Index  Expr
+	Token    lexer.Token
+	Object   Expr
+	Index    Expr
+	Optional bool // true for `?.` member or `?.[` access
 }
 
 func (e *IndexExpr) exprNode()      {}
@@ -448,6 +458,16 @@ func (s *ContinueStmt) declNode()      {}
 func (s *ContinueStmt) stmtNode()      {}
 func (s *ContinueStmt) String() string { return "continue;" }
 
+// DeleteStmt deletes an own property from a table object (`delete obj["k"]`).
+type DeleteStmt struct {
+	Token  lexer.Token
+	Target Expr
+}
+
+func (s *DeleteStmt) declNode()      {}
+func (s *DeleteStmt) stmtNode()      {}
+func (s *DeleteStmt) String() string { return "delete …;" }
+
 type SwitchStmt struct {
 	Token   lexer.Token
 	Subject Expr
@@ -475,8 +495,10 @@ func (s *DoWhileStmt) stmtNode()      {}
 func (s *DoWhileStmt) String() string { return "do-while" }
 
 type ForOfStmt struct {
-	Token    lexer.Token
-	VarName  lexer.Token
+	Token   lexer.Token
+	VarName lexer.Token // single-var `for-of` value binding, or key in `for (let [k, v] of …)`
+	// ValueVar non-nil selects destructuring: bind VarName=key, *ValueVar=value per insertion slot.
+	ValueVar *lexer.Token
 	Iterable Expr
 	Body     Stmt
 }

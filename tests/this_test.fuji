@@ -1,12 +1,10 @@
-let obj = {
-    x: 10,
-    getX: func() {
-        return this.x;
-    }
-};
+let obj = { x: 10, getx: func() {
+    return this.x;
+} };
 
-print("obj.getX():", obj.getX());
-if (obj.getX() == 10) {
+print("obj.getX():", obj.getx());
+
+if (obj.getx() == 10) {
     print("OK");
 } else {
     print("FAILED");

@@ -1,70 +1,55 @@
-// 3D demo using the hand-written Raylib shim (wrapper.c + raylib.fuji), not built-in gfx names.
 #include "../wrappers/raylib_shim/raylib.fuji"
 
 func main() {
-    let screenWidth = 800;
-    let screenHeight = 600;
-
-    let BLACK = 255;
-    let WHITE = 4294967295;
-    let LIGHTGRAY = 2426965247;
-    let RED = 4278190335;
-
-    let KEY_W = 87;
-    let KEY_S = 83;
-    let KEY_A = 65;
-    let KEY_D = 68;
-
-    let cameraPosX = 10.0;
-    let cameraPosY = 10.0;
-    let cameraPosZ = 10.0;
-    let cameraTargetX = 0.0;
-    let cameraTargetY = 0.0;
-    let cameraTargetZ = 0.0;
-    let cameraUpX = 0.0;
-    let cameraUpY = 1.0;
-    let cameraUpZ = 0.0;
-    let cameraFovy = 45.0;
-
-    InitWindow(screenWidth, screenHeight, "Fuji + Raylib shim");
-    SetTargetFPS(60);
-
-    while (!WindowShouldClose()) {
-        let dt = deltaTime();
-
-        if (IsKeyDown(KEY_W)) {
-            cameraPosZ = cameraPosZ - 10.0 * dt;
+    let screenwidth = 800;
+    let screenheight = 600;
+    let black = 255;
+    let white = 4294967295;
+    let lightgray = 2426965247;
+    let red = 4278190335;
+    let key_w = 87;
+    let key_s = 83;
+    let key_a = 65;
+    let key_d = 68;
+    let cameraposx = 10.0;
+    let cameraposy = 10.0;
+    let cameraposz = 10.0;
+    let cameratargetx = 0.0;
+    let cameratargety = 0.0;
+    let cameratargetz = 0.0;
+    let cameraupx = 0.0;
+    let cameraupy = 1.0;
+    let cameraupz = 0.0;
+    let camerafovy = 45.0;
+    initwindow(screenwidth, screenheight, "Fuji + Raylib shim");
+    settargetfps(60);
+    while (!windowshouldclose()) {
+        let dt = deltatime();
+        if (iskeydown(key_w)) {
+            cameraposz = cameraposz - 10.0 * dt;
         }
-        if (IsKeyDown(KEY_S)) {
-            cameraPosZ = cameraPosZ + 10.0 * dt;
+        if (iskeydown(key_s)) {
+            cameraposz = cameraposz + 10.0 * dt;
         }
-        if (IsKeyDown(KEY_A)) {
-            cameraPosX = cameraPosX - 10.0 * dt;
+        if (iskeydown(key_a)) {
+            cameraposx = cameraposx - 10.0 * dt;
         }
-        if (IsKeyDown(KEY_D)) {
-            cameraPosX = cameraPosX + 10.0 * dt;
+        if (iskeydown(key_d)) {
+            cameraposx = cameraposx + 10.0 * dt;
         }
-
-        cameraTargetX = 0.0;
-        cameraTargetY = 0.0;
-        cameraTargetZ = 0.0;
-
-        BeginDrawing();
-        ClearBackground(BLACK);
-
-        BeginMode3D(cameraPosX, cameraPosY, cameraPosZ, cameraTargetX, cameraTargetY, cameraTargetZ, cameraUpX, cameraUpY, cameraUpZ, cameraFovy);
-
-        DrawGrid(20, 1.0);
-        DrawCube(0.0, 0.0, 0.0, 2.0, 2.0, 2.0, RED);
-        DrawCubeWires(0.0, 0.0, 0.0, 2.0, 2.0, 2.0, WHITE);
-
-        EndMode3D();
-
-        DrawText("Fuji + Raylib (extern shim)", 10, 10, 20, WHITE);
-        DrawText("WASD move camera", 10, 40, 16, LIGHTGRAY);
-
-        EndDrawing();
+        cameratargetx = 0.0;
+        cameratargety = 0.0;
+        cameratargetz = 0.0;
+        begindrawing();
+        clearbackground(black);
+        beginmode3d(cameraposx, cameraposy, cameraposz, cameratargetx, cameratargety, cameratargetz, cameraupx, cameraupy, cameraupz, camerafovy);
+        drawgrid(20, 1.0);
+        drawcube(0.0, 0.0, 0.0, 2.0, 2.0, 2.0, red);
+        drawcubewires(0.0, 0.0, 0.0, 2.0, 2.0, 2.0, white);
+        endmode3d();
+        drawtext("Fuji + Raylib (extern shim)", 10, 10, 20, white);
+        drawtext("WASD move camera", 10, 40, 16, lightgray);
+        enddrawing();
     }
-
-    CloseWindow();
+    closewindow();
 }

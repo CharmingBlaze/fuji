@@ -12,6 +12,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <errno.h>
+#include <ctype.h>
 
 // Platform-specific sleep and monotonic clock
 #ifdef _WIN32
@@ -345,6 +346,30 @@ Value fuji_object_get(Value obj, Value key) {
     return NIL_VAL;
 }
 
+static bool table_remove_pair(ObjTable* table, Value key) {
+    for (int i = 0; i < table->count; i++) {
+        if (values_equal(table->keys[i], key)) {
+            for (int j = i; j < table->count - 1; j++) {
+                table->keys[j] = table->keys[j + 1];
+                table->values[j] = table->values[j + 1];
+            }
+            table->count--;
+            return true;
+        }
+    }
+    return false;
+}
+
+/** Remove own property `key` from table object; returns boxed boolean. */
+Value fuji_object_remove(Value obj, Value key) {
+    if (!IS_OBJ(obj)) return NIL_VAL;
+    Obj* o = AS_OBJ(obj);
+    if (o->type != OBJ_TABLE) return NIL_VAL;
+    ObjTable* table = (ObjTable*)o;
+    bool ok = table_remove_pair(table, key);
+    return BOOL_VAL(ok);
+}
+
 Value fuji_object_set(Value obj, Value key, Value value) {
     if (!IS_OBJ(obj)) {
         return NIL_VAL;
@@ -353,9 +378,21 @@ Value fuji_object_set(Value obj, Value key, Value value) {
     if (o->type != OBJ_TABLE) return NIL_VAL;
     
     ObjTable* table = (ObjTable*)o;
+
+    // Update existing key in-place.
+    for (int i = 0; i < table->count; i++) {
+        if (values_equal(table->keys[i], key)) {
+            gc_write_barrier(o, key);
+            gc_write_barrier(o, value);
+            table->keys[i] = key;
+            table->values[i] = value;
+            return value;
+        }
+    }
     
     // Add new key-value pair if space available
     if (table->count < table->capacity) {
+        gc_write_barrier(o, key);
         gc_write_barrier(o, value);
         table->keys[table->count] = key;
         table->values[table->count] = value;
@@ -491,6 +528,7 @@ void fuji_array_push(Value arr, Value value) {
     
     ObjArray* array = (ObjArray*)obj;
     if (array->count < array->capacity) {
+        gc_write_barrier(obj, value);
         array->elements[array->count] = value;
         array->count++;
     }
@@ -516,6 +554,55 @@ Value fuji_array_length(Value arr) {
     
     ObjArray* array = (ObjArray*)obj;
     return NUMBER_VAL(array->count);
+}
+
+/** Slot iteration length for native `for-of` / `for-in` (arrays + tables). */
+Value fuji_forof_length(Value v) {
+    if (!IS_OBJ(v)) return NUMBER_VAL(0);
+    Obj* o = AS_OBJ(v);
+    if (o->type == OBJ_ARRAY) {
+        return NUMBER_VAL((double)((ObjArray*)o)->count);
+    }
+    if (o->type == OBJ_TABLE) {
+        return NUMBER_VAL((double)((ObjTable*)o)->count);
+    }
+    return NUMBER_VAL(0);
+}
+
+/** Key at linear slot `idx` (number): array → numeric index; table → insertion-order key. */
+Value fuji_forof_key_at(Value v, Value idx_val) {
+    if (!IS_OBJ(v) || !IS_NUMBER(idx_val)) return NIL_VAL;
+    int i = (int)AS_NUMBER(idx_val);
+    Obj* o = AS_OBJ(v);
+    if (o->type == OBJ_ARRAY) {
+        ObjArray* a = (ObjArray*)o;
+        if (i < 0 || i >= a->count) return NIL_VAL;
+        return NUMBER_VAL((double)i);
+    }
+    if (o->type == OBJ_TABLE) {
+        ObjTable* t = (ObjTable*)o;
+        if (i < 0 || i >= t->count) return NIL_VAL;
+        return t->keys[i];
+    }
+    return NIL_VAL;
+}
+
+/** Value at linear slot `idx` (insertion order for tables). */
+Value fuji_forof_value_at(Value v, Value idx_val) {
+    if (!IS_OBJ(v) || !IS_NUMBER(idx_val)) return NIL_VAL;
+    int i = (int)AS_NUMBER(idx_val);
+    Obj* o = AS_OBJ(v);
+    if (o->type == OBJ_ARRAY) {
+        ObjArray* a = (ObjArray*)o;
+        if (i < 0 || i >= a->count) return NIL_VAL;
+        return a->elements[i];
+    }
+    if (o->type == OBJ_TABLE) {
+        ObjTable* t = (ObjTable*)o;
+        if (i < 0 || i >= t->count) return NIL_VAL;
+        return t->values[i];
+    }
+    return NIL_VAL;
 }
 
 // Standard library functions
@@ -564,6 +651,12 @@ Value fuji_len(Value value) {
                 ObjArray* arr = (ObjArray*)obj;
                 return NUMBER_VAL(arr->count);
             }
+            case OBJ_TABLE: {
+                ObjTable* table = (ObjTable*)obj;
+                return NUMBER_VAL((double)table->count);
+            }
+            default:
+                break;
         }
     }
     return NUMBER_VAL(0);
@@ -1083,101 +1176,134 @@ Value fuji_range(int arg_count, Value* args) {
 }
 
 // Array methods for game development
+//
+// Higher-order helpers taking Fuji callbacks are lowered by the LLVM backend on `.map()` /
+// `.filter()` etc.; argv variants remain unavailable from native Tier-1 glue.
+
 Value fuji_array_map(int arg_count, Value* args) {
+    (void)args;
     if (arg_count != 2) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return empty array (proper implementation would map function over array)
-    ObjArray* arr = allocate_array(0);
-    return OBJ_VAL((Obj*)arr);
+    return NIL_VAL;
 }
 
 Value fuji_array_filter(int arg_count, Value* args) {
+    (void)args;
     if (arg_count != 2) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return empty array (proper implementation would filter array)
-    ObjArray* arr = allocate_array(0);
-    return OBJ_VAL((Obj*)arr);
+    return NIL_VAL;
 }
 
 Value fuji_array_forEach(int arg_count, Value* args) {
+    (void)args;
     if (arg_count != 2) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return nil (proper implementation would iterate over array)
     return NIL_VAL;
 }
 
 Value fuji_array_find(int arg_count, Value* args) {
+    (void)args;
     if (arg_count != 2) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return nil (proper implementation would find element)
     return NIL_VAL;
 }
 
 Value fuji_array_findIndex(int arg_count, Value* args) {
+    (void)args;
     if (arg_count != 2) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return -1 (proper implementation would find index)
     return NUMBER_VAL(-1);
 }
 
 Value fuji_array_some(int arg_count, Value* args) {
+    (void)args;
     if (arg_count != 2) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return false (proper implementation would check if some elements match)
     return BOOL_VAL(false);
 }
 
 Value fuji_array_every(int arg_count, Value* args) {
+    (void)args;
     if (arg_count != 2) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return false (proper implementation would check if all elements match)
     return BOOL_VAL(false);
 }
 
 Value fuji_array_reduce(int arg_count, Value* args) {
+    (void)args;
     if (arg_count != 2) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return nil (proper implementation would reduce array)
     return NIL_VAL;
+}
+
+static int cmp_sort_values(Value a, Value b) {
+    if (IS_NUMBER(a) && IS_NUMBER(b)) {
+        double da = AS_NUMBER(a);
+        double db = AS_NUMBER(b);
+        return (da > db) - (da < db);
+    }
+    Value sa = fuji_string(a);
+    Value sb = fuji_string(b);
+    if (!IS_OBJ(sa) || AS_OBJ(sa)->type != OBJ_STRING) {
+        sa = fuji_copy_string("", 0);
+    }
+    if (!IS_OBJ(sb) || AS_OBJ(sb)->type != OBJ_STRING) {
+        sb = fuji_copy_string("", 0);
+    }
+    ObjString* A = (ObjString*)AS_OBJ(sa);
+    ObjString* B = (ObjString*)AS_OBJ(sb);
+    int minlen = A->length < B->length ? A->length : B->length;
+    int c = memcmp(A->chars, B->chars, (size_t)minlen);
+    if (c != 0) {
+        return c > 0 ? 1 : -1;
+    }
+    return (A->length > B->length) - (A->length < B->length);
 }
 
 Value fuji_array_sort(int arg_count, Value* args) {
     if (arg_count != 1) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return the array as-is (proper implementation would sort array)
+    ObjArray* arr = (ObjArray*)AS_OBJ(args[0]);
+    int n = arr->count;
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - 1 - i; j++) {
+            if (cmp_sort_values(arr->elements[j], arr->elements[j + 1]) > 0) {
+                Value tmp = arr->elements[j];
+                arr->elements[j] = arr->elements[j + 1];
+                arr->elements[j + 1] = tmp;
+            }
+        }
+    }
     return args[0];
 }
 
 Value fuji_array_reverse(int arg_count, Value* args) {
     if (arg_count != 1) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return the array as-is (proper implementation would reverse array)
-    return args[0];
+    ObjArray* src = (ObjArray*)AS_OBJ(args[0]);
+    ObjArray* out = allocate_array(src->count < 1 ? 1 : src->count);
+    Value ov = OBJ_VAL((Obj*)out);
+    for (int i = src->count - 1; i >= 0; i--) {
+        fuji_array_push(ov, src->elements[i]);
+    }
+    return ov;
 }
 
 Value fuji_array_indexOf(int arg_count, Value* args) {
     if (arg_count != 2) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return -1 (proper implementation would find index of element)
+    ObjArray* arr = (ObjArray*)AS_OBJ(args[0]);
+    Value needle = args[1];
+    for (int i = 0; i < arr->count; i++) {
+        if (values_equal(arr->elements[i], needle)) {
+            return NUMBER_VAL((double)i);
+        }
+    }
     return NUMBER_VAL(-1);
 }
 
 Value fuji_array_includes(int arg_count, Value* args) {
     if (arg_count != 2) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
-    
-    // For now, return false (proper implementation would check if array includes element)
+    ObjArray* arr = (ObjArray*)AS_OBJ(args[0]);
+    Value needle = args[1];
+    for (int i = 0; i < arr->count; i++) {
+        if (values_equal(arr->elements[i], needle)) {
+            return BOOL_VAL(true);
+        }
+    }
     return BOOL_VAL(false);
 }
 
@@ -1227,90 +1353,229 @@ Value fuji_array_concat(int arg_count, Value* args) {
     return ov;
 }
 
+Value fuji_array_join(int arg_count, Value* args) {
+    if (arg_count != 2) return NIL_VAL;
+    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_ARRAY) return NIL_VAL;
+    Value sepv = fuji_string(args[1]);
+    if (!IS_OBJ(sepv) || AS_OBJ(sepv)->type != OBJ_STRING) return NIL_VAL;
+    ObjArray* arr = (ObjArray*)AS_OBJ(args[0]);
+    ObjString* sep = (ObjString*)AS_OBJ(sepv);
+    Value acc = fuji_copy_string("", 0);
+    for (int i = 0; i < arr->count; i++) {
+        if (i > 0) {
+            acc = fuji_string_concat(acc, sepv);
+        }
+        Value part = fuji_string(arr->elements[i]);
+        acc = fuji_string_concat(acc, part);
+    }
+    return acc;
+}
+
+static void push_substring(Value arrv, const char* start, int len) {
+    Value chunk = fuji_copy_string(start, len);
+    fuji_array_push(arrv, chunk);
+}
+
 // String methods for game development
 Value fuji_string_split(int arg_count, Value* args) {
     if (arg_count != 2) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
     if (!IS_OBJ(args[1]) || AS_OBJ(args[1])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return empty array (proper implementation would split string)
-    ObjArray* arr = allocate_array(0);
-    return OBJ_VAL((Obj*)arr);
+
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    ObjString* delim = (ObjString*)AS_OBJ(args[1]);
+
+    if (delim->length == 0) {
+        Value ov = OBJ_VAL((Obj*)allocate_array(s->length < 1 ? 1 : s->length));
+        for (int i = 0; i < s->length; i++) {
+            push_substring(ov, &s->chars[i], 1);
+        }
+        return ov;
+    }
+
+    Value ov = OBJ_VAL((Obj*)allocate_array(8));
+    int pos = 0;
+    const char* hay = s->chars;
+    int sl = s->length;
+    int dl = delim->length;
+
+    while (pos <= sl) {
+        int found = -1;
+        for (int i = pos; i <= sl - dl; i++) {
+            if (memcmp(hay + i, delim->chars, (size_t)dl) == 0) {
+                found = i;
+                break;
+            }
+        }
+        if (found < 0) {
+            push_substring(ov, hay + pos, sl - pos);
+            break;
+        }
+        push_substring(ov, hay + pos, found - pos);
+        pos = found + dl;
+    }
+    return ov;
 }
 
 Value fuji_string_trim(int arg_count, Value* args) {
     if (arg_count != 1) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return the string as-is (proper implementation would trim)
-    return args[0];
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    int lo = 0;
+    int hi = s->length;
+    while (lo < hi && isspace((unsigned char)s->chars[lo])) {
+        lo++;
+    }
+    while (hi > lo && isspace((unsigned char)s->chars[hi - 1])) {
+        hi--;
+    }
+    return fuji_copy_string(s->chars + lo, hi - lo);
 }
 
 Value fuji_string_upper(int arg_count, Value* args) {
     if (arg_count != 1) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return the string as-is (proper implementation would convert to uppercase)
-    return args[0];
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    ObjString* out = allocate_string(s->length);
+    for (int i = 0; i < s->length; i++) {
+        unsigned char c = (unsigned char)s->chars[i];
+        out->chars[i] = (char)toupper((int)c);
+    }
+    return OBJ_VAL((Obj*)out);
 }
 
 Value fuji_string_lower(int arg_count, Value* args) {
     if (arg_count != 1) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return the string as-is (proper implementation would convert to lowercase)
-    return args[0];
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    ObjString* out = allocate_string(s->length);
+    for (int i = 0; i < s->length; i++) {
+        unsigned char c = (unsigned char)s->chars[i];
+        out->chars[i] = (char)tolower((int)c);
+    }
+    return OBJ_VAL((Obj*)out);
 }
 
 Value fuji_string_startsWith(int arg_count, Value* args) {
     if (arg_count != 2) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
     if (!IS_OBJ(args[1]) || AS_OBJ(args[1])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return false (proper implementation would check if string starts with prefix)
-    return BOOL_VAL(false);
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    ObjString* pre = (ObjString*)AS_OBJ(args[1]);
+    if (pre->length > s->length) return BOOL_VAL(false);
+    return BOOL_VAL(memcmp(s->chars, pre->chars, (size_t)pre->length) == 0);
 }
 
 Value fuji_string_endsWith(int arg_count, Value* args) {
     if (arg_count != 2) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
     if (!IS_OBJ(args[1]) || AS_OBJ(args[1])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return false (proper implementation would check if string ends with suffix)
-    return BOOL_VAL(false);
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    ObjString* suf = (ObjString*)AS_OBJ(args[1]);
+    if (suf->length > s->length) return BOOL_VAL(false);
+    int off = s->length - suf->length;
+    return BOOL_VAL(memcmp(s->chars + off, suf->chars, (size_t)suf->length) == 0);
 }
 
 Value fuji_string_indexOf(int arg_count, Value* args) {
     if (arg_count != 2) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
     if (!IS_OBJ(args[1]) || AS_OBJ(args[1])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return -1 (proper implementation would find index of substring)
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    ObjString* needle = (ObjString*)AS_OBJ(args[1]);
+    if (needle->length == 0) return NUMBER_VAL(0);
+    if (needle->length > s->length) return NUMBER_VAL(-1);
+    for (int i = 0; i <= s->length - needle->length; i++) {
+        if (memcmp(s->chars + i, needle->chars, (size_t)needle->length) == 0) {
+            return NUMBER_VAL((double)i);
+        }
+    }
     return NUMBER_VAL(-1);
 }
 
 Value fuji_string_slice(int arg_count, Value* args) {
     if (arg_count != 3) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return the string as-is (proper implementation would slice string)
-    return args[0];
+    if (!IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) return NIL_VAL;
+
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    int len = s->length;
+    int start = (int)AS_NUMBER(args[1]);
+    int end = (int)AS_NUMBER(args[2]);
+
+    if (start < 0) start = len + start;
+    if (end < 0) end = len + end;
+    if (start < 0) start = 0;
+    if (end > len) end = len;
+    if (end < start) end = start;
+
+    int span = end - start;
+    return fuji_copy_string(s->chars + start, span);
 }
 
 Value fuji_string_replace(int arg_count, Value* args) {
     if (arg_count != 3) return NIL_VAL;
     if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return the string as-is (proper implementation would replace substring)
-    return args[0];
+    if (!IS_OBJ(args[1]) || AS_OBJ(args[1])->type != OBJ_STRING) return NIL_VAL;
+    if (!IS_OBJ(args[2]) || AS_OBJ(args[2])->type != OBJ_STRING) return NIL_VAL;
+
+    ObjString* s = (ObjString*)AS_OBJ(args[0]);
+    ObjString* from = (ObjString*)AS_OBJ(args[1]);
+    ObjString* to = (ObjString*)AS_OBJ(args[2]);
+
+    if (from->length == 0) return args[0];
+
+    int idx = -1;
+    for (int i = 0; i <= s->length - from->length; i++) {
+        if (memcmp(s->chars + i, from->chars, (size_t)from->length) == 0) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0) return args[0];
+
+    int newLen = s->length - from->length + to->length;
+    ObjString* out = allocate_string(newLen);
+    memcpy(out->chars, s->chars, (size_t)idx);
+    memcpy(out->chars + idx, to->chars, (size_t)to->length);
+    memcpy(out->chars + idx + to->length, s->chars + idx + from->length,
+           (size_t)(s->length - idx - from->length));
+    return OBJ_VAL((Obj*)out);
 }
 
 Value fuji_string_replaceAll(int arg_count, Value* args) {
     if (arg_count != 3) return NIL_VAL;
-    if (!IS_OBJ(args[0]) || AS_OBJ(args[0])->type != OBJ_STRING) return NIL_VAL;
-    
-    // For now, return the string as-is (proper implementation would replace all occurrences)
-    return args[0];
+    Value cur = args[0];
+    if (!IS_OBJ(cur) || AS_OBJ(cur)->type != OBJ_STRING) return NIL_VAL;
+    if (!IS_OBJ(args[1]) || AS_OBJ(args[1])->type != OBJ_STRING) return NIL_VAL;
+    if (!IS_OBJ(args[2]) || AS_OBJ(args[2])->type != OBJ_STRING) return NIL_VAL;
+
+    ObjString* from = (ObjString*)AS_OBJ(args[1]);
+    if (from->length == 0) return cur;
+
+    while (true) {
+        Value args3[3] = { cur, args[1], args[2] };
+        Value next = fuji_string_replace(3, args3);
+        if (values_equal(next, cur)) {
+            break;
+        }
+        cur = next;
+    }
+    return cur;
+}
+
+/** Literal substring match after string coercion (`matches(haystack, pattern)`). */
+Value fuji_matches(int arg_count, Value* args) {
+    if (arg_count != 2) return NIL_VAL;
+    Value a = fuji_string(args[0]);
+    Value b = fuji_string(args[1]);
+    if (!IS_OBJ(a) || AS_OBJ(a)->type != OBJ_STRING) return NIL_VAL;
+    if (!IS_OBJ(b) || AS_OBJ(b)->type != OBJ_STRING) return NIL_VAL;
+    ObjString* hay = (ObjString*)AS_OBJ(a);
+    ObjString* needle = (ObjString*)AS_OBJ(b);
+    if (needle->length == 0) return TRUE_VAL;
+    char* hit = strstr(hay->chars, needle->chars);
+    return BOOL_VAL(hit != NULL);
 }
 
 // File I/O functions

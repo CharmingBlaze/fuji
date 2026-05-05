@@ -1,13 +1,14 @@
-func makeCounter() {
-  let count = 0;
-  let counter = func() {
-    count = count + 1;
-    return count;
-  };
-  return counter;
+func makecounter() {
+    let count = 0;
+    let counter = func() {
+        count = count + 1;
+        return count;
+    };
+    return counter;
 }
 
-let c = makeCounter();
+let c = makecounter();
+
 print(c());
 print(c());
 print(c());

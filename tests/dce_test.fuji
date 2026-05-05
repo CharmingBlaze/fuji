@@ -9,9 +9,8 @@ if (false) {
 }
 
 let x = 10;
+
 if (x > 5) {
-    // This cannot be pruned yet because x is a variable, 
-    // unless we implement constant propagation.
     print("Variable check stays");
 }
 
@@ -19,4 +18,4 @@ while (false) {
     print("This loop is gone");
 }
 
-1 + 2; // This expression statement should be removed
+1 + 2;

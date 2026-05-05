@@ -1,22 +1,27 @@
 func outer(x) {
     func inner(y) {
-        return x + y
+        return x + y;
     }
-    return inner(10)
+    return inner(10);
 }
 
-let a = outer(5)
-let b = outer(20)
-print(a)
-print(b)
+let a = outer(5);
 
-func makeAdder(n) {
+let b = outer(20);
+
+print(a);
+print(b);
+
+func makeadder(n) {
     return func(x) {
-        return n + x
-    }
+        return n + x;
+    };
 }
-let add5 = makeAdder(5)
-let add10 = makeAdder(10)
-print(add5(3))
-print(add10(3))
-print("PASS")
+
+let add5 = makeadder(5);
+
+let add10 = makeadder(10);
+
+print(add5(3));
+print(add10(3));
+print("PASS");

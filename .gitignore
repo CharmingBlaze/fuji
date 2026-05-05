@@ -59,8 +59,14 @@ Thumbs.db
 runtime/src/*.o
 runtime/obj_win/
 
-# Release-only embedded LLVM + archive (see internal/fujihome/bundled/README.md)
+# Release-only embedded artifacts (see internal/embed/README.md)
+internal/embed/**/*.exe
+internal/embed/**/clang
+internal/embed/**/lld.exe
+internal/embed/**/libfuji_runtime.a
+
+# Legacy bundled layout (unused by current release workflow)
 internal/fujihome/bundled/**/*.exe
 internal/fujihome/bundled/**/llc
 internal/fujihome/bundled/**/lld
-internal/fujihome/bundled/**/libkuji_runtime.a
+internal/fujihome/bundled/**/libfuji_runtime.a

@@ -1,0 +1,170 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+func parseAllCLI(args []string) (*WrapGenConfig, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("usage: %s [options] <header.h> [...]\n       %s -name <lib> -headers <a.h>[,b.h] -out <dir>  (legacy)\nRun %s --help", toolDisplayName(), toolDisplayName(), toolDisplayName())
+	}
+	switch args[0] {
+	case "--version":
+		fmt.Println(WrapgenVersion)
+		os.Exit(0)
+	case "-h", "--help":
+		printModernUsage()
+		os.Exit(0)
+	}
+	for _, a := range args {
+		if a == "-name" {
+			return parseLegacyCLI(args)
+		}
+	}
+	return parseModernCLI(args)
+}
+
+func parseModernCLI(args []string) (*WrapGenConfig, error) {
+	cfg := &WrapGenConfig{
+		Version:     WrapgenVersion,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		OutputDir:   ".",
+		Language:    "fuji",
+	}
+	var headers []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case (a == "-o" || a == "-out") && i+1 < len(args):
+			cfg.OutputDir = args[i+1]
+			i++
+		case a == "-I" && i+1 < len(args):
+			cfg.IncludePaths = append(cfg.IncludePaths, args[i+1])
+			i++
+		case a == "--no-docs":
+			cfg.NoDocsMarkdown = true
+			cfg.NoHTML = true
+		case a == "--no-html":
+			cfg.NoHTML = true
+		case a == "-v" || a == "--verbose":
+			cfg.Verbose = true
+		case strings.HasPrefix(a, "-"):
+			return nil, fmt.Errorf("unknown flag: %s", a)
+		default:
+			headers = append(headers, a)
+		}
+	}
+	if len(headers) == 0 {
+		return nil, fmt.Errorf("expected at least one header file (.h)")
+	}
+	cfg.InputHeaders = headers
+	base := filepath.Base(headers[0])
+	cfg.PrimaryHeader = base
+	cfg.LibraryName = strings.TrimSuffix(base, filepath.Ext(base))
+	if cfg.LibraryName == "" {
+		cfg.LibraryName = "bindings"
+	}
+	return cfg, nil
+}
+
+func parseLegacyCLI(args []string) (*WrapGenConfig, error) {
+	fs := flag.NewFlagSet("fujiwrap", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	cfg := &WrapGenConfig{
+		Version:        WrapgenVersion,
+		GeneratedAt:    time.Now().UTC().Format(time.RFC3339),
+		OutputDir:      "./wrapper",
+		Language:       "fuji",
+		ComplexCPP:     true,
+		Documentation:  true,
+		BuildSystem:    false,
+		IncludeTests:   false,
+		NoDocsMarkdown: false,
+		NoHTML:         false,
+	}
+	var headers string
+	fs.StringVar(&cfg.LibraryName, "name", "", "library name (required)")
+	fs.StringVar(&cfg.OutputDir, "out", "./wrapper", "output directory (-out or -o)")
+	var outShort string
+	fs.StringVar(&outShort, "o", "", "alias for -out (same value)")
+	fs.StringVar(&cfg.Language, "lang", "fuji", "target language (fuji only)")
+	fs.BoolVar(&cfg.Documentation, "docs", true, "generate README + api_reference (+ HTML unless --no-html in modern mode)")
+	fs.BoolVar(&cfg.BuildSystem, "build", false, "deprecated; ignored")
+	fs.BoolVar(&cfg.IncludeTests, "tests", false, "deprecated; ignored")
+	fs.BoolVar(&cfg.ComplexCPP, "cpp", true, "reserved")
+	fs.BoolVar(&cfg.Verbose, "v", false, "verbose")
+	fs.StringVar(&headers, "headers", "", "comma-separated headers (required)")
+
+	fs.Usage = func() { printModernUsage() }
+
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(outShort) != "" {
+		cfg.OutputDir = outShort
+	}
+	if headers != "" {
+		for _, h := range strings.Split(headers, ",") {
+			if h = strings.TrimSpace(h); h != "" {
+				cfg.InputHeaders = append(cfg.InputHeaders, h)
+			}
+		}
+	}
+	if cfg.LibraryName == "" {
+		return nil, fmt.Errorf("-name is required in legacy mode")
+	}
+	if len(cfg.InputHeaders) == 0 {
+		return nil, fmt.Errorf("-headers is required in legacy mode")
+	}
+	if len(cfg.InputHeaders) > 0 {
+		cfg.PrimaryHeader = filepath.Base(cfg.InputHeaders[0])
+	}
+	cfg.NoDocsMarkdown = !cfg.Documentation
+	cfg.NoHTML = !cfg.Documentation
+	return cfg, nil
+}
+
+func printModernUsage() {
+	me := toolDisplayName()
+	fmt.Fprintf(os.Stderr, `%s — Fuji C/C++ header → .fuji, wrapper.c, and docs
+
+USAGE (preferred)
+  %s [options] <header.h> [<more.h> ...]
+
+OPTIONS
+  -o <dir>      output directory (default: .)
+  -I <dir>      extra include path for the toolchain (repeatable; reserved for clang)
+  --no-docs     skip README.md and api_reference.md
+  --no-html     skip index.html only
+  -v            verbose
+  --version     print version and exit
+  -h, --help    this help
+
+LEGACY (still supported)
+  %s -name <lib> -headers <a.h>[,b.h] -out <dir> [-docs=false] [-v]
+
+OUTPUT (five files)
+  <name>.fuji   api_reference.md   README.md   index.html   wrapper.c
+
+`, me, me, me)
+}
+
+func validateConfig(config *WrapGenConfig) error {
+	if config.LibraryName == "" {
+		return fmt.Errorf("library name missing")
+	}
+	if len(config.InputHeaders) == 0 {
+		return fmt.Errorf("no header files")
+	}
+	for _, header := range config.InputHeaders {
+		if _, err := os.Stat(header); err != nil {
+			return fmt.Errorf("header file not found: %s: %w", header, err)
+		}
+	}
+	return nil
+}

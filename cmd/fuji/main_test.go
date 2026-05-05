@@ -88,8 +88,8 @@ func TestCLI_wrap_help(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wrap: %v\n%s", err, out)
 	}
-	if !bytes.Contains(out, []byte("wrapgen")) {
-		t.Fatalf("expected wrap help mentioning wrapgen, got:\n%s", out)
+	if !bytes.Contains(out, []byte("fujiwrap")) {
+		t.Fatalf("expected wrap help mentioning fujiwrap, got:\n%s", out)
 	}
 }
 
@@ -151,7 +151,7 @@ func TestCLI_run_phase1Surface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
-	// Checksum includes for-in over array elements (values), not indices; see internal/fuji/compiler.go desugarForInStmt.
+	// Checksum includes summing array elements via `for-of`; see tests/phase1_surface.fuji.
 	if !bytes.Contains(out, []byte("98")) {
 		t.Fatalf("output missing expected checksum:\n%s", out)
 	}

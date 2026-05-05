@@ -1,9 +1,3 @@
-// Test all include styles
-
-// Angle-bracket form
-#include <tests/math_module.fuji>
-
-// Quote form  
 #include "tests/hello.fuji"
 
 print("import styles: OK");

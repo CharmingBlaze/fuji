@@ -7,6 +7,7 @@ import (
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
+	"github.com/llir/llvm/ir/value"
 
 	"fuji/internal/parser"
 )
@@ -39,6 +40,8 @@ func (g *Generator) emitStmt(stmt parser.Stmt) error {
 		return g.emitContinueStmt(s)
 	case *parser.SwitchStmt:
 		return g.emitSwitchStmt(s)
+	case *parser.DeleteStmt:
+		return g.emitDeleteStmt(s)
 	default:
 		return fmt.Errorf("unsupported statement type: %T", stmt)
 	}
@@ -174,23 +177,29 @@ func (g *Generator) emitDoWhileStmt(s *parser.DoWhileStmt) error {
 	return nil
 }
 
-// emitForOfStmt emits LLVM IR for for-of loops.
+// emitForOfStmt emits LLVM IR for for-of loops over arrays and tables (slot order).
 func (g *Generator) emitForOfStmt(s *parser.ForOfStmt) error {
-	// for (let x of arr): native lowering assumes an array; uses half-open index [0, len).
 	iterable, err := g.emitExpr(s.Iterable)
 	if err != nil {
 		return err
 	}
 	iterI := g.emitAsFujiI64(iterable)
 
-	lenVal := g.block.NewCall(g.runtimeArrayLen, iterI)
+	lenVal := g.block.NewCall(g.runtimeForOfLength, iterI)
 
-	idxSlot := g.block.NewAlloca(types.I64)
+	idxSlot := g.entryAlloca(types.I64)
 	zeroNum := g.emitAsFujiI64(constant.NewFloat(types.Double, 0))
 	g.block.NewStore(zeroNum, idxSlot)
 
-	varSlot := g.block.NewAlloca(types.I64)
-	g.locals[s.VarName.Lexeme] = varSlot
+	valSlot := g.entryAlloca(types.I64)
+	var keySlot value.Value
+	if s.ValueVar != nil {
+		keySlot = g.entryAlloca(types.I64)
+		g.locals[s.VarName.Lexeme] = keySlot
+		g.locals[s.ValueVar.Lexeme] = valSlot
+	} else {
+		g.locals[s.VarName.Lexeme] = valSlot
+	}
 
 	g.tempN++
 	condBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.cond.%d", g.tempN))
@@ -211,8 +220,15 @@ func (g *Generator) emitForOfStmt(s *parser.ForOfStmt) error {
 	g.block.NewCondBr(cmp, bodyBlock, afterBlock)
 
 	g.block = bodyBlock
-	elem := g.block.NewCall(g.runtimeObjGet, iterI, idxV)
-	g.block.NewStore(elem, varSlot)
+	if s.ValueVar != nil {
+		key := g.block.NewCall(g.runtimeForOfKeyAt, iterI, idxV)
+		val := g.block.NewCall(g.runtimeForOfValueAt, iterI, idxV)
+		g.block.NewStore(key, keySlot)
+		g.block.NewStore(val, valSlot)
+	} else {
+		val := g.block.NewCall(g.runtimeForOfValueAt, iterI, idxV)
+		g.block.NewStore(val, valSlot)
+	}
 	if err := g.emitStmt(s.Body); err != nil {
 		return err
 	}
@@ -293,8 +309,7 @@ func (g *Generator) emitForStmt(s *parser.ForStmt) error {
 	return nil
 }
 
-// emitForInStmt emits LLVM IR for for-in loops. Array iteration uses the same lowering as for-of
-// (element values keyed by numeric index), matching the phase-1 surface test expectations.
+// emitForInStmt emits LLVM IR for for-in loops (keys in insertion order for tables).
 func (g *Generator) emitForInStmt(s *parser.ForInStmt) error {
 	if s.ValueVar != nil {
 		return fmt.Errorf("native codegen: for-in with two variables is not supported")
@@ -302,13 +317,59 @@ func (g *Generator) emitForInStmt(s *parser.ForInStmt) error {
 	if s.KeyVar == nil {
 		return fmt.Errorf("native codegen: for-in missing loop variable")
 	}
-	fo := &parser.ForOfStmt{
-		Token:    s.Token,
-		VarName:  *s.KeyVar,
-		Iterable: s.Iterable,
-		Body:     s.Body,
+	iterable, err := g.emitExpr(s.Iterable)
+	if err != nil {
+		return err
 	}
-	return g.emitForOfStmt(fo)
+	iterI := g.emitAsFujiI64(iterable)
+
+	lenVal := g.block.NewCall(g.runtimeForOfLength, iterI)
+
+	idxSlot := g.entryAlloca(types.I64)
+	zeroNum := g.emitAsFujiI64(constant.NewFloat(types.Double, 0))
+	g.block.NewStore(zeroNum, idxSlot)
+
+	keySlot := g.entryAlloca(types.I64)
+	g.locals[s.KeyVar.Lexeme] = keySlot
+
+	g.tempN++
+	condBlock := g.block.Parent.NewBlock(fmt.Sprintf("forin.cond.%d", g.tempN))
+	bodyBlock := g.block.Parent.NewBlock(fmt.Sprintf("forin.body.%d", g.tempN))
+	incBlock := g.block.Parent.NewBlock(fmt.Sprintf("forin.inc.%d", g.tempN))
+	afterBlock := g.block.Parent.NewBlock(fmt.Sprintf("forin.after.%d", g.tempN))
+
+	ctx := loopContext{condBlock: condBlock, incBlock: incBlock, afterBlock: afterBlock}
+	g.loopStack = append(g.loopStack, ctx)
+
+	g.block.NewBr(condBlock)
+
+	g.block = condBlock
+	idxV := g.block.NewLoad(types.I64, idxSlot)
+	idxD := g.block.NewBitCast(idxV, types.Double)
+	lenD := g.block.NewBitCast(lenVal, types.Double)
+	cmp := g.block.NewFCmp(enum.FPredOLT, idxD, lenD)
+	g.block.NewCondBr(cmp, bodyBlock, afterBlock)
+
+	g.block = bodyBlock
+	key := g.block.NewCall(g.runtimeForOfKeyAt, iterI, idxV)
+	g.block.NewStore(key, keySlot)
+	if err := g.emitStmt(s.Body); err != nil {
+		return err
+	}
+	g.block.NewBr(incBlock)
+
+	g.block = incBlock
+	idxV2 := g.block.NewLoad(types.I64, idxSlot)
+	idxD2 := g.block.NewBitCast(idxV2, types.Double)
+	nextD := g.block.NewFAdd(idxD2, constant.NewFloat(types.Double, 1))
+	nextI := g.block.NewBitCast(nextD, types.I64)
+	g.block.NewStore(nextI, idxSlot)
+	g.block.NewBr(condBlock)
+
+	g.block = afterBlock
+
+	g.loopStack = g.loopStack[:len(g.loopStack)-1]
+	return nil
 }
 
 // emitBreakStmt emits LLVM IR for break statements.
@@ -402,5 +463,22 @@ func (g *Generator) emitSwitchStmt(s *parser.SwitchStmt) error {
 	}
 
 	g.block = mergeBlock
+	return nil
+}
+
+func (g *Generator) emitDeleteStmt(s *parser.DeleteStmt) error {
+	ix, ok := s.Target.(*parser.IndexExpr)
+	if !ok {
+		return fmt.Errorf("delete expects a property access expression such as obj[\"key\"]")
+	}
+	obj, err := g.emitExpr(ix.Object)
+	if err != nil {
+		return err
+	}
+	key, err := g.emitExpr(ix.Index)
+	if err != nil {
+		return err
+	}
+	g.block.NewCall(g.runtimeObjRemove, g.emitAsFujiI64(obj), g.emitAsFujiI64(key))
 	return nil
 }

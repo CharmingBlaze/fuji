@@ -198,7 +198,7 @@ void gc_collect_minor(void) {
     } else {
         gc_mark_stack_conservative();
     }
-    if (fuji_globals != NULL && fuji_globals_count > 0) {
+    if (fuji_globals_count > 0) {
         for (int i = 0; i < fuji_globals_count; i++) {
             gc_mark_value(fuji_globals[i]);
         }
@@ -236,7 +236,7 @@ void gc_collect_minor(void) {
 }
 
 size_t gc_nursery_used_bytes(void) {
-    if (gc_state.nursery_top == NULL || gc_state.nursery_buf == NULL) {
+    if (gc_state.nursery_top == NULL) {
         return 0;
     }
     return (size_t)(gc_state.nursery_top - gc_state.nursery_buf);
@@ -443,7 +443,7 @@ void gc_mark_roots(void) {
     } else {
         gc_mark_stack_conservative();
     }
-    if (fuji_globals != NULL && fuji_globals_count > 0) {
+    if (fuji_globals_count > 0) {
         for (int i = 0; i < fuji_globals_count; i++) {
             gc_mark_value(fuji_globals[i]);
         }

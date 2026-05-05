@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Language surface (native / LLVM)** — template literals with **`${}`**; unary **`typeof`**; **`delete obj.key`**; array literal spread **`[...a]`**; **`??`** and **`?.`**; **`let { x, y } = obj`** destructuring; **`matches(haystack, pattern)`** (substring / **`strstr`**, not full regex); string methods (**`split`**, **`join`** on arrays, **`trim`**, **`replace`** / **`replaceAll`**, **`indexOf`**, **`toUpper`** / **`tolower`**, **`slice`**, **`startsWith`** / **`endsWith`**); array methods (**`map`**, **`filter`**, **`reduce`**, **`find`**, **`slice`**, **`sort`**, **`reverse`**, **`includes`**, **`concat`**, **`join`**); prelude **`math`** object (**`math.floor`**, …) alongside existing math globals; runtime symbols **`fuji_array_join`**, **`fuji_object_remove`**, **`fuji_matches`** (rebuild **`runtime/libfuji_runtime.a`** after pulling).
+- **`fuji fmt`** — canonical AST-based formatting (`internal/formatter`): 4-space indent, spacing around operators and after commas, `if (` / `while (` / `for (` style, `} else {` kept on one line when both branches are blocks, `import "…"` expressions, `fuji fmt --check`, directory and **`./...`** expansion (skips `.git`, `.FUJI_build`, `bin`, `node_modules`, `vendor`). Top-level **consecutive** expression statements (e.g. back-to-back `print`) stay compact; other top-level declarations stay separated by a blank line.
+- **Classic `for (init; cond; step)`** — parsed and lowered alongside `while` / `for-in` / `for-of` (`internal/parser`, `internal/codegen`).
+- **`for (let [k, v] of iterable)`** — destructuring **`for-of`** for **arrays** (numeric index + element) and **objects/tables** (insertion-order key + value); runtime helpers **`fuji_forof_length`**, **`fuji_forof_key_at`**, **`fuji_forof_value_at`** (`runtime/src/fuji_runtime.c`).
+- **Release binaries (`-tags release`)** — embedded Clang + runtime under **`internal/embed/`** (Windows also bundles **`lld.exe`** for linking); **`scripts/build-release.ps1`** / **`scripts/build-release.sh`**; **`release.yml`** publishes **`fujiwrap`** where applicable (`CHANGELOG` superseded notes under 0.1.0 remain historical).
+
 ### Changed
 
-- **Branding and paths:** sources use the **`.fuji`** extension; C runtime and LLVM symbols use the **`fuji_`** prefix; static archive **`runtime/libfuji_runtime.a`**. The desktop IDE module is **`fuji-ide`** (Wails app **`fuji-ide`**). **`fuji wrap`** still discovers a legacy **`kujiwrap`** binary beside **`fuji`** when present.
+- **`len(table)`** — returns **entry count** for object/table values (`fuji_len`).
+- **`for-of`** / **`for-in`** lowering — uses slot-ordered runtime iteration for arrays and tables (**`for-in`** binds **keys**; **`for-of`** binds **values**; **`tests/phase1_surface.fuji`** uses **`for-of`** where element sums are intended).
+- **Documentation** — loop-style guide (`docs/user_guide.md`), **`for-of`** / **`syntax.md`** examples, single-line vs multi-line braced bodies.
+- **Language (case):** reserved words and ASCII identifiers are **case-insensitive** (identifiers and object property keys are normalized to lowercase in the AST). **`@` module** specifiers and **`#include`** are matched case-insensitively; **`// fuji:…`** lines treat the `fuji:` prefix and the **`extern`** keyword case-insensitively, while the **C symbol** on extern lines stays spelled exactly for the linker. **`main`** / **`Main`** / etc. still map to the native entry (`fuji_user_main`) case-insensitively. Whitespace between tokens remains free-form; **semicolons between statements are still required.**
+- **Branding and paths:** sources use the **`.fuji`** extension; C runtime and LLVM symbols use the **`fuji_`** prefix; static archive **`runtime/libfuji_runtime.a`**. The desktop IDE module is **`fuji-ide`** (Wails app **`fuji-ide`**). **Wrapper generator:** canonical binary name **`fujiwrap`** (`go build -o fujiwrap ./cmd/wrapgen`); generated files credit **`fujiwrap`**. **`fuji wrap`** prefers **`fujiwrap`** next to **`fuji`**, then **`wrapgen`**, then legacy **`kujiwrap`**.
+
+### Fixed
+
+- **`fujihome`**: removed duplicate **`FUJI_CLANG`** / **`FUJI_LLC`** env branches in **`ClangWithSource`** / **`LLCWithSource`**.
 
 ## [0.1.0] - 2026-05-05
 

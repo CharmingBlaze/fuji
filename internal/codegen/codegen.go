@@ -100,6 +100,7 @@ type Generator struct {
 	runtimeArrayIncludes    *ir.Func
 	runtimeArraySlice       *ir.Func
 	runtimeArrayConcat      *ir.Func
+	runtimeArrayJoin        *ir.Func
 	runtimeStringSplit      *ir.Func
 	runtimeStringTrim       *ir.Func
 	runtimeStringUpper      *ir.Func
@@ -123,6 +124,7 @@ type Generator struct {
 	runtimeAllocObj     *ir.Func
 	runtimeObjGet       *ir.Func
 	runtimeObjSet       *ir.Func
+	runtimeObjRemove    *ir.Func
 	runtimeUnboxNumber  *ir.Func
 	runtimeBoxNumber    *ir.Func
 	runtimeSet          *ir.Func
@@ -133,6 +135,9 @@ type Generator struct {
 	runtimeArrayPush    *ir.Func
 	runtimeArrayPop     *ir.Func
 	runtimeArrayLen     *ir.Func
+	runtimeForOfLength  *ir.Func
+	runtimeForOfKeyAt   *ir.Func
+	runtimeForOfValueAt *ir.Func
 	runtimeType         *ir.Func
 	runtimeLen          *ir.Func
 	runtimeAbs          *ir.Func
@@ -152,6 +157,7 @@ type Generator struct {
 	runtimeErr          *ir.Func
 	runtimeValuesEqual  *ir.Func
 	runtimePanic        *ir.Func
+	runtimeMatches      *ir.Func
 	runtimePushCall     *ir.Func
 	runtimePopCall      *ir.Func
 	runtimeMalloc       *ir.Func
@@ -253,6 +259,7 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimeArrayIncludes:    runtimeFuncs["FUJI_array_includes"],
 		runtimeArraySlice:       runtimeFuncs["FUJI_array_slice"],
 		runtimeArrayConcat:      runtimeFuncs["FUJI_array_concat"],
+		runtimeArrayJoin:        runtimeFuncs["FUJI_array_join"],
 		runtimeStringSplit:      runtimeFuncs["FUJI_string_split"],
 		runtimeStringTrim:       runtimeFuncs["FUJI_string_trim"],
 		runtimeStringUpper:      runtimeFuncs["FUJI_string_upper"],
@@ -275,6 +282,7 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimeAllocObj:         runtimeFuncs["FUJI_allocate_object"],
 		runtimeObjGet:           runtimeFuncs["FUJI_object_get"],
 		runtimeObjSet:           runtimeFuncs["FUJI_object_set"],
+		runtimeObjRemove:        runtimeFuncs["FUJI_object_remove"],
 		runtimeUnboxNumber:      runtimeFuncs["FUJI_unbox_number"],
 		runtimeBoxNumber:        runtimeFuncs["FUJI_box_number"],
 		runtimeSet:              runtimeFuncs["FUJI_set"],
@@ -285,6 +293,9 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimeArrayPush:        runtimeFuncs["FUJI_array_push"],
 		runtimeArrayPop:         runtimeFuncs["FUJI_array_pop"],
 		runtimeArrayLen:         runtimeFuncs["FUJI_array_length"], // distinct symbol from FUJI_len
+		runtimeForOfLength:      runtimeFuncs["FUJI_forof_length"],
+		runtimeForOfKeyAt:       runtimeFuncs["FUJI_forof_key_at"],
+		runtimeForOfValueAt:     runtimeFuncs["FUJI_forof_value_at"],
 		runtimeType:             runtimeFuncs["FUJI_type"],
 		runtimeLen:              runtimeFuncs["FUJI_len"],
 		runtimeAbs:              runtimeFuncs["FUJI_abs"],
@@ -304,6 +315,7 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimeErr:              runtimeFuncs["FUJI_err"],
 		runtimeValuesEqual:      runtimeFuncs["FUJI_values_equal"],
 		runtimePanic:            runtimeFuncs["FUJI_panic"],
+		runtimeMatches:          runtimeFuncs["FUJI_matches"],
 		runtimePushCall:         runtimeFuncs["FUJI_push_call"],
 		runtimePopCall:          runtimeFuncs["FUJI_pop_call"],
 		runtimeMalloc:           runtimeFuncs["malloc"],
@@ -337,7 +349,7 @@ func (g *Generator) Generate(bundle *parser.ProgramBundle) (*ir.Module, error) {
 	g.localIsCell = make(map[string]bool)
 
 	// Allocate 'this' slot
-	thisSlot := g.block.NewAlloca(types.I64)
+	thisSlot := g.entryAlloca(types.I64)
 	g.locals["this"] = thisSlot
 	g.block.NewStore(constant.NewInt(types.I64, 0), thisSlot)
 
@@ -453,7 +465,7 @@ func (g *Generator) emitLetDecl(d *parser.LetDecl) error {
 	switch {
 	case g.ctx.StackDecls[d]:
 		useStack = true
-		storageSlot = g.block.NewAlloca(types.I64)
+		storageSlot = g.entryAlloca(types.I64)
 		g.localIsCell[name] = false
 	case g.ctx.EscapingDecls[d]:
 		useStack = false
@@ -564,6 +576,12 @@ func (g *Generator) emitPrefix(e *parser.PrefixExpr) (value.Value, error) {
 
 	// Handle different prefix operators
 	switch e.Operator {
+	case "typeof":
+		rv, err := g.emitExpr(e.Right)
+		if err != nil {
+			return nil, err
+		}
+		return g.block.NewCall(g.runtimeType, g.emitAsFujiI64(rv)), nil
 	case "!":
 		truthy := g.emitTruthy(right)
 		notTruthy := g.block.NewXor(truthy, constant.NewBool(true))
@@ -639,7 +657,7 @@ func (g *Generator) emitArgvRuntime(fn *ir.Func, args []value.Value) value.Value
 		return g.block.NewCall(fn, constant.NewInt(types.I32, 0), constant.NewNull(types.NewPointer(types.I64)))
 	}
 	arrTy := types.NewArray(uint64(n), types.I64)
-	slot := g.block.NewAlloca(arrTy)
+	slot := g.entryAlloca(arrTy)
 	for i, arg := range args {
 		argI64 := g.emitAsFujiI64(arg)
 		elemPtr := g.block.NewGetElementPtr(arrTy, slot, zero, constant.NewInt(types.I32, int64(i)))
@@ -761,20 +779,9 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 		objForThis = obj
 	}
 
-	// Native: arr.concat(a, b, ...) -> fuji_array_concat([this, ...args])
 	if memberExpr != nil && objForThis != nil {
-		if lit, ok := memberExpr.Index.(*parser.LiteralExpr); ok {
-			if name, ok := lit.Value.(string); ok && name == "concat" {
-				callArgs := []value.Value{objForThis}
-				for _, arg := range e.Arguments {
-					val, err := g.emitExpr(arg)
-					if err != nil {
-						return nil, err
-					}
-					callArgs = append(callArgs, val)
-				}
-				return g.emitArgvRuntime(g.runtimeArrayConcat, callArgs), nil
-			}
+		if v, handled, err := g.tryEmitMethodCall(memberExpr, objForThis, e); handled {
+			return v, err
 		}
 	}
 
@@ -833,7 +840,7 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 			argvPtr = constant.NewNull(types.NewPointer(types.I64))
 		} else {
 			arrTy := types.NewArray(uint64(argCount), types.I64)
-			slot := g.block.NewAlloca(arrTy)
+			slot := g.entryAlloca(arrTy)
 			for i, arg := range args {
 				argI64 := g.emitAsFujiI64(arg)
 				elemPtr := g.block.NewGetElementPtr(arrTy, slot, zero, constant.NewInt(types.I32, int64(i)))

@@ -1,24 +1,24 @@
-// Simple Graphics Demo - Visual Game Window
-// This will create a visual representation without complex loops
-
 print("=== KUJI GRAPHICS DEMO ===");
 print("Creating visual game window...");
 
-// Window properties
-let screenWidth = 800;
-let screenHeight = 600;
-print("Window: " + screenWidth + "x" + screenHeight + " pixels");
+let screenwidth = 800;
+
+let screenheight = 600;
+
+print("Window: " + screenwidth + "x" + screenheight + " pixels");
 print("Title: Brick Breaker Game");
 
-// Game state
-let paddleX = 350;
-let ballX = 400;
-let ballY = 300;
+let paddlex = 350;
+
+let ballx = 400;
+
+let bally = 300;
+
 let score = 0;
+
 let lives = 3;
 
-// Draw game screen (ASCII art representation)
-func drawScreen() {
+func drawscreen() {
     print("");
     print("╔═══════════════════════════════════════════════════════════════╗");
     print("║                     BRICK BREAKER                          ║");
@@ -45,63 +45,47 @@ func drawScreen() {
     print("");
 }
 
-// Update game state
-func updateGame() {
-    ballY = ballY - 20;
-    if (ballY < 150) {
-        ballY = 400;
+func updategame() {
+    bally = bally - 20;
+    if (bally < 150) {
+        bally = 400;
         score = score + 10;
     }
-    
-    paddleX = paddleX + 50;
-    if (paddleX > 600) {
-        paddleX = 200;
+    paddlex = paddlex + 50;
+    if (paddlex > 600) {
+        paddlex = 200;
     }
 }
 
-// Show game frames
-func showFrames() {
+func showframes() {
     print("🎯 Starting game animation...");
-    
-    // Frame 1
     print("=== FRAME 1 ===");
-    drawScreen();
-    print("Ball: (" + ballX + ", " + ballY + ")  Paddle: " + paddleX);
-    updateGame();
-    
-    // Frame 2
+    drawscreen();
+    print("Ball: (" + ballx + ", " + bally + ")  Paddle: " + paddlex);
+    updategame();
     print("=== FRAME 2 ===");
-    drawScreen();
-    print("Ball: (" + ballX + ", " + ballY + ")  Paddle: " + paddleX);
-    updateGame();
-    
-    // Frame 3
+    drawscreen();
+    print("Ball: (" + ballx + ", " + bally + ")  Paddle: " + paddlex);
+    updategame();
     print("=== FRAME 3 ===");
-    drawScreen();
-    print("Ball: (" + ballX + ", " + ballY + ")  Paddle: " + paddleX);
-    updateGame();
-    
-    // Frame 4
+    drawscreen();
+    print("Ball: (" + ballx + ", " + bally + ")  Paddle: " + paddlex);
+    updategame();
     print("=== FRAME 4 ===");
-    drawScreen();
-    print("Ball: (" + ballX + ", " + ballY + ")  Paddle: " + paddleX);
-    updateGame();
-    
-    // Frame 5
+    drawscreen();
+    print("Ball: (" + ballx + ", " + bally + ")  Paddle: " + paddlex);
+    updategame();
     print("=== FRAME 5 ===");
-    drawScreen();
-    print("Ball: (" + ballX + ", " + ballY + ")  Paddle: " + paddleX);
+    drawscreen();
+    print("Ball: (" + ballx + ", " + bally + ")  Paddle: " + paddlex);
 }
 
-// Main game
 func main() {
     print("🚀 Initializing Fuji Graphics Engine...");
     print("📊 Loading game assets...");
     print("🎮 Setting up game objects...");
     print("✅ Ready to play!");
-    
-    showFrames();
-    
+    showframes();
     print("");
     print("🏆 GAME RESULTS:");
     print("Final Score: " + score);
@@ -112,5 +96,4 @@ func main() {
     print("🖥️  Graphics window closed successfully");
 }
 
-// Start the game
 main();

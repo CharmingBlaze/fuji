@@ -20,7 +20,7 @@ You need `libraylib.a` (or `.lib`) and the `raylib.h` header.
 ## 2. Generate the Fuji wrapper
 
 ```powershell
-.\cmd\wrapgen\wrapgen.exe `
+.\bin\fujiwrap.exe `
   -name raylib `
   -headers .\path\to\raylib.h `
   -out .\wrappers\raylib

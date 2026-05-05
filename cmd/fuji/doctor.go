@@ -2,18 +2,56 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
+	fujembed "fuji/internal/embed"
 	"fuji/internal/fujihome"
 )
 
 // runDoctor prints a diagnostic report for zero-install / native builds.
 func runDoctor() error {
 	fmt.Println("=== fuji doctor ===")
+	fmt.Println()
+
+	if embedDir, err := fujembed.Extract(); err == nil {
+		fmt.Printf("Release build — embedded toolchain at %s\n", embedDir)
+		clang, _ := fujembed.ClangPath()
+		lib, _ := fujembed.RuntimeLibPath()
+		fmt.Printf("  clang:   %s\n", clang)
+		fmt.Printf("  runtime: %s\n", lib)
+		if runtime.GOOS == "windows" {
+			if lld, err := fujembed.LLDPathWindows(); err == nil {
+				fmt.Printf("  lld:     %s\n", lld)
+			}
+		}
+	} else if errors.Is(err, fujembed.ErrDevelopmentBuild) {
+		fmt.Println("Development build — system toolchain")
+
+		tc, err := fujihome.FindToolchain()
+		if err != nil {
+			fmt.Printf("✗ toolchain: %v\n", err)
+		} else {
+			fmt.Printf("✓ clang:   %s\n", tc.Clang)
+			fmt.Printf("✓ runtime: %s\n", tc.RuntimeLib)
+			fmt.Printf("  llc:     %s\n", tc.LLC)
+			if tc.LLD != "" {
+				fmt.Printf("  lld:     %s\n", tc.LLD)
+			}
+		}
+
+		llcPath, llcSrc := fujihome.LLCWithSource()
+		fmt.Printf("llc resolution: %s (from %s)\n", llcPath, llcSrc)
+		printToolProbe("llc", llcPath)
+	} else {
+		fmt.Printf("Embedded toolchain failed: %v\n", err)
+	}
+
 	fmt.Println()
 
 	install, err := fujihome.InstallDir()
@@ -34,22 +72,18 @@ func runDoctor() error {
 	fmt.Println()
 
 	clangPath, clangSrc := fujihome.ClangWithSource()
-	fmt.Printf("clang: %s (from %s)\n", clangPath, clangSrc)
+	fmt.Printf("clang (resolution): %s (from %s)\n", clangPath, clangSrc)
 	printToolProbe("clang", clangPath)
 
-	llcPath, llcSrc := fujihome.LLCWithSource()
-	fmt.Printf("llc: %s (from %s)\n", llcPath, llcSrc)
-	printToolProbe("llc", llcPath)
-
 	if p, ok := fujihome.BundledLLDPath(); ok {
-		fmt.Printf("lld: %s (bundled)\n", p)
+		fmt.Printf("lld next to binary: %s\n", p)
 		if fi, err := os.Stat(p); err != nil || fi.IsDir() {
 			fmt.Println("lld_status: missing_or_invalid")
 		} else {
 			fmt.Println("lld_status: ok")
 		}
 	} else {
-		fmt.Println("lld: (not bundled next to fuji; system linker may be used)")
+		fmt.Println("lld next to binary: (none)")
 	}
 	fmt.Println()
 
@@ -78,7 +112,10 @@ func runDoctor() error {
 	}
 
 	fmt.Println()
-	fmt.Println("Doctor finished. Native builds need clang + llc; LLD is optional if bundled.")
+	fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("Go version: %s\n", runtime.Version())
+	fmt.Println()
+	fmt.Println("Doctor finished.")
 	return nil
 }
 

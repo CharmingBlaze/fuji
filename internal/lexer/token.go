@@ -25,7 +25,9 @@ const (
 	TokenStar      // *
 	TokenPercent   // %
 	TokenColon     // :
-	TokenQuestion  // ?
+	TokenQuestion       // ?
+	TokenQuestionQuestion // ??
+	TokenOptionalDot    // ?.
 	TokenCaret     // ^
 	TokenTilde     // ~
 	TokenAnd       // &
@@ -93,6 +95,13 @@ const (
 	TokenTrue
 	TokenWhile
 	TokenVar // reserved keyword; use 'let' for variable declarations
+	TokenTypeof
+
+	// Template literals (` ... ${ expr } ... `)
+	TokenTemplateStart
+	TokenTemplateString
+	TokenTemplateInterp
+	TokenTemplateClose
 
 	// Directives
 	TokenInclude
@@ -137,6 +146,10 @@ func (t TokenType) String() string {
 		return ":"
 	case TokenQuestion:
 		return "?"
+	case TokenQuestionQuestion:
+		return "??"
+	case TokenOptionalDot:
+		return "?."
 	case TokenCaret:
 		return "^"
 	case TokenTilde:
@@ -253,8 +266,18 @@ func (t TokenType) String() string {
 		return "true"
 	case TokenWhile:
 		return "while"
+	case TokenTypeof:
+		return "typeof"
 	case TokenVar:
 		return "var"
+	case TokenTemplateStart:
+		return "TEMPLATE_START"
+	case TokenTemplateString:
+		return "TEMPLATE_STRING"
+	case TokenTemplateInterp:
+		return "TEMPLATE_EXPR"
+	case TokenTemplateClose:
+		return "TEMPLATE_CLOSE"
 	case TokenInclude:
 		return "#include"
 	default:

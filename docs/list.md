@@ -96,7 +96,7 @@ go test ./... -count=1
 - [x] `switch` / `case` / `default` — **C-style fall-through**; use `break` to exit the switch or to avoid running the next `case` / `default`.
 - [ ] `switch` as **expression** (`let m = switch …`).
 - [ ] `if` as **expression** (`let max = if (a > b) a else b`).
-- [x] `for (let x in arr)` and `for (let x of arr)` (same lowering today; iteration semantics: array **values** in VM path for desugared for-in — see `tests/phase1_surface.fuji` / compiler desugar).
+- [x] `for (let x in arr)` (**keys**, numeric indices for arrays) and `for (let x of arr)` (**values**); `for (let [k, v] of …)` destructuring for keys+values (`tests/for_of_pairs.fuji`).
 - [ ] `for (let i, item in items)` — **second** binding not parsed (only single `let ident`).
 - [ ] `for (let key, value in obj)` — not parsed.
 - [ ] Labeled `break` / `continue`.

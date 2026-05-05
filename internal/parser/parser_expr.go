@@ -27,41 +27,43 @@ const (
 )
 
 var precedences = map[lexer.TokenType]int{
-	lexer.TokenEqual:          PrecedenceAssign,
-	lexer.TokenPlusEqual:      PrecedenceAssign,
-	lexer.TokenMinusEqual:     PrecedenceAssign,
-	lexer.TokenStarEqual:      PrecedenceAssign,
-	lexer.TokenSlashEqual:     PrecedenceAssign,
-	lexer.TokenPercentEqual:   PrecedenceAssign,
-	lexer.TokenAndEqual:       PrecedenceAssign,
-	lexer.TokenOrEqual:        PrecedenceAssign,
-	lexer.TokenCaretEqual:     PrecedenceAssign,
-	lexer.TokenLessLessEqual:  PrecedenceAssign,
+	lexer.TokenEqual:               PrecedenceAssign,
+	lexer.TokenPlusEqual:           PrecedenceAssign,
+	lexer.TokenMinusEqual:          PrecedenceAssign,
+	lexer.TokenStarEqual:           PrecedenceAssign,
+	lexer.TokenSlashEqual:          PrecedenceAssign,
+	lexer.TokenPercentEqual:        PrecedenceAssign,
+	lexer.TokenAndEqual:            PrecedenceAssign,
+	lexer.TokenOrEqual:             PrecedenceAssign,
+	lexer.TokenCaretEqual:          PrecedenceAssign,
+	lexer.TokenLessLessEqual:       PrecedenceAssign,
 	lexer.TokenGreaterGreaterEqual: PrecedenceAssign,
-	lexer.TokenEqualEqual:     PrecedenceEquals,
-	lexer.TokenStrictEqual:    PrecedenceEquals,
-	lexer.TokenBangEqual:      PrecedenceEquals,
-	lexer.TokenStrictNotEqual: PrecedenceEquals,
-	lexer.TokenLess:           PrecedenceLessGreater,
-	lexer.TokenLessEqual:      PrecedenceLessGreater,
-	lexer.TokenGreater:        PrecedenceLessGreater,
-	lexer.TokenGreaterEqual:   PrecedenceLessGreater,
-	lexer.TokenPlus:           PrecedenceSum,
-	lexer.TokenMinus:          PrecedenceSum,
-	lexer.TokenLessLess:       PrecedenceShift,
-	lexer.TokenGreaterGreater: PrecedenceShift,
-	lexer.TokenUnsignedShift:  PrecedenceShift,
-	lexer.TokenSlash:          PrecedenceProduct,
-	lexer.TokenStar:           PrecedenceProduct,
-	lexer.TokenPercent:        PrecedenceProduct,
-	lexer.TokenAndAnd:         PrecedenceAnd,
-	lexer.TokenOrOr:           PrecedenceOr,
-	lexer.TokenAnd:            PrecedenceBitAnd,
-	lexer.TokenOr:             PrecedenceBitOr,
-	lexer.TokenCaret:          PrecedenceBitXor,
-	lexer.TokenLParen:         PrecedenceCall,
-	lexer.TokenLBracket:       PrecedenceIndex,
-	lexer.TokenDot:            PrecedenceIndex,
+	lexer.TokenEqualEqual:          PrecedenceEquals,
+	lexer.TokenStrictEqual:         PrecedenceEquals,
+	lexer.TokenBangEqual:           PrecedenceEquals,
+	lexer.TokenStrictNotEqual:      PrecedenceEquals,
+	lexer.TokenLess:                PrecedenceLessGreater,
+	lexer.TokenLessEqual:           PrecedenceLessGreater,
+	lexer.TokenGreater:             PrecedenceLessGreater,
+	lexer.TokenGreaterEqual:        PrecedenceLessGreater,
+	lexer.TokenPlus:                PrecedenceSum,
+	lexer.TokenMinus:               PrecedenceSum,
+	lexer.TokenLessLess:            PrecedenceShift,
+	lexer.TokenGreaterGreater:      PrecedenceShift,
+	lexer.TokenUnsignedShift:       PrecedenceShift,
+	lexer.TokenSlash:               PrecedenceProduct,
+	lexer.TokenStar:                PrecedenceProduct,
+	lexer.TokenPercent:             PrecedenceProduct,
+	lexer.TokenAndAnd:              PrecedenceAnd,
+	lexer.TokenOrOr:                PrecedenceOr,
+	lexer.TokenQuestionQuestion:    PrecedenceOr,
+	lexer.TokenAnd:                 PrecedenceBitAnd,
+	lexer.TokenOr:                  PrecedenceBitOr,
+	lexer.TokenCaret:               PrecedenceBitXor,
+	lexer.TokenLParen:              PrecedenceCall,
+	lexer.TokenLBracket:            PrecedenceIndex,
+	lexer.TokenDot:                 PrecedenceIndex,
+	lexer.TokenOptionalDot:         PrecedenceIndex,
 }
 
 func (p *Parser) peekPrecedence() int {
@@ -134,6 +136,10 @@ func (p *Parser) getPrefixFn(typ lexer.TokenType) prefixParseFn {
 		return p.parseNullLiteral
 	case lexer.TokenBang, lexer.TokenMinus:
 		return p.parsePrefixExpression
+	case lexer.TokenTypeof:
+		return p.parseTypeofExpression
+	case lexer.TokenTemplateStart:
+		return p.parseTemplateLiteral
 	case lexer.TokenLParen:
 		return p.parseGroupedExpression
 	case lexer.TokenLBrace:
@@ -173,8 +179,12 @@ func (p *Parser) getInfixFn(typ lexer.TokenType) infixParseFn {
 		return p.parseAssignExpression
 	case lexer.TokenDot:
 		return p.parseDotExpression
+	case lexer.TokenOptionalDot:
+		return p.parseOptionalDotExpression
 	case lexer.TokenLBracket:
 		return p.parseIndexExpression
+	case lexer.TokenQuestionQuestion:
+		return p.parseNullishCoalesceExpression
 	default:
 		return nil
 	}
@@ -182,6 +192,7 @@ func (p *Parser) getInfixFn(typ lexer.TokenType) infixParseFn {
 
 func (p *Parser) parseIdentifier() (Expr, error) {
 	token := p.advance()
+	token = normalizeIdentLexeme(token)
 	return &IdentifierExpr{Token: token, Name: token}, nil
 }
 
@@ -304,12 +315,101 @@ func (p *Parser) parseDotExpression(left Expr) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
+	name = normalizeIdentLexeme(name)
 	// Dot access obj.name is equivalent to obj["name"]
 	return &IndexExpr{
 		Token:  token,
 		Object: left,
 		Index:  &LiteralExpr{Token: name, Value: name.Lexeme},
 	}, nil
+}
+
+func (p *Parser) parseOptionalDotExpression(left Expr) (Expr, error) {
+	token := p.previous()
+	if p.check(lexer.TokenIdentifier) {
+		name, err := p.consume(lexer.TokenIdentifier, "expected property name after '?.'")
+		if err != nil {
+			return nil, err
+		}
+		name = normalizeIdentLexeme(name)
+		return &IndexExpr{
+			Token:    token,
+			Object:   left,
+			Index:    &LiteralExpr{Token: name, Value: name.Lexeme},
+			Optional: true,
+		}, nil
+	}
+	if _, err := p.consume(lexer.TokenLBracket, "expected '[' after '?.'"); err != nil {
+		return nil, err
+	}
+	index, err := p.parseExpression(PrecedenceLowest)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenRBracket, "expected ']' after optional computed member"); err != nil {
+		return nil, err
+	}
+	return &IndexExpr{Token: token, Object: left, Index: index, Optional: true}, nil
+}
+
+func (p *Parser) parseNullishCoalesceExpression(left Expr) (Expr, error) {
+	token := p.previous()
+	right, err := p.parseExpression(PrecedenceOr - 1)
+	if err != nil {
+		return nil, err
+	}
+	return &InfixExpr{Token: token, Left: left, Operator: "??", Right: right}, nil
+}
+
+func (p *Parser) parseTypeofExpression() (Expr, error) {
+	tok := p.advance()
+	right, err := p.parseExpression(PrecedencePrefix)
+	if err != nil {
+		return nil, err
+	}
+	return &PrefixExpr{Token: tok, Operator: "typeof", Right: right}, nil
+}
+
+func (p *Parser) parseTemplateLiteral() (Expr, error) {
+	tok := p.advance()
+	var parts []Expr
+	for !p.check(lexer.TokenTemplateClose) && !p.isAtEnd() {
+		switch {
+		case p.match(lexer.TokenTemplateString):
+			st := p.previous()
+			parts = append(parts, &LiteralExpr{Token: st, Value: st.Lexeme})
+		case p.match(lexer.TokenTemplateInterp):
+			exSrc := p.previous().Lexeme
+			ex, err := p.parseEmbeddedExpression(exSrc)
+			if err != nil {
+				return nil, err
+			}
+			parts = append(parts, ex)
+		default:
+			return nil, p.error(p.peek(), "malformed template literal")
+		}
+	}
+	if _, err := p.consume(lexer.TokenTemplateClose, "expected '`' to close template literal"); err != nil {
+		return nil, err
+	}
+	return &TemplateExpr{Token: tok, Parts: parts}, nil
+}
+
+func (p *Parser) parseEmbeddedExpression(src string) (Expr, error) {
+	l := lexer.NewLexer(src)
+	toks, err := l.Tokenize()
+	if err != nil {
+		return nil, fmt.Errorf("template embedded expr: %w", err)
+	}
+	sub := NewParser(toks)
+	e, err := sub.parseExpression(PrecedenceLowest)
+	if err != nil {
+		return nil, err
+	}
+	if sub.peek().Type != lexer.TokenEOF {
+		return nil, fmt.Errorf("trailing tokens in template embedded expression")
+	}
+	return e, nil
 }
 
 func (p *Parser) parseIndexExpression(left Expr) (Expr, error) {
@@ -329,11 +429,20 @@ func (p *Parser) parseArrayLiteral() (Expr, error) {
 	elements := []Expr{}
 	if !p.check(lexer.TokenRBracket) {
 		for {
-			el, err := p.parseExpression(PrecedenceLowest)
-			if err != nil {
-				return nil, err
+			if p.match(lexer.TokenTripleDot) {
+				dots := p.previous()
+				inner, err := p.parseExpression(PrecedenceLowest)
+				if err != nil {
+					return nil, err
+				}
+				elements = append(elements, &SpreadExpr{Token: dots, Expr: inner})
+			} else {
+				el, err := p.parseExpression(PrecedenceLowest)
+				if err != nil {
+					return nil, err
+				}
+				elements = append(elements, el)
 			}
-			elements = append(elements, el)
 			if !p.match(lexer.TokenComma) {
 				break
 			}
@@ -356,6 +465,7 @@ func (p *Parser) parseObjectLiteral() (Expr, error) {
 			if err != nil {
 				return nil, err
 			}
+			key = normalizeIdentLexeme(key)
 			keys = append(keys, key)
 
 			if _, err := p.consume(lexer.TokenColon, "expected ':' after property name"); err != nil {
@@ -393,6 +503,12 @@ func (p *Parser) parseFuncExpression() (Expr, error) {
 			name, err := p.consume(lexer.TokenIdentifier, "expected parameter name")
 			if err != nil {
 				return nil, err
+			}
+			name = normalizeIdentLexeme(name)
+			for _, q := range params {
+				if q.Name == name.Lexeme {
+					return nil, p.error(name, "duplicate parameter name")
+				}
 			}
 			params = append(params, Param{Name: name.Lexeme})
 

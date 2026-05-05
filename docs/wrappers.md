@@ -10,19 +10,19 @@ For each `import "name"` / `#include "file"` string, the loader tries, in order:
 2. Each directory in **`FUJI_PATH`** (same semantics as a normal search path)  
 3. Each directory in **`FUJI_WRAPPERS`** (path list, same separator as `PATH` on your OS)
 
-Under each root it looks for `name`, `name.fuji`, or `name/index.fuji` (and the same for `@segment/...` style modules). Set **`FUJI_WRAPPERS`** to the folder you distribute (e.g. unzip `kuji-wrappers/` next to `kuji.exe` and point users at it once).
+Under each root it looks for `name`, `name.fuji`, or `name/index.fuji` (and the same for `@segment/...` style modules). Set **`FUJI_WRAPPERS`** to the folder you distribute (e.g. unzip a `wrappers/` bundle next to **`fuji.exe`** and point users at it once).
 
 Example (PowerShell):
 
 ```powershell
-$env:FUJI_WRAPPERS = "C:\tools\kuji-wrappers"
+$env:FUJI_WRAPPERS = "C:\tools\fuji-wrappers"
 fuji run .\game.fuji
 ```
 
 Example (Unix):
 
 ```bash
-export FUJI_WRAPPERS="$HOME/kuji-wrappers"
+export FUJI_WRAPPERS="$HOME/fuji-wrappers"
 fuji run ./game.fuji
 ```
 
@@ -41,15 +41,15 @@ On Windows you might use `-L` to a MinGW lib folder and `-lraylib` (exact flags 
 
 ## 3. Producing wrappers
 
-- **`cmd/wrapgen`** (build the binary as **`kujiwrap`**) — header-driven generator in the **same Go module** as `fuji`. Run `go build -o kujiwrap ./cmd/wrapgen`. It emits readable `.fuji`, `wrapper.c`, and Markdown — no Python, no extra runtime.  
-- **`kuji wrap …`** — convenience: forwards to `kujiwrap` when it is installed next to `fuji`.  
-- **`cmd/kuji-single`** / **`cmd/dist`** — optional tools to embed or extract a **`wrappers/`** tree and set **`FUJI_WRAPPERS`** for turnkey bundles.
+- **`cmd/wrapgen`** — build the binary as **`fujiwrap`** (`go build -o fujiwrap ./cmd/wrapgen`). Header-driven generator in the **same Go module** as `fuji`. It emits readable `.fuji`, `wrapper.c`, and Markdown — no Python, no extra runtime. The legacy name **`wrapgen`** is the same program.  
+- **`fuji wrap …`** — forwards to **`fujiwrap`** (or **`wrapgen`** / **`kujiwrap`**) next to **`fuji`** or on **`PATH`**.  
+- Optional release tooling may embed or ship a **`wrappers/`** tree and document **`FUJI_WRAPPERS`** for turnkey bundles.
 
 Your distribution can be:
 
 | Artifact | Role |
 |----------|------|
-| `fuji` (or `kuji.exe`) | Compiler + VM + `fuji build` |
+| `fuji` | Compiler + `fuji build` / `fuji run` |
 | `wrappers/` directory (zip) | Pre-built or generated `*.fuji` trees per library |
 | README in `wrappers/` | Per-library **FUJI_LINKFLAGS** hints |
 

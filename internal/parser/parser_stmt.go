@@ -7,24 +7,20 @@ import (
 	"fuji/internal/lexer"
 )
 
-func (p *Parser) parseDeclaration() (Decl, error) {
+func (p *Parser) parseDeclaration() ([]Decl, error) {
 	if p.match(lexer.TokenComment) {
 		comment := p.previous().Lexeme
-		var rest string
-		switch {
-		case strings.HasPrefix(comment, "fuji:extern "):
-			rest = strings.TrimPrefix(comment, "fuji:extern ")
-		}
-		if rest != "" {
-			parts := strings.Fields(rest)
-			if len(parts) >= 2 {
+		if strings.HasPrefix(strings.ToLower(comment), "fuji:") {
+			body := strings.TrimSpace(comment[len("fuji:"):])
+			parts := strings.Fields(body)
+			if len(parts) >= 3 && strings.EqualFold(parts[0], "extern") {
 				arity := 0
-				if len(parts) >= 3 {
-					fmt.Sscanf(parts[2], "%d", &arity)
+				if len(parts) >= 4 {
+					_, _ = fmt.Sscanf(parts[3], "%d", &arity)
 				}
 				p.lastDirective = &NativeDirective{
-					BindingName: parts[0],
-					Symbol:      parts[1],
+					BindingName: strings.ToLower(parts[1]),
+					Symbol:      parts[2],
 					Arity:       arity,
 				}
 			}
@@ -32,34 +28,46 @@ func (p *Parser) parseDeclaration() (Decl, error) {
 		return p.parseDeclaration()
 	}
 	if p.match(lexer.TokenInclude) {
-		return p.parseIncludeDeclaration()
+		d, err := p.parseIncludeDeclaration()
+		if err != nil {
+			return nil, err
+		}
+		return []Decl{d}, nil
 	}
 	if p.match(lexer.TokenVar) {
 		tok := p.previous()
 		return nil, fmt.Errorf("%d:%d: 'var' is reserved; use 'let' to declare a variable", tok.Line, tok.Col)
 	}
 	if p.match(lexer.TokenLet) {
-		decl, err := p.parseLetDeclaration()
-		if err == nil {
-			if let, ok := decl.(*LetDecl); ok {
+		decls, err := p.parseLetDeclarations()
+		if err != nil {
+			return nil, err
+		}
+		if len(decls) > 0 {
+			if let, ok := decls[0].(*LetDecl); ok {
 				let.Native = p.lastDirective
 			}
-			p.lastDirective = nil
 		}
-		return decl, err
+		p.lastDirective = nil
+		return decls, nil
 	}
 	if p.match(lexer.TokenFunc) {
 		decl, err := p.parseFuncDeclaration()
-		if err == nil {
-			if f, ok := decl.(*FuncDecl); ok {
-				f.Native = p.lastDirective
-			}
-			p.lastDirective = nil
+		if err != nil {
+			return nil, err
 		}
-		return decl, err
+		if f, ok := decl.(*FuncDecl); ok {
+			f.Native = p.lastDirective
+		}
+		p.lastDirective = nil
+		return []Decl{decl}, nil
 	}
 	p.lastDirective = nil
-	return p.parseStatement()
+	s, err := p.parseStatement()
+	if err != nil {
+		return nil, err
+	}
+	return []Decl{s}, nil
 }
 
 func (p *Parser) parseIncludeDeclaration() (Decl, error) {
@@ -71,8 +79,55 @@ func (p *Parser) parseIncludeDeclaration() (Decl, error) {
 	return &IncludeDecl{Token: token, Path: path}, nil
 }
 
-func (p *Parser) parseLetDeclaration() (Decl, error) {
+func (p *Parser) parseLetDeclarations() ([]Decl, error) {
 	token := p.previous()
+
+	if p.check(lexer.TokenLBrace) {
+		p.advance()
+		var keys []lexer.Token
+		if !p.check(lexer.TokenRBrace) {
+			for {
+				keyTok, err := p.consume(lexer.TokenIdentifier, "expected property name in binding pattern")
+				if err != nil {
+					return nil, err
+				}
+				keyTok = normalizeIdentLexeme(keyTok)
+				keys = append(keys, keyTok)
+				if !p.match(lexer.TokenComma) {
+					break
+				}
+			}
+		}
+		if _, err := p.consume(lexer.TokenRBrace, "expected '}' after binding pattern"); err != nil {
+			return nil, err
+		}
+		if _, err := p.consume(lexer.TokenEqual, "expected '=' after destructuring pattern"); err != nil {
+			return nil, err
+		}
+		init, err := p.parseExpression(PrecedenceLowest)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.consume(lexer.TokenSemicolon, "expected ';' after variable declaration"); err != nil {
+			return nil, err
+		}
+		tmpLexeme := fmt.Sprintf("__fuji_destruct_%d", p.destructTmp)
+		p.destructTmp++
+		tmpTok := lexer.Token{Type: lexer.TokenIdentifier, Lexeme: tmpLexeme, Line: token.Line, Col: token.Col}
+
+		out := []Decl{
+			&LetDecl{Token: token, Name: tmpTok, Init: init},
+		}
+		for _, kt := range keys {
+			idTok := kt
+			objIdent := &IdentifierExpr{Token: tmpTok, Name: tmpTok}
+			idxLit := &LiteralExpr{Token: kt, Value: kt.Lexeme}
+			initIx := &IndexExpr{Token: kt, Object: objIdent, Index: idxLit}
+			out = append(out, &LetDecl{Token: token, Name: idTok, Init: initIx})
+		}
+		return out, nil
+	}
+
 	name, err := p.consume(lexer.TokenIdentifier, "expected variable name")
 	if err != nil {
 		if p.check(lexer.TokenVar) {
@@ -82,6 +137,7 @@ func (p *Parser) parseLetDeclaration() (Decl, error) {
 		}
 		return nil, err
 	}
+	name = normalizeIdentLexeme(name)
 
 	var init Expr
 	if p.match(lexer.TokenEqual) {
@@ -95,7 +151,7 @@ func (p *Parser) parseLetDeclaration() (Decl, error) {
 		return nil, err
 	}
 
-	return &LetDecl{Token: token, Name: name, Init: init}, nil
+	return []Decl{&LetDecl{Token: token, Name: name, Init: init}}, nil
 }
 
 func (p *Parser) parseFuncDeclaration() (Decl, error) {
@@ -109,6 +165,7 @@ func (p *Parser) parseFuncDeclaration() (Decl, error) {
 		}
 		return nil, err
 	}
+	name = normalizeIdentLexeme(name)
 
 	if _, err := p.consume(lexer.TokenLParen, "expected '(' after function name"); err != nil {
 		return nil, err
@@ -126,6 +183,12 @@ func (p *Parser) parseFuncDeclaration() (Decl, error) {
 					return nil, fmt.Errorf("%d:%d: 'var' is reserved; use 'let' to declare a variable", tok.Line, tok.Col)
 				}
 				return nil, err
+			}
+			paramName = normalizeIdentLexeme(paramName)
+			for _, q := range params {
+				if q.Name == paramName.Lexeme {
+					return nil, p.error(paramName, "duplicate parameter name")
+				}
 			}
 			param := Param{Name: paramName.Lexeme, IsRest: isRest}
 			if p.match(lexer.TokenEqual) {
@@ -161,6 +224,9 @@ func (p *Parser) parseFuncDeclaration() (Decl, error) {
 }
 
 func (p *Parser) parseStatement() (Stmt, error) {
+	if p.match(lexer.TokenDelete) {
+		return p.parseDeleteStatement()
+	}
 	if p.match(lexer.TokenIf) {
 		return p.parseIfStatement()
 	}
@@ -207,14 +273,16 @@ func (p *Parser) parseBlockStatement() (*BlockStmt, error) {
 	declarations := []Decl{}
 
 	for !p.check(lexer.TokenRBrace) && !p.isAtEnd() {
-		decl, err := p.parseDeclaration()
+		decls, err := p.parseDeclaration()
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := decl.(Stmt); !ok {
-			return nil, p.error(p.previous(), "expected statement in block")
+		for _, decl := range decls {
+			if _, ok := decl.(Stmt); !ok {
+				return nil, p.error(p.previous(), "expected statement in block")
+			}
+			declarations = append(declarations, decl)
 		}
-		declarations = append(declarations, decl)
 	}
 
 	if _, err := p.consume(lexer.TokenRBrace, "expected '}' after block"); err != nil {
@@ -333,11 +401,11 @@ func (p *Parser) parseSwitchStatement() (Stmt, error) {
 			}
 			var body []Decl
 			for !p.check(lexer.TokenCase) && !p.check(lexer.TokenDefault) && !p.check(lexer.TokenRBrace) && !p.isAtEnd() {
-				d, err := p.parseDeclaration()
+				ds, err := p.parseDeclaration()
 				if err != nil {
 					return nil, err
 				}
-				body = append(body, d)
+				body = append(body, ds...)
 			}
 			cases = append(cases, SwitchCase{Value: val, Body: body})
 			continue
@@ -347,11 +415,11 @@ func (p *Parser) parseSwitchStatement() (Stmt, error) {
 				return nil, err
 			}
 			for !p.check(lexer.TokenRBrace) && !p.isAtEnd() {
-				d, err := p.parseDeclaration()
+				ds, err := p.parseDeclaration()
 				if err != nil {
 					return nil, err
 				}
-				def = append(def, d)
+				def = append(def, ds...)
 			}
 			continue
 		}
@@ -369,43 +437,151 @@ func (p *Parser) parseForStatement() (Stmt, error) {
 	if _, err := p.consume(lexer.TokenLParen, "expected '(' after 'for'"); err != nil {
 		return nil, err
 	}
-	if !p.match(lexer.TokenLet) {
-		return nil, p.error(p.peek(), "expected 'let' in for-loop (only for-in / for-of is supported here)")
+	// for-in / for-of: for (let name in/of …) or for (let [k, v] of …)
+	if p.match(lexer.TokenLet) {
+		if p.match(lexer.TokenLBracket) {
+			keyTok, err := p.consume(lexer.TokenIdentifier, "expected key name in [k, v]")
+			if err != nil {
+				return nil, err
+			}
+			keyTok = normalizeIdentLexeme(keyTok)
+			if _, err := p.consume(lexer.TokenComma, "expected ',' between key and value in [k, v]"); err != nil {
+				return nil, err
+			}
+			valTok, err := p.consume(lexer.TokenIdentifier, "expected value name in [k, v]")
+			if err != nil {
+				return nil, err
+			}
+			valTok = normalizeIdentLexeme(valTok)
+			if _, err := p.consume(lexer.TokenRBracket, "expected ']' after [k, v]"); err != nil {
+				return nil, err
+			}
+			if !p.match(lexer.TokenOf) {
+				return nil, p.error(p.peek(), "expected 'of' after [k, v]")
+			}
+			iter, err := p.parseExpression(PrecedenceLowest)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.consume(lexer.TokenRParen, "expected ')' after for-of iterable"); err != nil {
+				return nil, err
+			}
+			body, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			v := valTok
+			return &ForOfStmt{Token: token, VarName: keyTok, ValueVar: &v, Iterable: iter, Body: body}, nil
+		}
+		name, err := p.consume(lexer.TokenIdentifier, "expected loop variable name")
+		if err != nil {
+			return nil, err
+		}
+		name = normalizeIdentLexeme(name)
+		if p.match(lexer.TokenIn) {
+			iter, err := p.parseExpression(PrecedenceLowest)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.consume(lexer.TokenRParen, "expected ')' after for-in iterable"); err != nil {
+				return nil, err
+			}
+			body, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			n := name
+			return &ForInStmt{Token: token, KeyVar: &n, Iterable: iter, Body: body}, nil
+		}
+		if p.match(lexer.TokenOf) {
+			iter, err := p.parseExpression(PrecedenceLowest)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.consume(lexer.TokenRParen, "expected ')' after for-of iterable"); err != nil {
+				return nil, err
+			}
+			body, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			return &ForOfStmt{Token: token, VarName: name, Iterable: iter, Body: body}, nil
+		}
+		// Classic for: for (let name [= expr]? [, let name [= expr]?]*; cond; incr)
+		letTok := p.tokens[p.current-2]
+		var init Expr
+		if p.match(lexer.TokenEqual) {
+			init, err = p.parseExpression(PrecedenceLowest)
+			if err != nil {
+				return nil, err
+			}
+		}
+		inits := []Decl{&LetDecl{Token: letTok, Name: name, Init: init}}
+		for p.match(lexer.TokenComma) {
+			if !p.match(lexer.TokenLet) {
+				return nil, p.error(p.peek(), "expected 'let' after ',' in for-loop initializer")
+			}
+			letTok2 := p.previous()
+			name2, err := p.consume(lexer.TokenIdentifier, "expected variable name in for-loop initializer")
+			if err != nil {
+				return nil, err
+			}
+			name2 = normalizeIdentLexeme(name2)
+			var init2 Expr
+			if p.match(lexer.TokenEqual) {
+				init2, err = p.parseExpression(PrecedenceLowest)
+				if err != nil {
+					return nil, err
+				}
+			}
+			inits = append(inits, &LetDecl{Token: letTok2, Name: name2, Init: init2})
+		}
+		if _, err := p.consume(lexer.TokenSemicolon, "expected ';' after for-loop initializer"); err != nil {
+			return nil, err
+		}
+		return p.finishClassicFor(token, inits)
 	}
-	name, err := p.consume(lexer.TokenIdentifier, "expected loop variable name")
+	// Classic for with empty initializer: for (; cond; incr)
+	if p.match(lexer.TokenSemicolon) {
+		return p.finishClassicFor(token, nil)
+	}
+	return nil, p.error(p.peek(), "expected 'let' or ';' after '(' in for-loop")
+}
+
+func (p *Parser) finishClassicFor(forTok lexer.Token, inits []Decl) (*ForStmt, error) {
+	var cond Expr
+	var err error
+	if !p.check(lexer.TokenSemicolon) {
+		cond, err = p.parseExpression(PrecedenceLowest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, err := p.consume(lexer.TokenSemicolon, "expected ';' after for-loop condition"); err != nil {
+		return nil, err
+	}
+
+	var increments []Expr
+	if !p.check(lexer.TokenRParen) {
+		for {
+			inc, err := p.parseExpression(PrecedenceLowest)
+			if err != nil {
+				return nil, err
+			}
+			increments = append(increments, inc)
+			if !p.match(lexer.TokenComma) {
+				break
+			}
+		}
+	}
+	if _, err := p.consume(lexer.TokenRParen, "expected ')' after for-loop clauses"); err != nil {
+		return nil, err
+	}
+	body, err := p.parseStatement()
 	if err != nil {
 		return nil, err
 	}
-	if p.match(lexer.TokenIn) {
-		iter, err := p.parseExpression(PrecedenceLowest)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := p.consume(lexer.TokenRParen, "expected ')' after for-in iterable"); err != nil {
-			return nil, err
-		}
-		body, err := p.parseStatement()
-		if err != nil {
-			return nil, err
-		}
-		n := name
-		return &ForInStmt{Token: token, KeyVar: &n, Iterable: iter, Body: body}, nil
-	}
-	if p.match(lexer.TokenOf) {
-		iter, err := p.parseExpression(PrecedenceLowest)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := p.consume(lexer.TokenRParen, "expected ')' after for-of iterable"); err != nil {
-			return nil, err
-		}
-		body, err := p.parseStatement()
-		if err != nil {
-			return nil, err
-		}
-		return &ForOfStmt{Token: token, VarName: name, Iterable: iter, Body: body}, nil
-	}
-	return nil, p.error(p.peek(), "expected 'in' or 'of' after for-loop variable")
+	return &ForStmt{Token: forTok, Inits: inits, Condition: cond, Increments: increments, Body: body}, nil
 }
 
 func (p *Parser) parseReturnStatement() (Stmt, error) {
@@ -425,6 +601,18 @@ func (p *Parser) parseReturnStatement() (Stmt, error) {
 	}
 
 	return &ReturnStmt{Token: token, Value: value}, nil
+}
+
+func (p *Parser) parseDeleteStatement() (Stmt, error) {
+	tok := p.previous()
+	target, err := p.parseExpression(PrecedenceLowest)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenSemicolon, "expected ';' after delete"); err != nil {
+		return nil, err
+	}
+	return &DeleteStmt{Token: tok, Target: target}, nil
 }
 
 func (p *Parser) parseExpressionStatement() (Stmt, error) {

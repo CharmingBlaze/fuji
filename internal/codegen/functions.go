@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -26,7 +27,7 @@ func (g *Generator) emitFuncDecl(d *parser.FuncDecl) error {
 	}
 
 	llvmName := name
-	if name == "main" {
+	if strings.EqualFold(name, "main") {
 		llvmName = "fuji_user_main"
 	}
 
@@ -65,7 +66,7 @@ func (g *Generator) emitFuncDecl(d *parser.FuncDecl) error {
 		}
 	}
 
-	thisSlot := g.block.NewAlloca(types.I64)
+	thisSlot := g.entryAlloca(types.I64)
 	g.locals["this"] = thisSlot
 	g.localIsCell["this"] = false
 	g.block.NewStore(fn.Params[0], thisSlot)
@@ -78,7 +79,7 @@ func (g *Generator) emitFuncDecl(d *parser.FuncDecl) error {
 			g.locals[param.Name] = cell
 			g.localIsCell[param.Name] = true
 		} else {
-			slot := g.block.NewAlloca(types.I64)
+			slot := g.entryAlloca(types.I64)
 			g.block.NewStore(fn.Params[i+1], slot)
 			g.locals[param.Name] = slot
 			g.localIsCell[param.Name] = false
@@ -161,7 +162,7 @@ func (g *Generator) emitFuncExpr(e *parser.FuncExpr) (value.Value, error) {
 
 	paramOffset := 1 + len(freeVars)
 
-	thisSlot := g.block.NewAlloca(types.I64)
+	thisSlot := g.entryAlloca(types.I64)
 	g.locals["this"] = thisSlot
 	g.localIsCell["this"] = false
 	g.block.NewStore(fn.Params[0], thisSlot)
@@ -174,7 +175,7 @@ func (g *Generator) emitFuncExpr(e *parser.FuncExpr) (value.Value, error) {
 			g.locals[param.Name] = cell
 			g.localIsCell[param.Name] = true
 		} else {
-			slot := g.block.NewAlloca(types.I64)
+			slot := g.entryAlloca(types.I64)
 			g.block.NewStore(fn.Params[paramOffset+i], slot)
 			g.locals[param.Name] = slot
 			g.localIsCell[param.Name] = false

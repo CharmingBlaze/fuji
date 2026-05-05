@@ -1,6 +1,10 @@
 package codegen
 
-import "github.com/llir/llvm/ir"
+import (
+	"strings"
+
+	"github.com/llir/llvm/ir"
+)
 
 // registerBuiltinFuncs binds Fuji global names to runtime LLVM symbols for native emission.
 func (g *Generator) registerBuiltinFuncs() {
@@ -17,6 +21,7 @@ func (g *Generator) registerBuiltinFuncs() {
 		{"len", g.runtimeLen},
 		{"type", g.runtimeType},
 		{"typeof", g.runtimeType},
+		{"matches", g.runtimeMatches},
 		{"time", g.runtimeTime},
 		{"clock", g.runtimeClock},
 		{"timestamp", g.runtimeTimestamp},
@@ -80,7 +85,7 @@ func (g *Generator) registerBuiltinFuncs() {
 	}
 	for _, p := range pairs {
 		if p.fn != nil {
-			g.funcs[p.name] = p.fn
+			g.funcs[strings.ToLower(p.name)] = p.fn
 		}
 	}
 }

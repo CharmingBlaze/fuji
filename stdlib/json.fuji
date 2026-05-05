@@ -1,4 +1,5 @@
-﻿// @json stdlib
 let stringify = json.stringify;
-let parse     = json.parse;
-let tryParse  = json.try_parse;
+
+let parse = json.parse;
+
+let tryparse = json.try_parse;

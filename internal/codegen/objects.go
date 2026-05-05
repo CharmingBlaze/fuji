@@ -3,7 +3,9 @@ package codegen
 import (
 	"fmt"
 
+	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
@@ -54,29 +56,41 @@ func (g *Generator) emitIndex(e *parser.IndexExpr) (value.Value, error) {
 		return nil, err
 	}
 
+	if !e.Optional {
+		key, err := g.emitExpr(e.Index)
+		if err != nil {
+			return nil, err
+		}
+		return g.block.NewCall(g.runtimeArrayGet, g.emitAsFujiI64(obj), g.emitAsFujiI64(key)), nil
+	}
+
+	nilTag := constant.NewInt(types.I64, llvmNilTagged)
+	objI := g.emitAsFujiI64(obj)
+	isNil := g.block.NewICmp(enum.IPredEQ, objI, nilTag)
+
+	g.tempN++
+	suf := fmt.Sprintf(".opt%d", g.tempN)
+	skip := g.currentFn.NewBlock("optnil"+suf)
+	cont := g.currentFn.NewBlock("optget"+suf)
+	merge := g.currentFn.NewBlock("optmg"+suf)
+	g.block.NewCondBr(isNil, skip, cont)
+
+	g.block = skip
+	skip.NewBr(merge)
+
+	g.block = cont
 	key, err := g.emitExpr(e.Index)
 	if err != nil {
 		return nil, err
 	}
+	got := g.block.NewCall(g.runtimeArrayGet, objI, g.emitAsFujiI64(key))
+	cont.NewBr(merge)
 
-	// For now, we'll use a simple heuristic:
-	// If the key is a string (represented as an object in our Value system), use object_get.
-	// Otherwise, assume it's an array index.
-	// In a production compiler, we'd have a unified 'FUJI_get' runtime function.
-
-	// Check if key is a string (this is a bit hacky without type info, but works for literals)
-	// For now, let's just use FUJI_object_get if the index expression was a string literal
-	if _, ok := e.Index.(*parser.LiteralExpr); ok {
-		// If it was a literal, we can be more certain
-		// But in general, we should use a runtime helper FUJI_get(obj, key)
-	}
-
-	// Use FUJI_object_get for everything for now, or implement a basic check
-	// Actually, let's use FUJI_object_get as the default and fallback to array if it fails?
-	// No, the runtime should handle it. Let's use a placeholder 'FUJI_get' if it existed.
-	// Since it doesn't, let's use FUJI_object_get for string keys and array_get for others.
-
-	return g.block.NewCall(g.runtimeObjGet, g.emitAsFujiI64(obj), g.emitAsFujiI64(key)), nil
+	g.block = merge
+	return merge.NewPhi(
+		ir.NewIncoming(nilTag, skip),
+		ir.NewIncoming(got, cont),
+	), nil
 }
 
 // emitAssign emits LLVM IR for assignment expressions.

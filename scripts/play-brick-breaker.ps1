@@ -1,0 +1,23 @@
+param(
+    [string]$Source = "examples/games/brick_breaker_new.fuji",
+    [string]$Output = "brick_breaker_new.exe"
+)
+
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Set-Location $repoRoot
+
+. (Join-Path $PSScriptRoot "use-raylib-env.ps1") -RepoRoot $repoRoot
+
+$raylibDll = Join-Path $repoRoot "raylib_lib\raylib-5.0_win64_mingw-w64\lib\raylib.dll"
+if (!(Test-Path $raylibDll)) {
+    throw "raylib.dll not found at '$raylibDll'"
+}
+
+& ".\fuji.exe" build --no-opt $Source -o $Output
+if ($LASTEXITCODE -ne 0) {
+    throw "Build failed for $Source"
+}
+
+Copy-Item -Force $raylibDll (Join-Path $repoRoot "raylib.dll")
+Start-Process -FilePath (Join-Path $repoRoot $Output)
+Write-Output "Launched $Output"

@@ -1,13 +1,17 @@
 # Fuji
 
-A small language for **games and apps**: JavaScript-style syntax, **native speed** via LLVM, and **plain `.fuji` files** you can read, diff, and ship. The compiler and CLI are **`fuji`**.
+**Fuji** is a **JavaScript-syntax** scripting language that compiles to **native binaries** via LLVM. That combination is **implemented today**, not only planned: **simple JavaScript**—objects, functions, familiar control flow—and **simple C**—**`fuji build`** produces a native executable (LLVM IR → object + **`libfuji_runtime.a`**), explicit statements, predictable performance, and **no separate runtime** for players to install.
+
+The **[language.md](language.md)** catalog lists the full surface (including **string/array methods**, **template `` `${}` `` literals**, **`math.*`** prelude, **`typeof`**, **`delete`**, **spread**, **destructuring**, **`?.`**, **`??`**, and **`matches()`** for substring checks).
+
+A small language for **games and apps**: **plain `.fuji` files** you can read, diff, and ship. The compiler and CLI are **`fuji`**. Use **`fuji fmt`** for canonical formatting (`CONTRIBUTING.md`).
 
 | Who | What they need |
 |-----|----------------|
 | **Players / Customers** | Only your **bundle** folder (`.exe` + assets). No Go, Python, or C++. |
-| **You (Author)** | **Go** to build **`fuji`** once. Either a **self-contained release binary** (no LLVM install) or **Clang** + **llc** on `PATH`, plus a C compiler to build **`runtime/libfuji_runtime.a`** when not using a prebuilt archive. Optional **wrapgen** for C header bindings. |
+| **You (Author)** | **Go** to build **`fuji`** once. Either a **self-contained release binary** (no LLVM install) or **Clang** + **llc** on `PATH`, plus a C compiler to build **`runtime/libfuji_runtime.a`** when not using a prebuilt archive. Optional **`fujiwrap`** (same sources as **`wrapgen`**) for C header bindings. |
 
-See **[CHANGELOG.md](CHANGELOG.md)** for **v0.1.0** (Result errors, GC, embedded toolchain, first tagged release).
+See **[CHANGELOG.md](CHANGELOG.md)** for **v0.1.0** (Result errors, GC, embedded toolchain, first tagged release). Contributors: **[CONTRIBUTING.md](CONTRIBUTING.md)** (tests, **`fuji fmt --check`**, runtime build).
 
 ### Verify v0.1.0 locally (Windows)
 
@@ -37,7 +41,7 @@ Fuji compiles **only** through the LLVM native pipeline (`fuji run` builds a tem
 
 **Build the toolchain:**
 ```bash
-make build    # ./bin/fuji and ./bin/wrapgen (see Makefile)
+make build    # ./bin/fuji and ./bin/fujiwrap (see Makefile; `make wrapgen` also builds legacy bin/wrapgen)
 ```
 
 **Run an example:**
@@ -74,6 +78,7 @@ make build    # ./bin/fuji and ./bin/wrapgen (see Makefile)
 
 | Document | Contents |
 |----------|----------|
+| [language.md](language.md) | **Single-page catalog** — keywords, operators, statements, builtins |
 | [docs/user_guide.md](docs/user_guide.md) | Comprehensive guide to Fuji |
 | [docs/reference.md](docs/reference.md) | Standard library and built-in functions |
 | [docs/language.md](docs/language.md) | Syntax and language specification |
@@ -81,6 +86,11 @@ make build    # ./bin/fuji and ./bin/wrapgen (see Makefile)
 | [docs/wrappers.md](docs/wrappers.md) | C/C++ FFI and Raylib integration |
 | [docs/architecture.md](docs/architecture.md) | Compiler pipeline (LLVM native only) |
 | [docs/windows-native-toolchain.md](docs/windows-native-toolchain.md) | Windows 11: LLVM 14, MSVC, Make, CGo for go-llvm |
+
+For the included Brick Breaker on Windows (raylib shim path), run:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\play-brick-breaker.ps1
+```
 
 **Release downloads** (GitHub **Releases**, tag `v*`): self-contained **`fuji`** binaries with embedded **`llc`**, **`lld`**, and **`libfuji_runtime.a`** are built by **`.github/workflows/release.yml`** (`go build -tags release`). No LLVM install is required to use those artifacts for **`fuji build`** / **`fuji run`**.
 

@@ -243,6 +243,8 @@ func shadowScanExprForFuncExprs(e parser.Expr, ctx *NativeEmitContext) {
 		for _, el := range x.Elements {
 			shadowScanExprForFuncExprs(el, ctx)
 		}
+	case *parser.SpreadExpr:
+		shadowScanExprForFuncExprs(x.Expr, ctx)
 	case *parser.ObjectExpr:
 		for _, v := range x.Values {
 			shadowScanExprForFuncExprs(v, ctx)
@@ -365,6 +367,9 @@ func shadowWalkStmt(s parser.Stmt, L *ShadowLayout, next *int) {
 		if L != nil && next != nil {
 			L.ForOfIndex[st] = *next
 			*next++
+			if st.ValueVar != nil {
+				*next++
+			}
 		}
 		shadowWalkStmt(st.Body, L, next)
 	case *parser.ForInStmt:
@@ -410,6 +415,8 @@ func shadowWalkExprLets(e parser.Expr, L *ShadowLayout, next *int) {
 		for _, el := range x.Elements {
 			shadowWalkExprLets(el, L, next)
 		}
+	case *parser.SpreadExpr:
+		shadowWalkExprLets(x.Expr, L, next)
 	case *parser.ObjectExpr:
 		for _, v := range x.Values {
 			shadowWalkExprLets(v, L, next)

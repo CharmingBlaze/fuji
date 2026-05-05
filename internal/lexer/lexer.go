@@ -70,7 +70,24 @@ func (l *Lexer) scanToken() error {
 	case ':':
 		l.addToken(TokenColon)
 	case '?':
-		l.addToken(TokenQuestion)
+		if l.match('?') {
+			l.addToken(TokenQuestionQuestion)
+		} else if l.match('.') {
+			l.addToken(TokenOptionalDot)
+		} else {
+			l.addToken(TokenQuestion)
+		}
+	case '`':
+		line := l.line
+		col := l.current - l.lineStart + 1
+		l.advance()
+		l.tokens = append(l.tokens, Token{
+			Type:   TokenTemplateStart,
+			Lexeme: "`",
+			Line:   line,
+			Col:    col,
+		})
+		return l.scanTemplateTail()
 	case '-':
 		if l.match('-') {
 			l.addToken(TokenMinusMinus)
@@ -100,8 +117,10 @@ func (l *Lexer) scanToken() error {
 				l.advance()
 			}
 			comment := string(l.source[start:l.current])
-			if strings.HasPrefix(comment, " fuji:") {
-				l.addTokenWithLexeme(TokenComment, "fuji:"+strings.TrimPrefix(comment, " fuji:"))
+			trim := strings.TrimLeft(comment, " \t")
+			if len(trim) >= 5 && strings.EqualFold(trim[:5], "fuji:") {
+				payload := strings.TrimSpace(trim[5:])
+				l.addTokenWithLexeme(TokenComment, "fuji:"+payload)
 			}
 		} else if l.match('*') {
 			for !l.isAtEnd() {
@@ -301,9 +320,13 @@ func (l *Lexer) identifier() error {
 		l.advance()
 	}
 
-	text := string(l.source[l.start:l.current])
-	typ := l.lookupKeyword(text)
-	l.addToken(typ)
+	raw := string(l.source[l.start:l.current])
+	typ := l.lookupKeyword(strings.ToLower(raw))
+	if typ == TokenIdentifier {
+		l.addToken(typ)
+	} else {
+		l.addTokenWithLexeme(typ, strings.ToLower(raw))
+	}
 	return nil
 }
 
@@ -312,8 +335,8 @@ func (l *Lexer) directive() error {
 		l.advance()
 	}
 	text := string(l.source[l.start:l.current])
-	if text == "#include" {
-		l.addToken(TokenInclude)
+	if strings.EqualFold(text, "#include") {
+		l.addTokenWithLexeme(TokenInclude, strings.ToLower(text))
 	} else {
 		l.addToken(TokenError)
 	}
@@ -366,8 +389,116 @@ func (l *Lexer) lookupKeyword(text string) TokenType {
 		return TokenTrue
 	case "while":
 		return TokenWhile
+	case "typeof":
+		return TokenTypeof
 	default:
 		return TokenIdentifier
+	}
+}
+
+func unescapeTemplateRun(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			switch s[i+1] {
+			case '`', '$', '\\':
+				b.WriteByte(s[i+1])
+				i++
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// scanTemplateTail runs after the opening ` token has been consumed and TemplateStart appended.
+func (l *Lexer) scanTemplateTail() error {
+	if l.peek() == '`' {
+		l.advance()
+		l.tokens = append(l.tokens, Token{
+			Type:   TokenTemplateClose,
+			Lexeme: "`",
+			Line:   l.line,
+			Col:    l.current - l.lineStart,
+		})
+		return nil
+	}
+
+	for {
+		if l.isAtEnd() {
+			return fmt.Errorf("unterminated template literal at %d:%d", l.line, l.current-l.lineStart+1)
+		}
+		if l.peek() == '`' {
+			l.advance()
+			l.tokens = append(l.tokens, Token{
+				Type:   TokenTemplateClose,
+				Lexeme: "`",
+				Line:   l.line,
+				Col:    l.current - l.lineStart,
+			})
+			return nil
+		}
+		if l.peek() == '$' && l.peekNext() == '{' {
+			l.advance()
+			l.advance()
+			exprStart := l.current
+			depth := 1
+			for depth > 0 && !l.isAtEnd() {
+				c := l.peek()
+				if c == '{' {
+					depth++
+					l.advance()
+					continue
+				}
+				if c == '}' {
+					depth--
+					l.advance()
+					continue
+				}
+				if c == '\n' {
+					l.line++
+					l.lineStart = l.current + 1
+				}
+				l.advance()
+			}
+			if depth != 0 {
+				return fmt.Errorf("unterminated '${}' in template literal at %d:%d", l.line, l.current-l.lineStart+1)
+			}
+			body := string(l.source[exprStart : l.current-1])
+			l.tokens = append(l.tokens, Token{
+				Type:   TokenTemplateInterp,
+				Lexeme: body,
+				Line:   l.line,
+				Col:    exprStart - l.lineStart + 1,
+			})
+			continue
+		}
+
+		textStart := l.current
+		for l.peek() != '`' && !(l.peek() == '$' && l.peekNext() == '{') && !l.isAtEnd() {
+			if l.peek() == '\\' {
+				l.advance()
+				if !l.isAtEnd() {
+					l.advance()
+				}
+				continue
+			}
+			if l.peek() == '\n' {
+				l.line++
+				l.lineStart = l.current + 1
+			}
+			l.advance()
+		}
+		raw := string(l.source[textStart:l.current])
+		if raw != "" {
+			l.tokens = append(l.tokens, Token{
+				Type:   TokenTemplateString,
+				Lexeme: unescapeTemplateRun(raw),
+				Line:   l.line,
+				Col:    textStart - l.lineStart + 1,
+			})
+		}
 	}
 }
 

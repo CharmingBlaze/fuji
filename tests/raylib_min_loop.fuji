@@ -1,0 +1,16 @@
+#include "../wrappers/raylib_shim/raylib.fuji"
+
+let black = 0xFF000000;
+let white = 0xFFFFFFFF;
+
+InitWindow(640, 360, "Fuji Raylib Min Loop");
+SetTargetFPS(60);
+
+while (!WindowShouldClose()) {
+    BeginDrawing();
+    ClearBackground(black);
+    DrawText("Fuji min loop running", 140, 160, 24, white);
+    EndDrawing();
+}
+
+CloseWindow();

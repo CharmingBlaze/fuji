@@ -3,16 +3,12 @@
 package fujihome
 
 import (
-	"embed"
-	"fmt"
-	"os"
-	"path/filepath"
+	"errors"
 	"runtime"
 	"sync"
-)
 
-//go:embed all:bundled
-var bundledReleaseFS embed.FS
+	fujembed "fuji/internal/embed"
+)
 
 var (
 	embeddedOnce sync.Once
@@ -22,60 +18,36 @@ var (
 
 func embeddedToolchain() (*Toolchain, error) {
 	embeddedOnce.Do(func() {
-		embeddedTC, embeddedErr = setupEmbeddedToolchain()
+		embeddedTC, embeddedErr = setupEmbeddedClangToolchain()
 	})
 	return embeddedTC, embeddedErr
 }
 
-func setupEmbeddedToolchain() (*Toolchain, error) {
-	dir, err := os.MkdirTemp("", "fuji-embedded-*")
+func setupEmbeddedClangToolchain() (*Toolchain, error) {
+	if _, err := fujembed.Extract(); err != nil {
+		return nil, errors.Join(ErrIncompleteEmbeddedToolchain, err)
+	}
+	clang, err := fujembed.ClangPath()
 	if err != nil {
-		return nil, fmt.Errorf("embedded toolchain temp dir: %w", err)
+		return nil, errors.Join(ErrIncompleteEmbeddedToolchain, err)
 	}
-	platform := platformKey()
-	files := map[string]string{
-		llcBinaryName():     filepath.Join(dir, llcBinaryName()),
-		lldBinaryName():     filepath.Join(dir, lldBinaryName()),
-		"libfuji_runtime.a": filepath.Join(dir, "libfuji_runtime.a"),
+	lib, err := fujembed.RuntimeLibPath()
+	if err != nil {
+		return nil, errors.Join(ErrIncompleteEmbeddedToolchain, err)
 	}
-	for srcLeaf, dstPath := range files {
-		// embed.FS paths always use forward slashes (see go:embed).
-		srcPath := "bundled/" + platform + "/" + srcLeaf
-		data, err := bundledReleaseFS.ReadFile(srcPath)
-		if err != nil {
-			return nil, fmt.Errorf("%w: read %s: %v", ErrIncompleteEmbeddedToolchain, srcPath, err)
-		}
-		mode := os.FileMode(0o644)
-		if filepath.Ext(srcLeaf) != ".a" {
-			mode = 0o755
-		}
-		if err := os.WriteFile(dstPath, data, mode); err != nil {
-			return nil, fmt.Errorf("write embedded %s: %w", dstPath, err)
-		}
-	}
-
-	llcPath := filepath.Join(dir, llcBinaryName())
-	lldPath := filepath.Join(dir, lldBinaryName())
-	libPath := filepath.Join(dir, "libfuji_runtime.a")
-
 	tc := &Toolchain{
-		LLC:        llcPath,
-		LLD:        lldPath,
-		RuntimeLib: libPath,
+		LLC:        "",
+		LLD:        "",
+		Clang:      clang,
+		RuntimeLib: lib,
+		LinkMode:   LinkClang,
 	}
-	switch runtime.GOOS {
-	case "linux":
-		tc.LinkMode = LinkLLDGNU
-		tc.Clang = ""
-	case "darwin":
-		tc.LinkMode = LinkLLDDarwin
-		tc.Clang = ""
-	case "windows":
-		tc.LinkMode = LinkClang
-		tc.Clang = findClangForEmbeddedLink(llcPath)
-	default:
-		tc.LinkMode = LinkClang
-		tc.Clang = findClangForEmbeddedLink(llcPath)
+	if runtime.GOOS == "windows" {
+		lld, err := fujembed.LLDPathWindows()
+		if err != nil {
+			return nil, errors.Join(ErrIncompleteEmbeddedToolchain, err)
+		}
+		tc.LLD = lld
 	}
 	return tc, nil
 }

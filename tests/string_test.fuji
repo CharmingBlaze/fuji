@@ -1,11 +1,14 @@
 let s = "hello";
+
 print("s[0]:", s[0]);
 print("Iterating string:");
+
 for (let c of s) {
     print("-", c);
 }
 
 let arr = [1, 2];
+
 arr.push(3);
 print("arr.length():", arr.length());
 print("arr.pop():", arr.pop());

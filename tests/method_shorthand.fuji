@@ -1,8 +1,5 @@
-let obj = {
-    x: 10,
-    getX() {
-        return this.x;
-    }
-};
+let obj = { x: 10, getx: func() {
+    return this.x;
+} };
 
-print("obj.getX():", obj.getX());
+print("obj.getX():", obj.getx());

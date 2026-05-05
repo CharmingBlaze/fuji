@@ -86,6 +86,8 @@ func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 		return g.emitLogicalAnd(e)
 	case "||":
 		return g.emitLogicalOr(e)
+	case "??":
+		return g.emitNullishCoalesce(e)
 	}
 
 	left, err := g.emitExpr(e.Left)
@@ -195,7 +197,7 @@ func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 }
 
 func (g *Generator) emitLogicalAnd(e *parser.InfixExpr) (value.Value, error) {
-	resultSlot := g.block.NewAlloca(types.I64)
+	resultSlot := g.entryAlloca(types.I64)
 	g.shadowStoreTemp(resultSlot)
 	leftVal, err := g.emitExpr(e.Left)
 	if err != nil {
@@ -220,8 +222,39 @@ func (g *Generator) emitLogicalAnd(e *parser.InfixExpr) (value.Value, error) {
 	return g.block.NewLoad(types.I64, resultSlot), nil
 }
 
+func (g *Generator) emitNullishCoalesce(e *parser.InfixExpr) (value.Value, error) {
+	resultSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(resultSlot)
+
+	leftVal, err := g.emitExpr(e.Left)
+	if err != nil {
+		return nil, err
+	}
+	leftI := g.emitAsFujiI64(leftVal)
+	g.block.NewStore(leftI, resultSlot)
+
+	nilTag := constant.NewInt(types.I64, llvmNilTagged)
+	isNil := g.block.NewICmp(enum.IPredEQ, leftI, nilTag)
+
+	g.tempN++
+	rhsBlock := g.currentFn.NewBlock(fmt.Sprintf("nn.rhs.%d", g.tempN))
+	mergeBlock := g.currentFn.NewBlock(fmt.Sprintf("nn.merge.%d", g.tempN))
+	g.block.NewCondBr(isNil, rhsBlock, mergeBlock)
+
+	g.block = rhsBlock
+	rightVal, err := g.emitExpr(e.Right)
+	if err != nil {
+		return nil, err
+	}
+	g.block.NewStore(g.emitAsFujiI64(rightVal), resultSlot)
+	g.block.NewBr(mergeBlock)
+
+	g.block = mergeBlock
+	return g.block.NewLoad(types.I64, resultSlot), nil
+}
+
 func (g *Generator) emitLogicalOr(e *parser.InfixExpr) (value.Value, error) {
-	resultSlot := g.block.NewAlloca(types.I64)
+	resultSlot := g.entryAlloca(types.I64)
 	g.shadowStoreTemp(resultSlot)
 	leftVal, err := g.emitExpr(e.Left)
 	if err != nil {
@@ -248,24 +281,42 @@ func (g *Generator) emitLogicalOr(e *parser.InfixExpr) (value.Value, error) {
 
 // emitArray emits LLVM IR for array expressions.
 func (g *Generator) emitArray(e *parser.ArrayExpr) (value.Value, error) {
-	n := len(e.Elements)
-	if n < 1 {
-		n = 1 // allow empty [] literal; runtime needs at least one slot before push fills
+	if len(e.Elements) == 0 {
+		capacity := constant.NewInt(types.I32, 1)
+		return g.block.NewCall(g.runtimeAllocArray, capacity), nil
 	}
-	capacity := constant.NewInt(types.I32, int64(n))
-	arr := g.block.NewCall(g.runtimeAllocArray, capacity)
 
-	// Initialize array elements
-	for i, elem := range e.Elements {
+	out := value.Value(nil)
+	for _, elem := range e.Elements {
+		if sp, ok := elem.(*parser.SpreadExpr); ok {
+			part, err := g.emitExpr(sp.Expr)
+			if err != nil {
+				return nil, err
+			}
+			if out == nil {
+				out = part
+			} else {
+				out = g.emitArgvRuntime(g.runtimeArrayConcat, []value.Value{out, part})
+			}
+			continue
+		}
 		elemVal, err := g.emitExpr(elem)
 		if err != nil {
 			return nil, err
 		}
-		index := constant.NewInt(types.I64, int64(i))
-		g.block.NewCall(g.runtimeArraySet, arr, index, g.emitAsFujiI64(elemVal))
+		singleton := g.block.NewCall(g.runtimeAllocArray, constant.NewInt(types.I32, 1))
+		g.block.NewCall(g.runtimeArraySet, singleton, constant.NewInt(types.I64, 0), g.emitAsFujiI64(elemVal))
+		if out == nil {
+			out = singleton
+		} else {
+			out = g.emitArgvRuntime(g.runtimeArrayConcat, []value.Value{out, singleton})
+		}
 	}
-
-	return arr, nil
+	if out == nil {
+		capacity := constant.NewInt(types.I32, 1)
+		return g.block.NewCall(g.runtimeAllocArray, capacity), nil
+	}
+	return out, nil
 }
 
 // emitThis emits LLVM IR for the this keyword.
@@ -310,7 +361,7 @@ func (g *Generator) emitSlice(e *parser.SliceExpr) (value.Value, error) {
 
 	zero := constant.NewInt(types.I32, 0)
 	arrTy := types.NewArray(3, types.I64)
-	slot := g.block.NewAlloca(arrTy)
+	slot := g.entryAlloca(arrTy)
 	g.block.NewStore(objI, g.block.NewGetElementPtr(arrTy, slot, zero, constant.NewInt(types.I32, 0)))
 	g.block.NewStore(startI, g.block.NewGetElementPtr(arrTy, slot, zero, constant.NewInt(types.I32, 1)))
 	g.block.NewStore(endI, g.block.NewGetElementPtr(arrTy, slot, zero, constant.NewInt(types.I32, 2)))
@@ -364,7 +415,7 @@ func (g *Generator) emitRange(e *parser.RangeExpr) (value.Value, error) {
 
 	zero := constant.NewInt(types.I32, 0)
 	arrTy := types.NewArray(2, types.I64)
-	slot := g.block.NewAlloca(arrTy)
+	slot := g.entryAlloca(arrTy)
 	g.block.NewStore(g.emitAsFujiI64(fromVal), g.block.NewGetElementPtr(arrTy, slot, zero, constant.NewInt(types.I32, 0)))
 	g.block.NewStore(g.emitAsFujiI64(toVal), g.block.NewGetElementPtr(arrTy, slot, zero, constant.NewInt(types.I32, 1)))
 	argvPtr := g.block.NewGetElementPtr(arrTy, slot, zero, zero)
@@ -386,14 +437,14 @@ func (g *Generator) emitImport(_ *parser.ImportExpr) (value.Value, error) {
 
 // emitSwitchExpr emits LLVM IR for switch expressions (expression-level switch).
 func (g *Generator) emitSwitchExpr(e *parser.SwitchExpr) (value.Value, error) {
-	resultSlot := g.block.NewAlloca(types.I64)
+	resultSlot := g.entryAlloca(types.I64)
 	g.shadowStoreTemp(resultSlot)
 
 	subj, err := g.emitExpr(e.Subject)
 	if err != nil {
 		return nil, err
 	}
-	subjSlot := g.block.NewAlloca(types.I64)
+	subjSlot := g.entryAlloca(types.I64)
 	g.shadowStoreTemp(subjSlot)
 	g.block.NewStore(g.emitAsFujiI64(subj), subjSlot)
 

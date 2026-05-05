@@ -4,4 +4,4 @@ print("Type of time:", type(time));
 print("Time call:", time());
 print("Clock call:", clock());
 print("Timestamp call:", timestamp());
-print("DeltaTime call:", deltaTime());
+print("DeltaTime call:", deltatime());

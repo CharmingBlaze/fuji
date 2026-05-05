@@ -38,6 +38,37 @@ func TestLexer(t *testing.T) {
 	assertTokenTypes(t, source, expected)
 }
 
+func TestLexerCaseInsensitiveKeywords(t *testing.T) {
+	l := NewLexer("LET X = 1;\nFUNC F() { RETURN X; }\n")
+	toks, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if toks[0].Type != TokenLet || toks[0].Lexeme != "let" {
+		t.Fatalf("LET: got %v %q", toks[0].Type, toks[0].Lexeme)
+	}
+	if toks[1].Type != TokenIdentifier || toks[1].Lexeme != "X" {
+		t.Fatalf("identifier lexeme: got %q", toks[1].Lexeme)
+	}
+	if toks[5].Type != TokenFunc || toks[5].Lexeme != "func" {
+		t.Fatalf("FUNC: got %v %q", toks[5].Type, toks[5].Lexeme)
+	}
+	if toks[10].Type != TokenReturn || toks[10].Lexeme != "return" {
+		t.Fatalf("RETURN: got %v %q", toks[10].Type, toks[10].Lexeme)
+	}
+}
+
+func TestLexerIncludeDirectiveCase(t *testing.T) {
+	l := NewLexer("#INCLUDE \"a.fuji\"\n")
+	toks, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if toks[0].Type != TokenInclude || strings.ToLower(toks[0].Lexeme) != "#include" {
+		t.Fatalf("got %#v", toks[0])
+	}
+}
+
 func TestLexerComplex(t *testing.T) {
 	source := `func add(a, b) { return a + b; }`
 	expected := []TokenType{

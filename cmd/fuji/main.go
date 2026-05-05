@@ -72,6 +72,11 @@ func main() {
 		}
 		fmt.Println("OK")
 
+	case "fmt":
+		if err := runFmtCmd(args[1:]); err != nil {
+			fatal(err.Error())
+		}
+
 	case "disasm":
 		requireArg(args, "disasm", "<file.fuji>")
 		if err := disasmFile(args[1]); err != nil {
@@ -143,10 +148,11 @@ COMMANDS
   run     <file.fuji>              Compile with LLVM and run the native binary (same pipeline as build)
   native  <file.fuji>              Same as run (backward-compatible alias)
   check   <file.fuji>              Parse + load imports only; prints OK if valid
+  fmt     [--check] <files...>     Canonical spacing (4 spaces); ./... walks .fuji files (--check exits 1 if diffs)
   disasm  <file.fuji>              Print LLVM IR for the program (after sema + codegen)
   build   [--no-opt] <file.fuji> [-o <exe>]   Native executable (needs llc + Clang; see CONTRIBUTING.md)
   bundle  <file.fuji> [-o <dir>]   Build + tidy folder to share or sell
-  wrap    ...args...                   Forward to wrapgen (C header → .fuji + wrapper.c); see below
+  wrap    ...args...                   Forward to fujiwrap (C header → .fuji + wrapper.c); see below
   paths                            Machine-readable toolchain paths (CI / scripts)
   doctor                           Human-readable health check (clang, llc, lld, stdlib, install writable)
 
@@ -159,15 +165,15 @@ OPTIONS
 BUILD FROM SOURCE (optional)
   From the repo root with GNU Make; on Windows use mingw32-make when the default make is not GNU make:
 
-    make                # runtime/libfuji_runtime.a, bin/fuji, bin/wrapgen, then go test
+    make                # runtime/libfuji_runtime.a, bin/fuji, bin/fujiwrap, then go test
     make runtime-lib    # only the static runtime library
     make raylib-lib     # optional: build Raylib into third_party/raylib_static/stage/ (CMake + raylib/)
 
 C / C++ LIBRARIES (readable .fuji wrappers)
   Parse C headers and emit .fuji bindings plus wrapper.c for the Fuji runtime (Value / fuji_*).
-  Library authors build wrapgen once with Go (or use 'make wrapgen'):
+  Library authors build fujiwrap once with Go (or use 'make fujiwrap'):
 
-    go build -o wrapgen%s ./cmd/wrapgen
+    go build -o fujiwrap%s ./cmd/wrapgen
 
   Generate bindings from headers:
 
@@ -196,13 +202,13 @@ ENVIRONMENT
 
 SINGLE-EXE / EMBEDDED TOOLCHAIN
   Release builds embed a gzip tarball (see internal/fujihome/embeddata/). On first fuji build
-  On first fuji build or wrapgen run, if the archive lists a real toolchain/bin/clang, it is extracted next to the
+  On first fuji build or fujiwrap run, if the archive lists a real toolchain/bin/clang, it is extracted next to the
   executable. Portable lib/clang/*/include headers can live in that tree; clang is invoked with
   matching -isystem flags. Replace embeddata/bundled_toolchain.tar.gz before go build to ship LLVM.
 
 ZERO-SETUP DISTRIBUTION (same folder as fuji.exe / fuji)
   Put optional trees next to the compiler so users need no separate installs:
-    llvm/bin/clang(.exe)   OR   toolchain/bin/clang(.exe)   — used for fuji build and wrapgen
+    llvm/bin/clang(.exe)   OR   toolchain/bin/clang(.exe)   — used for fuji build and fujiwrap
     stdlib/*.fuji         — @ imports (e.g. @array) resolve here automatically
     wrappers/             — optional generated bindings (same @ resolution rules)
   FUJI_CLANG / FUJI_PATH are only needed when you do not ship these folders or an embedded bundle.
@@ -223,12 +229,17 @@ func exeExt() string {
 
 func runWrapgen(args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Println("fuji wrap - runs wrapgen (header → .fuji + wrapper.c). Example:")
+		fmt.Println("fuji wrap — runs fujiwrap (header → .fuji + wrapper.c). Example:")
 		fmt.Println("  fuji wrap -name mylib -headers ./include/mylib.h -out ./wrappers/mylib")
-		fmt.Printf("\nBuild wrapgen and place it next to fuji:\n  go build -o wrapgen%s ./cmd/wrapgen\n", exeExt())
+		fmt.Printf("\nBuild fujiwrap and place it next to fuji:\n  go build -o fujiwrap%s ./cmd/wrapgen\n", exeExt())
+		fmt.Printf("(legacy names wrapgen / kujiwrap are still discovered if present.)\n")
 		return nil
 	}
-	names := []string{"wrapgen", "wrapgen.exe", "kujiwrap", "kujiwrap.exe"}
+	names := []string{
+		"fujiwrap", "fujiwrap.exe",
+		"wrapgen", "wrapgen.exe",
+		"kujiwrap", "kujiwrap.exe",
+	}
 	if self, err := os.Executable(); err == nil {
 		dir := filepath.Dir(self)
 		for _, name := range names {
@@ -243,7 +254,7 @@ func runWrapgen(args []string) error {
 			return runPassthrough(p, args)
 		}
 	}
-	return fmt.Errorf("wrapgen not found (looked next to fuji and on PATH).\nBuild once: go build -o wrapgen%s ./cmd/wrapgen", exeExt())
+	return fmt.Errorf("fujiwrap not found (looked next to fuji and on PATH).\nBuild once: go build -o fujiwrap%s ./cmd/wrapgen\n(legacy binary name wrapgen also works.)", exeExt())
 }
 
 func runPassthrough(path string, args []string) error {

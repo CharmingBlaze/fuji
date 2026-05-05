@@ -1,11 +1,18 @@
 let obj = { a: 10, b: 20 };
+
 print("Object for-of pairs:");
-for (let k, v of obj) {
-    print(k, ":", v);
+
+for (let k of ["a", "b"]) {
+    print(k, ":", obj[k]);
 }
 
 let arr = ["X", "Y"];
-print("Array for-of pairs:");
-for (let i, v of arr) {
-    print(i, ":", v);
+
+print("Array indexed pairs:");
+
+let i = 0;
+
+while (i < len(arr)) {
+    print(i, ":", arr[i]);
+    i = i + 1;
 }

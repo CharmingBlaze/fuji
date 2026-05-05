@@ -1,65 +1,86 @@
-// Brick Breaker — Raylib via wrappers/raylib_shim (FUJI_NATIVE_SOURCES + FUJI_LINKFLAGS).
 #include "../../wrappers/raylib_shim/raylib.fuji"
 
-// Color constants (0xRRGGBBAA)
-let BLACK = 0x000000FF;
-let WHITE = 0xFFFFFFFF;
-let RED   = 0xFF0000FF;
-let GREEN = 0x00FF00FF;
-let BLUE  = 0x0000FFFF;
-let YELLOW = 0xFFFF00FF;
-let ORANGE = 0xFFA500FF;
-let PURPLE = 0x800080FF;
-let GRAY   = 0x808080FF;
+let black = 0x000000FF;
 
-// Key constants
-let KEY_LEFT = 263;
-let KEY_RIGHT = 262;
-let KEY_SPACE = 32;
-let KEY_R = 82;
+let white = 0xFFFFFFFF;
 
-// Game constants
-let SCREEN_WIDTH = 800;
-let SCREEN_HEIGHT = 600;
-let PADDLE_WIDTH = 100;
-let PADDLE_HEIGHT = 15;
-let BALL_RADIUS = 8;
-let BRICK_WIDTH = 75;
-let BRICK_HEIGHT = 20;
-let BRICK_ROWS = 5;
-let BRICK_COLS = 10;
-let BRICK_PADDING = 4;
-let BRICK_OFFSET_TOP = 60;
-let BRICK_OFFSET_LEFT = 35;
+let red = 0xFF0000FF;
 
-// Game state
-let paddleX = 350;
-let paddleY = 565;
-let ballX = 400;
-let ballY = 300;
-let ballSpeedX = 5;
-let ballSpeedY = -5;
-let ballActive = false;
+let green = 0x00FF00FF;
+
+let blue = 0x0000FFFF;
+
+let yellow = 0xFFFF00FF;
+
+let orange = 0xFFA500FF;
+
+let purple = 0x800080FF;
+
+let gray = 0x808080FF;
+
+let key_left = 263;
+
+let key_right = 262;
+
+let key_space = 32;
+
+let key_r = 82;
+
+let screen_width = 800;
+
+let screen_height = 600;
+
+let paddle_width = 100;
+
+let paddle_height = 15;
+
+let ball_radius = 8;
+
+let brick_width = 75;
+
+let brick_height = 20;
+
+let brick_rows = 5;
+
+let brick_cols = 10;
+
+let brick_padding = 4;
+
+let brick_offset_top = 60;
+
+let brick_offset_left = 35;
+
+let paddlex = 350;
+
+let paddley = 565;
+
+let ballx = 400;
+
+let bally = 300;
+
+let ballspeedx = 5;
+
+let ballspeedy = -5;
+
+let ballactive = false;
 
 let bricks = [];
-let score = 0;
-let lives = 3;
-let gameState = "START"; // "START", "PLAYING", "PAUSED", "GAME_OVER", "WIN"
-let brickColors = [RED, ORANGE, YELLOW, GREEN, BLUE];
 
-// Initialize bricks
-func initBricks() {
+let score = 0;
+
+let lives = 3;
+
+let gamestate = "START";
+
+let brickcolors = [red, orange, yellow, green, blue];
+
+func initbricks() {
     bricks = [];
     let row = 0;
-    while (row < BRICK_ROWS) {
+    while (row < brick_rows) {
         let col = 0;
-        while (col < BRICK_COLS) {
-            let brick = {
-                x: col * (BRICK_WIDTH + BRICK_PADDING) + BRICK_OFFSET_LEFT,
-                y: row * (BRICK_HEIGHT + BRICK_PADDING) + BRICK_OFFSET_TOP,
-                color: brickColors[row],
-                destroyed: false
-            };
+        while (col < brick_cols) {
+            let brick = { x: col * (brick_width + brick_padding) + brick_offset_left, y: row * (brick_height + brick_padding) + brick_offset_top, color: brickcolors[row], destroyed: false };
             bricks.push(brick);
             col = col + 1;
         }
@@ -67,192 +88,165 @@ func initBricks() {
     }
 }
 
-// Reset ball position
-func resetBall() {
-    ballX = paddleX + PADDLE_WIDTH / 2;
-    ballY = paddleY - BALL_RADIUS - 2;
-    ballSpeedX = 5;
-    ballSpeedY = -5;
-    ballActive = false;
+func resetball() {
+    ballx = paddlex + paddle_width / 2;
+    bally = paddley - ball_radius - 2;
+    ballspeedx = 5;
+    ballspeedy = -5;
+    ballactive = false;
 }
 
-// Check collision between ball and rectangle
-func checkBallRectCollision(bx, by, br, rx, ry, rw, rh) {
-    let closestX = bx;
-    if (bx < rx) { closestX = rx; }
-    else if (bx > rx + rw) { closestX = rx + rw; }
-    
-    let closestY = by;
-    if (by < ry) { closestY = ry; }
-    else if (by > ry + rh) { closestY = ry + rh; }
-    
-    let dx = bx - closestX;
-    let dy = by - closestY;
-    let distSq = dx * dx + dy * dy;
-    
-    return distSq < (br * br);
+func checkballrectcollision(bx, by, br, rx, ry, rw, rh) {
+    let closestx = bx;
+    if (bx < rx) {
+        closestx = rx;
+    } else
+        if (bx > rx + rw) {
+            closestx = rx + rw;
+        }
+    let closesty = by;
+    if (by < ry) {
+        closesty = ry;
+    } else
+        if (by > ry + rh) {
+            closesty = ry + rh;
+        }
+    let dx = bx - closestx;
+    let dy = by - closesty;
+    let distsq = dx * dx + dy * dy;
+    return distsq < br * br;
 }
 
-// Update game logic
-func updateGame() {
-    if (gameState == "START") {
-        if (IsKeyPressed(KEY_SPACE)) {
-            gameState = "PLAYING";
-            ballActive = true;
+func updategame() {
+    if (gamestate == "START") {
+        if (iskeypressed(key_space)) {
+            gamestate = "PLAYING";
+            ballactive = true;
         }
         return;
     }
-    
-    if (gameState == "PLAYING") {
-        // Move paddle
-        if (IsKeyDown(KEY_LEFT) && paddleX > 0) {
-            paddleX = paddleX - 8;
+    if (gamestate == "PLAYING") {
+        if (iskeydown(key_left) && paddlex > 0) {
+            paddlex = paddlex - 8;
         }
-        if (IsKeyDown(KEY_RIGHT) && paddleX < SCREEN_WIDTH - PADDLE_WIDTH) {
-            paddleX = paddleX + 8;
+        if (iskeydown(key_right) && paddlex < screen_width - paddle_width) {
+            paddlex = paddlex + 8;
         }
-        
-        // Move ball
-        if (ballActive) {
-            ballX = ballX + ballSpeedX;
-            ballY = ballY + ballSpeedY;
-            
-            // Wall collisions
-            if (ballX + BALL_RADIUS > SCREEN_WIDTH || ballX - BALL_RADIUS < 0) {
-                ballSpeedX = -ballSpeedX;
+        if (ballactive) {
+            ballx = ballx + ballspeedx;
+            bally = bally + ballspeedy;
+            if (ballx + ball_radius > screen_width || ballx - ball_radius < 0) {
+                ballspeedx = -ballspeedx;
             }
-            if (ballY - BALL_RADIUS < 0) {
-                ballSpeedY = -ballSpeedY;
+            if (bally - ball_radius < 0) {
+                ballspeedy = -ballspeedy;
             }
-            
-            // Death
-            if (ballY - BALL_RADIUS > SCREEN_HEIGHT) {
+            if (bally - ball_radius > screen_height) {
                 lives = lives - 1;
                 if (lives <= 0) {
-                    gameState = "GAME_OVER";
+                    gamestate = "GAME_OVER";
                 } else {
-                    resetBall();
+                    resetball();
                 }
             }
-            
-            // Paddle collision
-            if (ballSpeedY > 0 && checkBallRectCollision(ballX, ballY, BALL_RADIUS, paddleX, paddleY, PADDLE_WIDTH, PADDLE_HEIGHT)) {
-                ballSpeedY = -ballSpeedY;
-                let hitPos = (ballX - paddleX) / PADDLE_WIDTH;
-                ballSpeedX = 10 * (hitPos - 0.5);
+            if (ballspeedy > 0 && checkballrectcollision(ballx, bally, ball_radius, paddlex, paddley, paddle_width, paddle_height)) {
+                ballspeedy = -ballspeedy;
+                let hitpos = (ballx - paddlex) / paddle_width;
+                ballspeedx = 10 * (hitpos - 0.5);
             }
-            
-            // Brick collision
             let i = 0;
             while (i < len(bricks)) {
                 let brick = bricks[i];
-                if (!brick.destroyed && checkBallRectCollision(ballX, ballY, BALL_RADIUS, brick.x, brick.y, BRICK_WIDTH, BRICK_HEIGHT)) {
+                if (!brick.destroyed && checkballrectcollision(ballx, bally, ball_radius, brick.x, brick.y, brick_width, brick_height)) {
                     brick.destroyed = true;
-                    ballSpeedY = -ballSpeedY;
+                    ballspeedy = -ballspeedy;
                     score = score + 10;
-                    
-                    // Check win
-                    let allDestroyed = true;
+                    let alldestroyed = true;
                     let j = 0;
                     while (j < len(bricks)) {
                         if (!bricks[j].destroyed) {
-                            allDestroyed = false;
+                            alldestroyed = false;
                             break;
                         }
                         j = j + 1;
                     }
-                    if (allDestroyed) {
-                        gameState = "WIN";
+                    if (alldestroyed) {
+                        gamestate = "WIN";
                     }
                     break;
                 }
                 i = i + 1;
             }
         }
-        
-        if (IsKeyPressed(KEY_SPACE)) {
-            gameState = "PAUSED";
+        if (iskeypressed(key_space)) {
+            gamestate = "PAUSED";
         }
-    } else if (gameState == "PAUSED") {
-        if (IsKeyPressed(KEY_SPACE)) {
-            gameState = "PLAYING";
-        }
-    } else if (gameState == "GAME_OVER" || gameState == "WIN") {
-        if (IsKeyPressed(KEY_R)) {
-            score = 0;
-            lives = 3;
-            gameState = "START";
-            initBricks();
-            paddleX = 350;
-            resetBall();
-        }
-    }
+    } else
+        if (gamestate == "PAUSED") {
+            if (iskeypressed(key_space)) {
+                gamestate = "PLAYING";
+            }
+        } else
+            if (gamestate == "GAME_OVER" || gamestate == "WIN") {
+                if (iskeypressed(key_r)) {
+                    score = 0;
+                    lives = 3;
+                    gamestate = "START";
+                    initbricks();
+                    paddlex = 350;
+                    resetball();
+                }
+            }
 }
 
-// Draw game
-func drawGame() {
-    BeginDrawing();
-    ClearBackground(BLACK);
-    
-    if (gameState == "START") {
-        DrawText("FUJI BRICK BREAKER", 220, 150, 40, WHITE);
-        DrawText("Press SPACE to start", 280, 250, 20, WHITE);
-        DrawText("Use LEFT/RIGHT arrows to move", 240, 300, 20, WHITE);
+func drawgame() {
+    begindrawing();
+    clearbackground(black);
+    if (gamestate == "START") {
+        drawtext("FUJI BRICK BREAKER", 220, 150, 40, white);
+        drawtext("Press SPACE to start", 280, 250, 20, white);
+        drawtext("Use LEFT/RIGHT arrows to move", 240, 300, 20, white);
     }
-    
-    if (gameState == "PLAYING" || gameState == "PAUSED") {
-        // Draw bricks
+    if (gamestate == "PLAYING" || gamestate == "PAUSED") {
         let i = 0;
         while (i < len(bricks)) {
             let brick = bricks[i];
             if (!brick.destroyed) {
-                DrawRectangle(brick.x, brick.y, BRICK_WIDTH, BRICK_HEIGHT, brick.color);
+                drawrectangle(brick.x, brick.y, brick_width, brick_height, brick.color);
             }
             i = i + 1;
         }
-        
-        // Draw paddle
-        DrawRectangle(paddleX, paddleY, PADDLE_WIDTH, PADDLE_HEIGHT, WHITE);
-        
-        // Draw ball
-        DrawCircle(ballX, ballY, BALL_RADIUS, WHITE);
-        
-        // Draw UI
-        DrawText("Score: " + score, 10, 10, 20, WHITE);
-        DrawText("Lives: " + lives, 10, 35, 20, WHITE);
-        
-        if (gameState == "PAUSED") {
-            DrawText("PAUSED", 350, 300, 30, YELLOW);
+        drawrectangle(paddlex, paddley, paddle_width, paddle_height, white);
+        drawcircle(ballx, bally, ball_radius, white);
+        drawtext("Score: " + score, 10, 10, 20, white);
+        drawtext("Lives: " + lives, 10, 35, 20, white);
+        if (gamestate == "PAUSED") {
+            drawtext("PAUSED", 350, 300, 30, yellow);
         }
     }
-    
-    if (gameState == "GAME_OVER") {
-        DrawText("GAME OVER", 310, 250, 40, RED);
-        DrawText("Score: " + score, 350, 310, 20, WHITE);
-        DrawText("Press R to restart", 320, 350, 20, WHITE);
+    if (gamestate == "GAME_OVER") {
+        drawtext("GAME OVER", 310, 250, 40, red);
+        drawtext("Score: " + score, 350, 310, 20, white);
+        drawtext("Press R to restart", 320, 350, 20, white);
     }
-    
-    if (gameState == "WIN") {
-        DrawText("YOU WIN!", 330, 250, 40, GREEN);
-        DrawText("Score: " + score, 350, 310, 20, WHITE);
-        DrawText("Press R to restart", 320, 350, 20, WHITE);
+    if (gamestate == "WIN") {
+        drawtext("YOU WIN!", 330, 250, 40, green);
+        drawtext("Score: " + score, 350, 310, 20, white);
+        drawtext("Press R to restart", 320, 350, 20, white);
     }
-    
-    EndDrawing();
+    enddrawing();
 }
 
 func main() {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Fuji Production Brick Breaker");
-    SetTargetFPS(60);
-    initBricks();
-    resetBall();
-    
-    while (!WindowShouldClose()) {
-        updateGame();
-        drawGame();
+    initwindow(screen_width, screen_height, "Fuji Production Brick Breaker");
+    settargetfps(60);
+    initbricks();
+    resetball();
+    while (!windowshouldclose()) {
+        updategame();
+        drawgame();
     }
-    
-    CloseWindow();
+    closewindow();
 }
 
 main();

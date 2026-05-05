@@ -9,6 +9,7 @@ type Parser struct {
 	tokens        []lexer.Token
 	current       int
 	lastDirective *NativeDirective
+	destructTmp   int
 }
 
 func NewParser(tokens []lexer.Token) *Parser {
@@ -18,11 +19,11 @@ func NewParser(tokens []lexer.Token) *Parser {
 func (p *Parser) Parse() (*Program, error) {
 	program := &Program{Declarations: []Decl{}}
 	for !p.isAtEnd() {
-		decl, err := p.parseDeclaration()
+		decls, err := p.parseDeclaration()
 		if err != nil {
 			return nil, err
 		}
-		program.Declarations = append(program.Declarations, decl)
+		program.Declarations = append(program.Declarations, decls...)
 	}
 	return program, nil
 }

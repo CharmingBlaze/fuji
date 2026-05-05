@@ -48,6 +48,7 @@ func PrepareNativeBundle(bundle *parser.ProgramBundle) (*NativeEmitContext, erro
 	if err := parser.FlattenEntryIncludes(bundle); err != nil {
 		return nil, err
 	}
+	parser.InjectNativeMathPrelude(bundle)
 	ctx := &NativeEmitContext{
 		Bundle:         bundle,
 		locals:         make(map[parser.Expr]parser.Decl),

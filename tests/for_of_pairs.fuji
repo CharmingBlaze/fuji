@@ -1,0 +1,16 @@
+func main() {
+    let obj = { a: 1, b: 2 };
+
+    for (let [k, v] of obj) {
+        print(k, ":", v);
+    }
+
+    let arr = ["x", "y"];
+    let saw = "";
+
+    for (let [ik, iv] of arr) {
+        saw = saw + string(ik) + iv;
+    }
+
+    print("array_pairs", saw);
+}

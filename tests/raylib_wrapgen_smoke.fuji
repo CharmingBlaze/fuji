@@ -1,7 +1,6 @@
-// Native link smoke for wrapgen-produced @raylib (requires FUJI_WRAPPERS, FUJI_NATIVE_SOURCES, FUJI_LINKFLAGS).
 #include "@raylib"
 
 func main() {
-    InitWindow(320, 240, "wrapgen smoke");
-    CloseWindow();
+    initwindow(320, 240, "wrapgen smoke");
+    closewindow();
 }

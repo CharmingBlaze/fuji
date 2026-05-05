@@ -7,7 +7,7 @@ globs: **/*
 
 - Go module: `fuji` (root `go.mod`, Go 1.22+). Main CLI: `cmd/fuji`.
 - Compiler implementation: **`internal/parser`**, **`internal/lexer`**, **`internal/sema`**, **`internal/codegen`**, **`internal/nativebuild`**, **`internal/runtime`**, **`internal/fujihome`**. C runtime sources: **`runtime/src/`** (`fuji_runtime.c`, etc.) and optional embed under **`internal/runtime/data/`** (`fuji.c`, `fuji.h`).
-- Wrapper generator: **`cmd/wrapgen`** — build as **`wrapgen`** (`go build -o wrapgen ./cmd/wrapgen`); same Go module as `fuji`. **`fuji wrap`** forwards to **`wrapgen`** (or legacy **`kujiwrap`**) when placed next to **`fuji`**.
+- Wrapper generator: **`cmd/wrapgen`** — build as **`fujiwrap`** (`go build -o fujiwrap ./cmd/wrapgen`); same Go module as `fuji`. Legacy names **`wrapgen`** / **`kujiwrap`** are the same binary. **`fuji wrap`** discovers **`fujiwrap`** first, then **`wrapgen`**, then **`kujiwrap`**, beside **`fuji`** or on **`PATH`**.
 
 ## Commands to verify changes
 

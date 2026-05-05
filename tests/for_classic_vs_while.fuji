@@ -1,0 +1,24 @@
+// Same iteration pattern: skip 3, sum 0+1+2+4 = 7.
+// In a classic `for`, `continue` still runs the increment clause (like C/JavaScript).
+func main() {
+    let totalFor = 0;
+    for (let i = 0; i < 5; i += 1) {
+        if (i == 3) {
+            continue;
+        }
+        totalFor += i;
+    }
+    print("for", totalFor);
+
+    let totalWhile = 0;
+    let j = 0;
+    while (j < 5) {
+        if (j == 3) {
+            j += 1;
+            continue;
+        }
+        totalWhile += j;
+        j += 1;
+    }
+    print("while", totalWhile);
+}

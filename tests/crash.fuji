@@ -1,15 +1,15 @@
 func outer() {
-  middle();
+    middle();
 }
 
 func middle() {
-  inner();
+    inner();
 }
 
 func inner() {
-  let x = 10;
-  let y = "oops";
-  print(x + y); // This should crash
+    let x = 10;
+    let y = "oops";
+    print(x + y);
 }
 
 outer();

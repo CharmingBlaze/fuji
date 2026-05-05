@@ -9,7 +9,7 @@ import (
 	"runtime"
 )
 
-// InstallDir returns the directory containing the running fuji or wrapgen executable.
+// InstallDir returns the directory containing the running fuji or fujiwrap executable.
 // EvalSymlinks follows macOS/Linux shim symlinks (e.g. /usr/local/bin) to the real binary
 // so bundled stdlib/ and toolchain/ next to that binary resolve correctly.
 func InstallDir() (string, error) {

@@ -4,21 +4,25 @@
 SHELL := sh.exe
 .SHELLFLAGS := -ec
 #
-#   make              — runtime static lib, then fuji + wrapgen, then go test
+#   make              — runtime static lib, then fuji + fujiwrap, then go test
 #   make runtime-lib  — only runtime/libfuji_runtime.a
 #   make raylib-lib   — CMake Raylib into third_party/raylib_static/stage/ (needs raylib/ + cmake)
 
-.PHONY: all build fuji wrapgen runtime-lib raylib-lib raylib-clean test fmt clean
+.PHONY: all build fuji fujiwrap wrapgen runtime-lib raylib-lib raylib-clean test fmt clean
 
 all: build test
 
-build: fuji wrapgen
+build: fuji fujiwrap
 
 fuji:
 	@mkdir -p bin
 	go build -trimpath -ldflags "-s -w" -o bin/fuji ./cmd/fuji
 
-wrapgen:
+fujiwrap:
+	@mkdir -p bin
+	go build -trimpath -ldflags "-s -w" -o bin/fujiwrap ./cmd/wrapgen
+
+wrapgen: fujiwrap
 	@mkdir -p bin
 	go build -trimpath -ldflags "-s -w" -o bin/wrapgen ./cmd/wrapgen
 

@@ -12,9 +12,9 @@ On Windows, install LLVM from https://releases.llvm.org or via `winget install L
 
 ---
 
-## Build the CLI (and optional wrapgen)
+## Build the CLI (and optional fujiwrap)
 
-From the repository root, **`fuji`** and **wrapgen** (C-header → `.fuji` generator) share the same `go.mod`.
+From the repository root, **`fuji`** and **`fujiwrap`** (C-header → `.fuji` + `wrapper.c`; sources under **`cmd/wrapgen`**) share the same `go.mod`.
 
 ```powershell
 git clone <repo>
@@ -25,7 +25,7 @@ make build
 
 # Or by hand
 go build -o fuji.exe ./cmd/fuji
-go build -o wrapgen.exe ./cmd/wrapgen
+go build -o fujiwrap.exe ./cmd/wrapgen
 ```
 
 On macOS/Linux you can use `make build` to populate `./bin/`.

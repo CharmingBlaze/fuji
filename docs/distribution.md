@@ -39,16 +39,16 @@ Optional environment variables:
 
 ## 3. Generate wrappers for C/C++ libraries
 
-Build **kujiwrap** from this repo (same module as `fuji`; sources live under `cmd/wrapgen`):
+Build **fujiwrap** from this repo (same module as `fuji`; sources live under `cmd/wrapgen`):
 
 ```powershell
-go build -o kujiwrap.exe ./cmd/wrapgen
+go build -o fujiwrap.exe ./cmd/wrapgen
 ```
 
-Run it on one or more headers (or use `kuji wrap …` if `kujiwrap.exe` sits next to `kuji.exe`):
+Run it on one or more headers (or use **`fuji wrap …`**, which discovers **`fujiwrap.exe`** next to **`fuji.exe`**):
 
 ```powershell
-.\kujiwrap.exe -name mylib -headers .\native\mylib.h -out .\wrappers\mylib
+.\fujiwrap.exe -name mylib -headers .\native\mylib.h -out .\wrappers\mylib
 ```
 
 Generated output:
@@ -141,16 +141,16 @@ $env:FUJI_WRAPPERS = 'C:\path\to\mylib-wrapper'
 For distributing Fuji itself, build the CLI and include the docs and wrappers:
 
 ```powershell
-go build -o kuji.exe .\cmd\kuji
-go build -o cmd\wrapgen\wrapgen.exe .\cmd\wrapgen
+go build -o fuji.exe .\cmd\fuji
+go build -o fujiwrap.exe .\cmd\wrapgen
 ```
 
 Suggested release folder:
 
 ```text
-kuji-release/
-  kuji.exe
-  wrapgen.exe
+fuji-release/
+  fuji.exe
+  fujiwrap.exe
   README.md
   RELEASE.md
   DISTRIBUTION_GUIDE.md

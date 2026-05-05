@@ -8,6 +8,78 @@ import (
 	"fuji/internal/lexer"
 )
 
+func TestParseClassicForLoop(t *testing.T) {
+	src := `func main() {
+		let total = 0;
+		for (let i = 0; i < 5; i += 1) {
+			if (i == 3) { continue; }
+			total += i;
+		}
+	}`
+	l := lexer.NewLexer(src)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := NewParser(tokens).Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := prog.Declarations[0].(*FuncDecl)
+	forStmt := fn.Body.Declarations[1].(*ForStmt)
+	if len(forStmt.Inits) != 1 {
+		t.Fatalf("inits: want 1, got %d", len(forStmt.Inits))
+	}
+	if forStmt.Condition == nil {
+		t.Fatal("expected condition")
+	}
+	if len(forStmt.Increments) != 1 {
+		t.Fatalf("increments: want 1, got %d", len(forStmt.Increments))
+	}
+}
+
+func TestParseForOfDestructuring(t *testing.T) {
+	src := `func main() {
+		let o = { a: 1 };
+		for (let [k, v] of o) { print(k); }
+	}`
+	l := lexer.NewLexer(src)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := NewParser(tokens).Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := prog.Declarations[0].(*FuncDecl)
+	forOf := fn.Body.Declarations[1].(*ForOfStmt)
+	if forOf.ValueVar == nil {
+		t.Fatal("expected ValueVar for [k, v] binding")
+	}
+	if forOf.VarName.Lexeme != "k" || forOf.ValueVar.Lexeme != "v" {
+		t.Fatalf("bindings: got %q, %q", forOf.VarName.Lexeme, forOf.ValueVar.Lexeme)
+	}
+}
+
+func TestParseClassicForInfinite(t *testing.T) {
+	src := `func main() { for (;;) { break; } }`
+	l := lexer.NewLexer(src)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := NewParser(tokens).Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := prog.Declarations[0].(*FuncDecl)
+	forStmt := fn.Body.Declarations[0].(*ForStmt)
+	if len(forStmt.Inits) != 0 || forStmt.Condition != nil || len(forStmt.Increments) != 0 {
+		t.Fatalf("for (;;): got inits=%d cond=%v inc=%d", len(forStmt.Inits), forStmt.Condition != nil, len(forStmt.Increments))
+	}
+}
+
 func TestVarReservedUseLet(t *testing.T) {
 	l := lexer.NewLexer(`var x = 1;`)
 	tokens, err := l.Tokenize()
@@ -37,6 +109,48 @@ func TestVarReservedInExpression(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "let") {
 		t.Fatalf("expected hint to use let, got: %v", err)
+	}
+}
+
+func TestParserCaseFoldsBoundNames(t *testing.T) {
+	src := `LET X = 1;
+func G() { RETURN X; }`
+	l := lexer.NewLexer(src)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := NewParser(tokens).Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	let := prog.Declarations[0].(*LetDecl)
+	if let.Name.Lexeme != "x" {
+		t.Fatalf("let name: want x, got %q", let.Name.Lexeme)
+	}
+	fn := prog.Declarations[1].(*FuncDecl)
+	if fn.Name.Lexeme != "g" {
+		t.Fatalf("func name: want g, got %q", fn.Name.Lexeme)
+	}
+	ret := fn.Body.Declarations[0].(*ReturnStmt)
+	id := ret.Value.(*IdentifierExpr)
+	if id.Name.Lexeme != "x" {
+		t.Fatalf("return ref: want x, got %q", id.Name.Lexeme)
+	}
+}
+
+func TestParserRejectDuplicateParams(t *testing.T) {
+	l := lexer.NewLexer(`func f(A, a) { return 1; }`)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = NewParser(tokens).Parse()
+	if err == nil {
+		t.Fatal("expected duplicate parameter error")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("got: %v", err)
 	}
 }
 
@@ -189,13 +303,13 @@ func TestProgramIncludeLoadsShim(t *testing.T) {
 	}
 	found := false
 	for _, n := range names {
-		if n == "InitWindow" {
+		if n == "initwindow" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("InitWindow not in entry after flatten; let names: %v", names)
+		t.Fatalf("initwindow not in entry after flatten; let names: %v", names)
 	}
 }
 

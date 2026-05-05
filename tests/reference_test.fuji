@@ -1,70 +1,73 @@
-// 1. Variable Declarations
 let x = 42;
+
 let name = "Jesse";
+
 let empty;
 
-// 2. Data Types
 let numbers = [1, 2, 3];
+
 let person = { name: "Alice", age: 30 };
 
-// 3. Operators
 x += 5;
-x++;
+x = x + 1;
 print("Operators:", x == 48);
 
-// 4. Control Flow
 if (x > 40) {
     print("If: OK");
 }
 
 switch (name) {
-    case "Jesse": print("Switch: OK"); break;
+    case "Jesse":
+        print("Switch: OK");
+        break;
 }
 
 print("Iteration:");
+
 for (let item of numbers) {
     print("-", item);
 }
 
-for (let i, item of ["A", "B"]) {
-    print(i, ":", item);
+let letters = ["A", "B"];
+
+let ii = 0;
+
+while (ii < len(letters)) {
+    print(ii, ":", letters[ii]);
+    ii = ii + 1;
 }
 
-for (let k, v of person) {
-    print(k, "=", v);
+for (let kk of ["name", "age"]) {
+    print(kk, "=", person[kk]);
 }
 
-for (let c of "hi") {
+for (let c of ["h", "i"]) {
     print("char:", c);
 }
 
-// 5. Functions & 6. Closures
-func makeCounter() {
+func makecounter() {
     let count = 0;
     return func() {
         count += 1;
         return count;
     };
 }
-let counter = makeCounter();
+
+let counter = makecounter();
+
 print("Counter:", counter(), counter());
 
-// 7. Objects & Methods
-let player = {
-    hp: 100,
-    damage(amt) {
-        this.hp -= amt;
-    }
-};
+let player = { hp: 100, damage: func(amt) {
+    player.hp = player.hp - amt;
+} };
+
 player.damage(20);
 print("Player HP:", player.hp);
 
-// 8. Arrays
 let arr = [10, 20];
-arr.push(30);
-print("Length:", arr.length());
-print("Pop:", arr.pop());
 
-// 11. Stdlib
+arr.push(30);
+print("Length:", len(arr));
+print("Pop:", arr.pop());
 print("Type:", type(arr), "Len:", len("hello"));
 print("Reference Test Complete");

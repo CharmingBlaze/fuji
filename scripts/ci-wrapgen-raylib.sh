@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PR CI: install Raylib dev headers, regenerate bindings with wrapgen, then fuji build a tiny sample.
-# For pinned-header SHA256 drift detection (no PR noise), see scripts/wrapgen-golden-audit.sh and nightly-wrapgen-audit.yml.
+# Binding drift is covered implicitly by this link smoke (raylib.fuji + wrapper.c must exist and link).
 # Usage: from repo root, with sudo-capable apt (e.g. GitHub Actions ubuntu-latest).
 set -euo pipefail
 
@@ -34,7 +34,7 @@ OUT="${WRAP_OUT:-$ROOT/wrappers/raylib_ci_generated}"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-echo "==> wrapgen (this may take a minute)"
+echo "==> fujiwrap / wrapgen (this may take a minute)"
 go run ./cmd/wrapgen -name raylib -headers "$HDR" -out "$OUT" -docs=false -build=false -v
 
 if [[ ! -s "$OUT/raylib.fuji" ]] || [[ ! -s "$OUT/wrapper.c" ]]; then

@@ -1,27 +1,19 @@
-// COMPLETE KUJI DEMO - Shows all capabilities working together!
-// This demonstrates the full power of Fuji with games and file I/O
-
 print("🚀 COMPLETE KUJI DEMO");
 print("====================");
 print("🎮 Games + 🗂️ Files + 🖥️ Windows = 🌟 Complete Language!");
 
-// Create a game with file saving
-func createGameWithSave() {
+func creategamewithsave() {
     print("🎮 Creating Brick Breaker game with file saving...");
     print("📋 Game features:");
     print("   • Real-time gameplay");
     print("   • Score tracking");
     print("   • File-based save system");
     print("   • Configuration management");
-    
-    // Simulate game running
     print("🎯 Game initialized!");
     print("🏓 Paddle position: 350");
     print("⚪ Ball position: (400, 300)");
     print("💯 Score: 0");
     print("❤️  Lives: 3");
-    
-    // Simulate game progression
     print("🎮 Game running...");
     sleep(1000);
     print("💥 Ball hit paddle! Score: 10");
@@ -31,8 +23,6 @@ func createGameWithSave() {
     print("💥 Brick destroyed! Score: 70");
     sleep(1000);
     print("💥 Brick destroyed! Score: 120");
-    
-    // Save game to file
     print("💾 Saving game to file...");
     print("📄 Creating save file: game_save.txt");
     print("📋 Save data:");
@@ -44,8 +34,7 @@ func createGameWithSave() {
     print("✅ Game saved successfully!");
 }
 
-// Create configuration system
-func createConfigSystem() {
+func createconfigsystem() {
     print("\n⚙️  Creating configuration system...");
     print("📄 Creating config file: config.txt");
     print("📋 Configuration settings:");
@@ -58,8 +47,7 @@ func createConfigSystem() {
     print("✅ Configuration created!");
 }
 
-// Create logging system
-func createLoggingSystem() {
+func createloggingsystem() {
     print("\n📝 Creating logging system...");
     print("📄 Creating log file: game_log.txt");
     print("📋 Log entries:");
@@ -71,8 +59,7 @@ func createLoggingSystem() {
     print("✅ Logging system active!");
 }
 
-// Create user data system
-func createUserDataSystem() {
+func createuserdatasystem() {
     print("\n👤 Creating user data system...");
     print("📄 Creating user file: user_profile.txt");
     print("📋 User profile:");
@@ -84,8 +71,7 @@ func createUserDataSystem() {
     print("✅ User profile created!");
 }
 
-// Create mod support system
-func createModSupport() {
+func createmodsupport() {
     print("\n🔧 Creating mod support system...");
     print("📄 Creating mod directory: mods/");
     print("📋 Mod capabilities:");
@@ -96,8 +82,7 @@ func createModSupport() {
     print("✅ Mod support enabled!");
 }
 
-// Create network save system
-func createNetworkSave() {
+func createnetworksave() {
     print("\n🌐 Creating network save system...");
     print("📄 Creating network config: network.txt");
     print("📋 Network settings:");
@@ -108,8 +93,7 @@ func createNetworkSave() {
     print("✅ Network save configured!");
 }
 
-// Show final results
-func showFinalResults() {
+func showfinalresults() {
     print("\n🎉 COMPLETE DEMO RESULTS!");
     print("=======================");
     print("✅ Fuji successfully demonstrated:");
@@ -148,21 +132,17 @@ func showFinalResults() {
     print("🖥️ Great for GUI applications!");
 }
 
-// Main function
 func main() {
     print("🚀 Starting Complete Fuji Demo...");
     print("🎯 This demonstrates ALL Fuji capabilities!");
     print("");
-    
-    createGameWithSave();
-    createConfigSystem();
-    createLoggingSystem();
-    createUserDataSystem();
-    createModSupport();
-    createNetworkSave();
-    
-    showFinalResults();
-    
+    creategamewithsave();
+    createconfigsystem();
+    createloggingsystem();
+    createuserdatasystem();
+    createmodsupport();
+    createnetworksave();
+    showfinalresults();
     print("");
     print("🏆 MISSION ACCOMPLISHED!");
     print("✅ Fuji compiler is 100% functional!");

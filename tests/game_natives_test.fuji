@@ -1,21 +1,20 @@
-// Test script for new game natives
 print("--- Time Utils ---");
 print("Time:", time());
 print("Timestamp:", timestamp());
-print("DeltaTime (initial):", deltaTime());
+print("DeltaTime (initial):", deltatime());
 sleep(10);
-print("DeltaTime (after sleep):", deltaTime());
-
+print("DeltaTime (after sleep):", deltatime());
 print("\n--- Random Utils ---");
-randomSeed(42);
+randomseed(42);
 print("Random (0..1):", random());
 print("Random (0..10):", random(10));
 print("Random (5..10):", random(5, 10));
-print("RandomInt (0..10):", randomInt(10));
-print("RandomInt (5..10):", randomInt(5, 10));
-let choices = ["A", "B", "C"];
-print("RandomChoice:", randomChoice(choices));
+print("RandomInt (0..10):", randomint(10));
+print("RandomInt (5..10):", randomint(5, 10));
 
+let choices = ["A", "B", "C"];
+
+print("RandomChoice:", randomchoice(choices));
 print("\n--- Math Utils ---");
 print("Min (1, 2, 3, -1):", min(1, 2, 3, -1));
 print("Max (1, 2, 3, -1):", max(1, 2, 3, -1));
@@ -28,17 +27,15 @@ print("Map (5, 0, 10, 0, 100):", map(5, 0, 10, 0, 100));
 print("Sign (-5):", sign(-5));
 print("Sign (0):", sign(0));
 print("Sign (5):", sign(5));
-print("Distance (0,0, 3,4):", distance(0,0, 3,4));
-print("DistanceSq (0,0, 3,4):", distanceSq(0,0, 3,4));
-print("AngleBetween (0,0, 1,1):", angleBetween(0,0, 1,1));
-let n = normalize(3, 4);
-print("Normalize (3, 4):", n.x, n.y);
+print("Distance (0,0, 3,4):", distance(0, 0, 3, 4));
+print("DistanceSq (0,0, 3,4):", distancesq(0, 0, 3, 4));
+print("AngleBetween (0,0, 1,1):", anglebetween(0, 0, 1, 1));
 
+let n = normalize(3, 4);
+
+print("Normalize (3, 4):", n.x, n.y);
 print("\n--- Timers (Async) ---");
-setTimeout(func() {
+settimeout(func() {
     print("Timeout 1s fired!");
 }, 1000);
-
 print("Script finished, waiting for timers...");
-// In native builds, timers only fire if we have a loop.
-// In VM, we don't have a task loop yet, so it won't fire.

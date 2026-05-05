@@ -160,7 +160,7 @@ Pin the module version to the LLVM line you installed (for example the **llvm14*
 
 ## Self-contained release `fuji` (optional; no LLVM on PATH for end users)
 
-The **Release** GitHub Actions workflow (`.github/workflows/release.yml`, runs on **`v*`** tags) builds **`fuji-windows-amd64.exe`** with **embedded** **`llc.exe`**, **`lld.exe`**, and **`libfuji_runtime.a`** under **`internal/fujihome/bundled/windows/amd64/`**, then compiles Fuji with:
+The **Release** GitHub Actions workflow (`.github/workflows/release.yml`, runs on **`v*`** tags) builds **`fuji-windows-amd64.exe`** with **embedded** **`clang.exe`**, **`lld.exe`**, and **`libfuji_runtime.a`** under **`internal/embed/windows/amd64/`**, then compiles Fuji with:
 
 `go build -trimpath -tags release -ldflags="-s -w" -o fuji-windows-amd64.exe ./cmd/fuji`
 

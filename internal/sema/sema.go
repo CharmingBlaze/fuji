@@ -2,6 +2,7 @@ package sema
 
 import (
 	"fmt"
+
 	"fuji/internal/parser"
 )
 
@@ -99,6 +100,9 @@ func (a *Analyzer) analyzeDecl(decl parser.Decl) error {
 
 func (a *Analyzer) analyzeLetDecl(d *parser.LetDecl) error {
 	name := d.Name.Lexeme
+	if _, ok := a.currentScope.symbols[name]; ok {
+		return fmt.Errorf("duplicate binding %q in the same scope", name)
+	}
 	a.currentScope.Define(name, d)
 	if d.Init != nil {
 		return a.analyzeExpr(d.Init)
@@ -108,6 +112,9 @@ func (a *Analyzer) analyzeLetDecl(d *parser.LetDecl) error {
 
 func (a *Analyzer) analyzeFuncDecl(d *parser.FuncDecl) error {
 	name := d.Name.Lexeme
+	if _, ok := a.currentScope.symbols[name]; ok {
+		return fmt.Errorf("duplicate function %q in the same scope", name)
+	}
 	a.currentScope.Define(name, d)
 
 	a.enterScope()
@@ -157,6 +164,8 @@ func (a *Analyzer) analyzeStmt(stmt parser.Stmt) error {
 			return err
 		}
 		return a.analyzeStmt(s.Body)
+	case *parser.DeleteStmt:
+		return a.analyzeExpr(s.Target)
 	case *parser.BreakStmt, *parser.ContinueStmt:
 		return nil
 	default:
@@ -223,6 +232,20 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) error {
 	case *parser.GroupingExpr:
 		return a.analyzeExpr(e.Expr)
 	case *parser.ImportExpr:
+		return nil
+	case *parser.IndexExpr:
+		if err := a.analyzeExpr(e.Object); err != nil {
+			return err
+		}
+		return a.analyzeExpr(e.Index)
+	case *parser.SpreadExpr:
+		return a.analyzeExpr(e.Expr)
+	case *parser.TemplateExpr:
+		for _, p := range e.Parts {
+			if err := a.analyzeExpr(p); err != nil {
+				return err
+			}
+		}
 		return nil
 	default:
 		return fmt.Errorf("unsupported expression type: %T", expr)

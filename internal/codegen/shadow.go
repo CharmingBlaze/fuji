@@ -37,8 +37,8 @@ func (g *Generator) beginShadowFrame(layout *sema.ShadowLayout, thisSlot value.V
 	n := layout.Total
 	elemTy := types.NewPointer(types.I64)
 	arrTy := types.NewArray(uint64(n), elemTy)
-	frame := g.block.NewAlloca(arrTy)
-	nilSlot := g.block.NewAlloca(types.I64)
+	frame := g.entryAlloca(arrTy)
+	nilSlot := g.entryAlloca(types.I64)
 	g.block.NewStore(constant.NewInt(types.I64, llvmNilTagged), nilSlot)
 
 	zero := constant.NewInt(types.I32, 0)

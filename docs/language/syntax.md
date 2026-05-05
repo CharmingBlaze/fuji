@@ -99,16 +99,22 @@ print(c());   // 2
 
 ## Control flow
 
+Braces `{}` are **always** required around `if` / `else` bodies, loops, and `switch` bodies — no single-statement branches without braces.
+
+You may still write a **compact single line** when the body is tiny, or spread it across **multiple lines**:
+
 ```fuji
+if (x > 0) { print("positive"); }
+
 if (x > 0) {
     print("positive");
-} else {
-    print("non-positive");
 }
 
 while (running) {
     update();
 }
+
+for (let i = 0; i < 10; i += 1) { print(i); }
 
 for (let i = 0; i < 10; i += 1) {
     print(i);
@@ -117,9 +123,21 @@ for (let i = 0; i < 10; i += 1) {
 
 ---
 
+## For loops (classic C form)
+
+Counted loops use `init`, `condition`, and `step`; any part may be omitted (`for (;;)` is valid with `break`).
+
+```fuji
+for (let i = 0; i < n; i += 1) {
+    print(i);
+}
+```
+
+You can mix this with `while`, `do-while`, `for-in`, and `for-of` in the same codebase—see **`docs/user_guide.md`** (“Choosing a loop style”).
+
 ## For-of loops
 
-Iterate array values:
+Single binding: each **value** in **insertion order** (arrays by index, tables by stored slot order).
 
 ```fuji
 let items = ["sword", "shield", "potion"];
@@ -129,21 +147,27 @@ for (let item of items) {
 }
 ```
 
-Iterate with index:
+Destructuring **`[indexOrKey, value]`**:
 
 ```fuji
-for (let i, item of items) {
-    print(i, ":", item);
+let tbl = { a: 1, b: 2 };
+
+for (let [k, v] of tbl) {
+    print(k, v);
+}
+
+let xs = ["x", "y"];
+
+for (let [i, ch] of xs) {
+    print(i, ch); // i is numeric index 0, 1 …
 }
 ```
 
-Iterate object keys and values:
+For keys only on objects, **`for-in`** is enough:
 
 ```fuji
-let player = {name: "Hero", hp: 100};
-
-for (let key, value of player) {
-    print(key, "=", value);
+for (let key in tbl) {
+    print(key, tbl[key]);
 }
 ```
 

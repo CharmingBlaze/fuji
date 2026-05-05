@@ -22,8 +22,9 @@ ObjArray* allocate_array(int capacity) {
     array->obj.next = NULL;
     array->capacity = capacity;
     array->count = 0;
-    array->elements = (Value*)gc_alloc(sizeof(Value) * (size_t)capacity);
+    array->elements = NULL;
     gc_register_object(&array->obj);
+    array->elements = (Value*)gc_alloc(sizeof(Value) * (size_t)capacity);
     return array;
 }
 
@@ -34,9 +35,11 @@ ObjTable* allocate_table(int capacity) {
     table->obj.next = NULL;
     table->capacity = capacity;
     table->count = 0;
+    table->keys = NULL;
+    table->values = NULL;
+    gc_register_object(&table->obj);
     table->keys = (Value*)gc_alloc(sizeof(Value) * (size_t)capacity);
     table->values = (Value*)gc_alloc(sizeof(Value) * (size_t)capacity);
-    gc_register_object(&table->obj);
     return table;
 }
 
@@ -59,9 +62,14 @@ ObjClosure* allocate_closure(ObjFunction* function, int upvalue_count) {
     closure->obj.is_marked = false;
     closure->obj.next = NULL;
     closure->function = function;
-    closure->upvalue_count = upvalue_count;
-    closure->upvalues = (Value*)gc_alloc(sizeof(Value) * (size_t)upvalue_count);
+    closure->upvalues = NULL;
+    closure->upvalue_count = 0;
     gc_register_object(&closure->obj);
+    closure->upvalues = (Value*)gc_alloc(sizeof(Value) * (size_t)upvalue_count);
+    closure->upvalue_count = upvalue_count;
+    for (int i = 0; i < upvalue_count; i++) {
+        closure->upvalues[i] = NIL_VAL;
+    }
     return closure;
 }
 

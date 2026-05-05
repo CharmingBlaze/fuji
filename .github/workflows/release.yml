@@ -1,5 +1,5 @@
-# Each job populates internal/fujihome/bundled/<GOOS>/<GOARCH>/ (llc, lld, libfuji_runtime.a),
-# then builds fuji with -tags release so those artifacts are embedded. Triggered by version tags.
+# Jobs populate internal/embed/<GOOS>/<GOARCH>/ (clang [+ lld on Windows], libfuji_runtime.a),
+# then build with -tags release. Triggered by version tags.
 
 name: Release
 
@@ -8,180 +8,209 @@ on:
     tags:
       - "v*"
 
-# Release fuji binaries are pure Go + embed; CGo LLVM is optional (see CONTRIBUTING.md).
 env:
   CGO_ENABLED: "0"
 
 jobs:
-  release-windows:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22.x"
+          go-version: "1.22"
 
-      - name: Install LLVM 14
-        run: choco install llvm --version=14.0.6 -y
+      - name: Install LLVM
+        run: choco install llvm --version=18.1.8 -y
 
       - name: Add LLVM to PATH
         run: echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
 
       - name: Build C runtime
-        shell: cmd
         run: |
-          cd runtime\src
-          clang -c -O2 -std=c11 -I. gc.c object.c value.c fuji_runtime.c
-          llvm-ar rcs ..\libfuji_runtime.a gc.obj object.obj value.obj fuji_runtime.obj
+          New-Item -ItemType Directory -Force runtime\obj_win | Out-Null
+          clang -c runtime\src\value.c        -O2 -std=c11 -Iruntime\src -D_AMD64_=1 -o runtime\obj_win\value.o
+          clang -c runtime\src\object.c       -O2 -std=c11 -Iruntime\src -D_AMD64_=1 -o runtime\obj_win\object.o
+          clang -c runtime\src\gc.c           -O2 -std=c11 -Iruntime\src -D_AMD64_=1 -o runtime\obj_win\gc.o
+          clang -c runtime\src\fuji_runtime.c -O2 -std=c11 -Iruntime\src -D_AMD64_=1 -o runtime\obj_win\fuji_runtime.o
+          llvm-ar rcs runtime\libfuji_runtime.a runtime\obj_win\value.o runtime\obj_win\object.o runtime\obj_win\gc.o runtime\obj_win\fuji_runtime.o
 
-      - name: Populate bundled/windows/amd64
-        shell: pwsh
+      - name: Populate embed/windows/amd64
         run: |
-          New-Item -ItemType Directory -Force internal/fujihome/bundled/windows/amd64 | Out-Null
-          Copy-Item "C:\Program Files\LLVM\bin\llc.exe" internal/fujihome/bundled/windows/amd64/
-          Copy-Item "C:\Program Files\LLVM\bin\lld.exe" internal/fujihome/bundled/windows/amd64/
-          Copy-Item runtime/libfuji_runtime.a internal/fujihome/bundled/windows/amd64/
+          New-Item -ItemType Directory -Force internal\embed\windows\amd64 | Out-Null
+          Copy-Item "C:\Program Files\LLVM\bin\clang.exe" internal\embed\windows\amd64\
+          Copy-Item "C:\Program Files\LLVM\bin\lld.exe" internal\embed\windows\amd64\
+          Copy-Item runtime\libfuji_runtime.a             internal\embed\windows\amd64\
 
-      - name: Build fuji (embedded toolchain)
+      - name: Build fuji.exe
         run: go build -trimpath -tags release -ldflags="-s -w" -o fuji-windows-amd64.exe ./cmd/fuji
+
+      - name: Build fujiwrap.exe
+        run: go build -trimpath -ldflags="-s -w" -o fujiwrap-windows-amd64.exe ./cmd/wrapgen
+
+      - name: Test
+        run: |
+          .\fuji-windows-amd64.exe build tests\hello.fuji -o hello.exe
+          .\hello.exe
 
       - uses: actions/upload-artifact@v4
         with:
-          name: fuji-windows-amd64
-          path: fuji-windows-amd64.exe
+          name: windows
+          path: |
+            fuji-windows-amd64.exe
+            fujiwrap-windows-amd64.exe
 
-  release-linux-amd64:
+  linux-amd64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22.x"
+          go-version: "1.22"
 
-      - name: Install LLVM 14
+      - name: Install LLVM
         run: |
           sudo apt-get update
-          sudo apt-get install -y llvm-14 clang-14 lld-14
+          sudo apt-get install -y clang-18 llvm-18
 
       - name: Build C runtime
-        run: bash scripts/build-runtime.sh
-
-      - name: Populate bundled/linux/amd64
         run: |
-          mkdir -p internal/fujihome/bundled/linux/amd64
-          cp "$(command -v llc-14)" internal/fujihome/bundled/linux/amd64/llc
-          cp "$(command -v lld-14)" internal/fujihome/bundled/linux/amd64/lld
-          cp runtime/libfuji_runtime.a internal/fujihome/bundled/linux/amd64/
+          mkdir -p runtime/obj_linux
+          clang-18 -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/value.o
+          clang-18 -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/object.o
+          clang-18 -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/gc.o
+          clang-18 -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/fuji_runtime.o
+          llvm-ar-18 rcs runtime/libfuji_runtime.a runtime/obj_linux/*.o
 
-      - name: Build fuji (embedded toolchain)
+      - name: Populate embed/linux/amd64
+        run: |
+          mkdir -p internal/embed/linux/amd64
+          cp "$(which clang-18)"         internal/embed/linux/amd64/clang
+          cp runtime/libfuji_runtime.a internal/embed/linux/amd64/
+
+      - name: Build fuji
         run: go build -trimpath -tags release -ldflags="-s -w" -o fuji-linux-amd64 ./cmd/fuji
+
+      - name: Build fujiwrap
+        run: go build -trimpath -ldflags="-s -w" -o fujiwrap-linux-amd64 ./cmd/wrapgen
+
+      - name: Test
+        run: |
+          ./fuji-linux-amd64 build tests/hello.fuji -o hello
+          ./hello
 
       - uses: actions/upload-artifact@v4
         with:
-          name: fuji-linux-amd64
-          path: fuji-linux-amd64
+          name: linux-amd64
+          path: |
+            fuji-linux-amd64
+            fujiwrap-linux-amd64
 
-  release-linux-arm64:
+  linux-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22.x"
+          go-version: "1.22"
 
-      - name: Install LLVM 14
+      - name: Install LLVM
         run: |
           sudo apt-get update
-          sudo apt-get install -y llvm-14 clang-14 lld-14
+          sudo apt-get install -y clang-18 llvm-18
 
       - name: Build C runtime
-        run: bash scripts/build-runtime.sh
-
-      - name: Populate bundled/linux/arm64
         run: |
-          mkdir -p internal/fujihome/bundled/linux/arm64
-          cp "$(command -v llc-14)" internal/fujihome/bundled/linux/arm64/llc
-          cp "$(command -v lld-14)" internal/fujihome/bundled/linux/arm64/lld
-          cp runtime/libfuji_runtime.a internal/fujihome/bundled/linux/arm64/
+          mkdir -p runtime/obj_linux_arm64
+          clang-18 -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/value.o
+          clang-18 -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/object.o
+          clang-18 -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/gc.o
+          clang-18 -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/fuji_runtime.o
+          llvm-ar-18 rcs runtime/libfuji_runtime.a runtime/obj_linux_arm64/*.o
 
-      - name: Build fuji (embedded toolchain)
-        run: go build -trimpath -tags release -ldflags="-s -w" -o fuji-linux-arm64 ./cmd/fuji
+      - name: Populate embed/linux/arm64
+        run: |
+          mkdir -p internal/embed/linux/arm64
+          cp "$(which clang-18)"         internal/embed/linux/arm64/clang
+          cp runtime/libfuji_runtime.a internal/embed/linux/arm64/
+
+      - name: Build fuji
+        run: GOARCH=arm64 go build -trimpath -tags release -ldflags="-s -w" -o fuji-linux-arm64 ./cmd/fuji
+
+      - name: Build fujiwrap
+        run: go build -trimpath -ldflags="-s -w" -o fujiwrap-linux-arm64 ./cmd/wrapgen
 
       - uses: actions/upload-artifact@v4
         with:
-          name: fuji-linux-arm64
-          path: fuji-linux-arm64
+          name: linux-arm64
+          path: |
+            fuji-linux-arm64
+            fujiwrap-linux-arm64
 
-  release-macos:
+  macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22.x"
+          go-version: "1.22"
 
-      - name: Install LLVM 14
+      - name: Install LLVM
         run: |
-          brew install llvm@14
-          echo "$(brew --prefix llvm@14)/bin" >> $GITHUB_PATH
+          brew install llvm
+          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
 
-      - name: Build C runtime (x86_64 and arm64)
+      - name: Build C runtime — amd64
         run: |
-          set -e
-          LLVM_PREFIX="$(brew --prefix llvm@14)"
-          export PATH="$LLVM_PREFIX/bin:$PATH"
-          cd runtime/src
-          for arch in amd64 arm64; do
-            if [ "$arch" = "amd64" ]; then
-              target="x86_64-apple-macos11"
-            else
-              target="arm64-apple-macos11"
-            fi
-            rm -f *.o
-            clang -c -O2 -std=c11 -I. -target "$target" gc.c object.c value.c fuji_runtime.c
-            llvm-ar rcs "../libfuji_runtime_${arch}.a" *.o
-          done
+          mkdir -p runtime/obj_macos_amd64
+          clang -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -target x86_64-apple-macos11 -o runtime/obj_macos_amd64/value.o
+          clang -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -target x86_64-apple-macos11 -o runtime/obj_macos_amd64/object.o
+          clang -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -target x86_64-apple-macos11 -o runtime/obj_macos_amd64/gc.o
+          clang -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -target x86_64-apple-macos11 -o runtime/obj_macos_amd64/fuji_runtime.o
+          llvm-ar rcs runtime/libfuji_runtime_amd64.a runtime/obj_macos_amd64/*.o
 
-      - name: Populate bundled/darwin/amd64 and darwin/arm64
+      - name: Build C runtime — arm64
         run: |
-          set -e
-          LLVM_PREFIX="$(brew --prefix llvm@14)"
-          LLVM_BIN="$LLVM_PREFIX/bin"
-          mkdir -p internal/fujihome/bundled/darwin/amd64 internal/fujihome/bundled/darwin/arm64
-          cp "$LLVM_BIN/llc" internal/fujihome/bundled/darwin/amd64/
-          cp "$LLVM_BIN/lld" internal/fujihome/bundled/darwin/amd64/
-          cp runtime/libfuji_runtime_amd64.a internal/fujihome/bundled/darwin/amd64/libfuji_runtime.a
-          cp "$LLVM_BIN/llc" internal/fujihome/bundled/darwin/arm64/
-          cp "$LLVM_BIN/lld" internal/fujihome/bundled/darwin/arm64/
-          cp runtime/libfuji_runtime_arm64.a internal/fujihome/bundled/darwin/arm64/libfuji_runtime.a
+          mkdir -p runtime/obj_macos_arm64
+          clang -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -target arm64-apple-macos11 -o runtime/obj_macos_arm64/value.o
+          clang -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -target arm64-apple-macos11 -o runtime/obj_macos_arm64/object.o
+          clang -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -target arm64-apple-macos11 -o runtime/obj_macos_arm64/gc.o
+          clang -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -target arm64-apple-macos11 -o runtime/obj_macos_arm64/fuji_runtime.o
+          llvm-ar rcs runtime/libfuji_runtime_arm64.a runtime/obj_macos_arm64/*.o
 
-      - name: Build fuji darwin amd64
-        env:
-          GOARCH: amd64
-        run: go build -trimpath -tags release -ldflags="-s -w" -o fuji-darwin-amd64 ./cmd/fuji
+      - name: Populate embed/darwin
+        run: |
+          mkdir -p internal/embed/darwin/amd64
+          mkdir -p internal/embed/darwin/arm64
+          cp "$(which clang)"                       internal/embed/darwin/amd64/clang
+          cp "$(which clang)"                       internal/embed/darwin/arm64/clang
+          cp runtime/libfuji_runtime_amd64.a      internal/embed/darwin/amd64/libfuji_runtime.a
+          cp runtime/libfuji_runtime_arm64.a      internal/embed/darwin/arm64/libfuji_runtime.a
 
-      - name: Build fuji darwin arm64
-        env:
-          GOARCH: arm64
-        run: go build -trimpath -tags release -ldflags="-s -w" -o fuji-darwin-arm64 ./cmd/fuji
+      - name: Build fuji — amd64
+        run: GOARCH=amd64 go build -trimpath -tags release -ldflags="-s -w" -o fuji-darwin-amd64 ./cmd/fuji
+
+      - name: Build fuji — arm64
+        run: GOARCH=arm64 go build -trimpath -tags release -ldflags="-s -w" -o fuji-darwin-arm64 ./cmd/fuji
+
+      - name: Build fujiwrap
+        run: go build -trimpath -ldflags="-s -w" -o fujiwrap-darwin-arm64 ./cmd/wrapgen
+
+      - name: Test
+        run: |
+          ./fuji-darwin-arm64 build tests/hello.fuji -o hello
+          ./hello
 
       - uses: actions/upload-artifact@v4
         with:
-          name: fuji-macos
+          name: macos
           path: |
             fuji-darwin-amd64
             fuji-darwin-arm64
+            fujiwrap-darwin-arm64
 
-  publish-release:
-    needs:
-      - release-windows
-      - release-linux-amd64
-      - release-linux-arm64
-      - release-macos
+  publish:
+    needs: [windows, linux-amd64, linux-arm64, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -190,51 +219,53 @@ jobs:
         with:
           path: artifacts
 
-      - uses: softprops/action-gh-release@v2
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/fuji-windows-amd64/fuji-windows-amd64.exe
-            artifacts/fuji-linux-amd64/fuji-linux-amd64
-            artifacts/fuji-linux-arm64/fuji-linux-arm64
-            artifacts/fuji-macos/fuji-darwin-amd64
-            artifacts/fuji-macos/fuji-darwin-arm64
           generate_release_notes: true
+          files: |
+            artifacts/windows/fuji-windows-amd64.exe
+            artifacts/windows/fujiwrap-windows-amd64.exe
+            artifacts/linux-amd64/fuji-linux-amd64
+            artifacts/linux-amd64/fujiwrap-linux-amd64
+            artifacts/linux-arm64/fuji-linux-arm64
+            artifacts/linux-arm64/fujiwrap-linux-arm64
+            artifacts/macos/fuji-darwin-amd64
+            artifacts/macos/fuji-darwin-arm64
+            artifacts/macos/fujiwrap-darwin-arm64
           body: |
-            ## Self-contained Fuji (embedded LLVM + Fuji runtime)
+            ## Fuji Programming Language
 
-            These binaries embed **llc**, **lld**, and **libfuji_runtime.a** for the matching OS/arch. No separate LLVM install is required to run `fuji build` / `fuji run`.
+            Download the binary for your platform.
+            Release binaries embed **Clang**, **libfuji_runtime.a**, and on Windows **lld** so native builds need no separate LLVM install.
 
-            | Platform | Download |
-            |----------|----------|
-            | Windows x86-64 | `fuji-windows-amd64.exe` |
-            | Linux x86-64 | `fuji-linux-amd64` |
-            | Linux arm64 | `fuji-linux-arm64` |
-            | macOS x86-64 | `fuji-darwin-amd64` |
-            | macOS Apple Silicon | `fuji-darwin-arm64` |
+            | Platform | Compiler | Wrapper Tool |
+            |----------|----------|--------------|
+            | Windows 64-bit | fuji-windows-amd64.exe | fujiwrap-windows-amd64.exe |
+            | Linux 64-bit | fuji-linux-amd64 | fujiwrap-linux-amd64 |
+            | Linux ARM64 | fuji-linux-arm64 | fujiwrap-linux-arm64 |
+            | macOS Intel | fuji-darwin-amd64 | — |
+            | macOS Apple Silicon | fuji-darwin-arm64 | fujiwrap-darwin-arm64 |
 
             ### Windows
 
-            ```bat
-            fuji-windows-amd64.exe build tests\hello.fuji -o hello.exe
-            hello.exe
+            ```powershell
+            fuji-windows-amd64.exe build hello.fuji -o hello.exe
+            .\hello.exe
             ```
 
             ### Linux
 
             ```bash
             chmod +x fuji-linux-amd64
-            ./fuji-linux-amd64 build tests/hello.fuji -o hello
+            ./fuji-linux-amd64 build hello.fuji -o hello
             ./hello
             ```
-
-            On **arm64** machines use `fuji-linux-arm64` the same way.
 
             ### macOS
 
             ```bash
             chmod +x fuji-darwin-arm64
-            ./fuji-darwin-arm64 build tests/hello.fuji -o hello
+            ./fuji-darwin-arm64 build hello.fuji -o hello
             ./hello
             ```
-
-            On Intel Macs use `fuji-darwin-amd64` instead.

@@ -1,3 +1,4 @@
 let x = 10;
+
 print(x);
-print(y); // This should fail!
+print(y);

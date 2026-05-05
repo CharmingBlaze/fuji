@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"fuji/internal/diagnostic"
 	"fuji/internal/fujihome"
 	"fuji/internal/lexer"
 )
@@ -66,13 +67,13 @@ func loadModule(path string, bundle *ProgramBundle, visited map[string]bool, ove
 	l := lexer.NewLexer(src)
 	tokens, err := l.Tokenize()
 	if err != nil {
-		return fmt.Errorf("lexer error in %s: %w", path, err)
+		return diagnostic.WrapLexer(path, src, err)
 	}
 
 	p := NewParser(tokens)
 	prog, err := p.Parse()
 	if err != nil {
-		return fmt.Errorf("parser error in %s: %w", path, err)
+		return diagnostic.WrapParse(path, src, err)
 	}
 
 	bundle.Modules[path] = prog
@@ -159,7 +160,7 @@ func tryResolveModuleUnderRoots(moduleID string, roots []string) (string, bool) 
 // ResolveImportPath resolves a relative or @module path relative to the importer.
 func ResolveImportPath(importerPath, relPath string) (string, error) {
 	if strings.HasPrefix(relPath, "@") {
-		name := relPath[1:]
+		name := strings.ToLower(relPath[1:])
 
 		// 1) Explicit search paths (override)
 		if p, ok := tryResolveModuleUnderRoots(name, pathListEnv("FUJI_WRAPPERS")); ok {

@@ -1,10 +1,17 @@
-﻿// @io stdlib
-let read   = readFile;
-let write  = writeFile;
-let append = appendFile;
-let exists = fileExists;
-let mkdir  = createDirectory;
-let isFile = os.isFile;
-let isDir  = os.isDir;
-let size   = os.size;
-let list   = os.list;
+let read = readfile;
+
+let write = writefile;
+
+let append = appendfile;
+
+let exists = fileexists;
+
+let mkdir = createdirectory;
+
+let isfile = os.isfile;
+
+let isdir = os.isdir;
+
+let size = os.size;
+
+let list = os.list;

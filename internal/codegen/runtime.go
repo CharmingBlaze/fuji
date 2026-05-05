@@ -108,6 +108,7 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 	functions["FUJI_array_includes"] = argvI64(mod, "fuji_array_includes")
 	functions["FUJI_array_slice"] = argvI64(mod, "fuji_array_slice")
 	functions["FUJI_array_concat"] = argvI64(mod, "fuji_array_concat")
+	functions["FUJI_array_join"] = argvI64(mod, "fuji_array_join")
 
 	functions["FUJI_string_split"] = argvI64(mod, "fuji_string_split")
 	functions["FUJI_string_trim"] = argvI64(mod, "fuji_string_trim")
@@ -166,6 +167,9 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 		ir.NewParam("obj", types.I64),
 		ir.NewParam("key", types.I64),
 		ir.NewParam("value", types.I64))
+	functions["FUJI_object_remove"] = mod.NewFunc("fuji_object_remove", types.I64,
+		ir.NewParam("obj", types.I64),
+		ir.NewParam("key", types.I64))
 
 	functions["FUJI_allocate_string"] = mod.NewFunc("fuji_allocate_string", types.I64,
 		ir.NewParam("length", types.I32),
@@ -189,6 +193,15 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 		ir.NewParam("value", types.I64))
 	functions["FUJI_array_length"] = arrayLenFn
 
+	functions["FUJI_forof_length"] = mod.NewFunc("fuji_forof_length", types.I64,
+		ir.NewParam("v", types.I64))
+	functions["FUJI_forof_key_at"] = mod.NewFunc("fuji_forof_key_at", types.I64,
+		ir.NewParam("v", types.I64),
+		ir.NewParam("idx", types.I64))
+	functions["FUJI_forof_value_at"] = mod.NewFunc("fuji_forof_value_at", types.I64,
+		ir.NewParam("v", types.I64),
+		ir.NewParam("idx", types.I64))
+
 	functions["FUJI_abs"] = mod.NewFunc("fuji_abs", types.I64,
 		ir.NewParam("value", types.I64))
 	functions["FUJI_sqrt"] = mod.NewFunc("fuji_sqrt", types.I64,
@@ -202,6 +215,7 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 		ir.NewParam("b", types.I64))
 
 	functions["FUJI_range"] = argvI64(mod, "fuji_range")
+	functions["FUJI_matches"] = argvI64(mod, "fuji_matches")
 
 	cellPtr := types.NewPointer(types.I64)
 	functions["FUJI_alloc_cell"] = mod.NewFunc("fuji_alloc_cell", cellPtr)

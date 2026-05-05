@@ -34,13 +34,20 @@ jobs:
       - name: Build CLIs
         run: |
           go build -trimpath -o /tmp/fuji ./cmd/fuji
+          go build -trimpath -o /tmp/fujiwrap ./cmd/wrapgen
           go build -trimpath -o /tmp/wrapgen ./cmd/wrapgen
+
+      - name: fuji fmt --check
+        run: /tmp/fuji fmt --check ./...
 
       - name: Native smoke (fuji build)
         run: |
           /tmp/fuji build tests/smoke_native.fuji -o /tmp/smoke_native
           test -x /tmp/smoke_native
           /tmp/smoke_native | head -n 5
+          /tmp/fuji build tests/for_of_pairs.fuji -o /tmp/for_of_pairs
+          test -x /tmp/for_of_pairs
+          /tmp/for_of_pairs | head -n 10
 
       - name: Wrapgen Raylib + link smoke
         env:

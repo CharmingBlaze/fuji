@@ -2,19 +2,19 @@ print("OR test:");
 print(true || false);
 print(false || true);
 print(false || false);
-
 print("AND test:");
 print(true && true);
 print(true && false);
 print(false && true);
-
 print("Short-circuit OR:");
+
 let x = true || print("SHOUD NOT PRINT");
+
 print(x);
-
 print("Short-circuit AND:");
-let y = false && print("SHOULD NOT PRINT");
-print(y);
 
+let y = false && print("SHOULD NOT PRINT");
+
+print(y);
 print("Complex logical:");
-print((true && false) || (true && true));
+print(true && false || true && true);

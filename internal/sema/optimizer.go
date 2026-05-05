@@ -140,6 +140,8 @@ func (c *NativeEmitContext) walkExprAssignments(e parser.Expr, cb func(parser.De
 		for _, el := range expr.Elements {
 			c.walkExprAssignments(el, cb)
 		}
+	case *parser.SpreadExpr:
+		c.walkExprAssignments(expr.Expr, cb)
 	case *parser.ObjectExpr:
 		for _, v := range expr.Values {
 			c.walkExprAssignments(v, cb)
@@ -457,6 +459,12 @@ func (c *NativeEmitContext) foldExprWithConstants(e parser.Expr, constants map[p
 				changed = true
 			}
 		}
+	case *parser.SpreadExpr:
+		newInner, ch := c.foldExprWithConstants(expr.Expr, constants)
+		if ch {
+			expr.Expr = newInner
+			changed = true
+		}
 	case *parser.TupleExpr:
 		for i, el := range expr.Elements {
 			newEl, c := c.foldExprWithConstants(el, constants)
@@ -583,6 +591,8 @@ func (c *NativeEmitContext) containsCallTo(e parser.Expr, name string) bool {
 				return true
 			}
 		}
+	case *parser.SpreadExpr:
+		return c.containsCallTo(expr.Expr, name)
 	case *parser.TemplateExpr:
 		for _, p := range expr.Parts {
 			if c.containsCallTo(p, name) {

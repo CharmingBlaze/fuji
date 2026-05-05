@@ -505,6 +505,28 @@ print(Vec2.len(a));    // 5
 
 ## 9. Control Flow
 
+Every `if`, `else`, loop, and `switch` body uses **`{ … }` braces** — Fuji does not allow braceless one-statement branches.
+
+Within that rule you can format however you like: **one short line** inside the braces, or **several lines** when the body is longer or you want clearer structure.
+
+```fuji
+// Single-line body (still braced)
+if (x > 0) { print("ok"); }
+
+// Multi-line body — same meaning, easier to extend
+if (x > 0) {
+    print("ok");
+}
+
+for (let i = 0; i < 3; i += 1) { print(i); }
+
+for (let i = 0; i < 3; i += 1) {
+    print(i);
+}
+```
+
+`fuji fmt` will reflow layout; choose a style that reads well for your team.
+
 ### if / else
 
 ```fuji
@@ -519,7 +541,7 @@ if (x > 5) {
 }
 ```
 
-The condition must be in parentheses. Braces are required — there are no
+The condition must be in parentheses. Braces are required on every branch — there are no
 braceless one-liners.
 
 ### if as an expression
@@ -584,6 +606,19 @@ do {
 
 The body runs **at least once**, then checks the condition.
 
+### Choosing a loop style
+
+You can mix **classic C-style loops** with Fuji’s **JavaScript-flavored** forms in the same program:
+
+| Style | Good when |
+|-------|-----------|
+| **`for (init; cond; step)`** | You want initialization, test, and step written together (counted loops). |
+| **`while` / `do-while`** | The condition is simpler than a three-part header, or the step is uneven. |
+| **`for-in`** | You iterate **keys** (object fields or array indices as values). |
+| **`for-of`** | You iterate **array elements** in order (half-open `[0, len)` indexing). |
+
+Nothing forces one style: pick whichever reads best.
+
 ### for loop
 
 ```fuji
@@ -592,12 +627,20 @@ for (let i = 0; i < 10; i++) {
 }
 ```
 
-The classic C-style for loop. All three parts are optional:
+The classic C-style `for` loop. All three parts are optional:
 
 ```fuji
 for (;;) {    // infinite loop
     // ...
     break;
+}
+```
+
+Multiple `let` bindings and comma-separated steps are allowed:
+
+```fuji
+for (let i = 0, let j = 10; i < j; i += 1, j -= 1) {
+    print(i, j);
 }
 ```
 
@@ -612,6 +655,38 @@ for (let key in obj) {
 ```
 
 `for-in` iterates over the **keys** of an object (or indices of an array).
+
+### for-of loop (iterate values)
+
+```fuji
+let items = ["sword", "shield", "potion"];
+
+for (let item of items) {
+    print(item);
+}
+```
+
+`for-of` walks stored slots **`0 .. len(iterable)-1`** and binds each **value** (arrays: elements; objects/tables: values in insertion order). Order matches how entries were stored in the runtime table.
+
+Bind **key and value** together:
+
+```fuji
+let tbl = { a: 1, b: 2 };
+
+for (let [k, v] of tbl) {
+    print(k, ":", v);
+}
+
+let xs = ["x", "y"];
+
+for (let [i, ch] of xs) {
+    print(i, ch); // i is the numeric index
+}
+```
+
+You can still use **`for-in`** when you only need keys, or **`for (let k of ["a","b"])`** when keys are fixed.
+
+Need only indices without destructuring? Use a classic **`for`** over **`len(items)`**.
 
 ### break and continue
 

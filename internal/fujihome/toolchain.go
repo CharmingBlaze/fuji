@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // LinkMode selects how the native backend links the object file with the runtime.
@@ -31,9 +32,9 @@ type Toolchain struct {
 }
 
 // FindToolchain resolves LLVM + runtime for native builds.
-// When built with "-tags release" and a populated internal/fujihome/bundled tree, the
-// embedded layout is extracted once to a temp directory and returned.
-// Otherwise the toolchain comes from the environment and PATH (see [ClangWithSource], [LLCWithSource]).
+// With "-tags release" and a populated internal/embed/<GOOS>/<GOARCH>/ tree, Clang + runtime are
+// extracted once to a temp directory and returned.
+// Otherwise the toolchain comes from the environment and PATH (see resolveDevClang, [LLCWithSource]).
 func FindToolchain() (*Toolchain, error) {
 	tc, err := embeddedToolchain()
 	if err != nil {
@@ -50,8 +51,11 @@ func findSystemToolchain() (*Toolchain, error) {
 	if err != nil {
 		return nil, fmt.Errorf("project root: %w", err)
 	}
+	clang, err := resolveDevClang()
+	if err != nil {
+		return nil, err
+	}
 	llc, _ := LLCWithSource()
-	clang := Clang()
 	lld := findLLDBinary()
 	return &Toolchain{
 		LLC:        llc,
@@ -60,6 +64,71 @@ func findSystemToolchain() (*Toolchain, error) {
 		RuntimeLib: filepath.Join(root, "runtime", "libfuji_runtime.a"),
 		LinkMode:   LinkClang,
 	}, nil
+}
+
+func resolveDevClang() (string, error) {
+	if p := strings.TrimSpace(os.Getenv("FUJI_CLANG")); p != "" {
+		return p, nil
+	}
+	if cc := strings.TrimSpace(os.Getenv("CC")); cc != "" {
+		return cc, nil
+	}
+	if runtime.GOOS == "windows" {
+		if root, err := filepath.Abs("."); err == nil {
+			gnuShim := filepath.Join(root, "scripts", "clang-gnu.cmd")
+			if fi, err := os.Stat(gnuShim); err == nil && !fi.IsDir() {
+				return gnuShim, nil
+			}
+		}
+	}
+	dir, err := InstallDir()
+	if err == nil {
+		for _, rel := range BundledClangRelPaths {
+			p := filepath.Join(dir, rel)
+			if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+				return p, nil
+			}
+		}
+	}
+	return findClangOnPathOrAbsolute(clangCandidates())
+}
+
+func clangCandidates() []string {
+	switch runtime.GOOS {
+	case "windows":
+		return []string{"clang", "clang-18", "clang-14"}
+	case "darwin":
+		return []string{
+			"/opt/homebrew/opt/llvm/bin/clang",
+			"/opt/homebrew/opt/llvm@18/bin/clang",
+			"/opt/homebrew/opt/llvm@14/bin/clang",
+			"/usr/local/opt/llvm/bin/clang",
+			"clang",
+		}
+	default:
+		return []string{"clang-18", "clang-14", "clang"}
+	}
+}
+
+func findClangOnPathOrAbsolute(candidates []string) (string, error) {
+	for _, name := range candidates {
+		if filepath.IsAbs(name) {
+			if fi, err := os.Stat(name); err == nil && !fi.IsDir() {
+				return name, nil
+			}
+			continue
+		}
+		if path, err := exec.LookPath(name); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf(
+		"clang not found.\n" +
+			"Install LLVM or use a Fuji release binary.\n" +
+			"  Windows: choco install llvm\n" +
+			"  macOS:   brew install llvm\n" +
+			"  Linux:   apt-get install clang",
+	)
 }
 
 func findLLDBinary() string {
@@ -76,37 +145,5 @@ func findLLDBinary() string {
 }
 
 // ErrIncompleteEmbeddedToolchain means a release build was compiled with -tags release
-// but bundled/{GOOS}/{GOARCH} is missing one of llc, lld, or libfuji_runtime.a.
-var ErrIncompleteEmbeddedToolchain = errors.New("incomplete embedded toolchain (see internal/fujihome/bundled/README.md)")
-
-func findClangForEmbeddedLink(llcPath string) string {
-	if dir := filepath.Dir(llcPath); dir != "" {
-		name := "clang"
-		if runtime.GOOS == "windows" {
-			name = "clang.exe"
-		}
-		candidate := filepath.Join(dir, name)
-		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
-			return candidate
-		}
-	}
-	return Clang()
-}
-
-func platformKey() string {
-	return runtime.GOOS + "/" + runtime.GOARCH
-}
-
-func llcBinaryName() string {
-	if runtime.GOOS == "windows" {
-		return "llc.exe"
-	}
-	return "llc"
-}
-
-func lldBinaryName() string {
-	if runtime.GOOS == "windows" {
-		return "lld.exe"
-	}
-	return "lld"
-}
+// but internal/embed/<GOOS>/<GOARCH>/ was incomplete at compile time (see internal/embed/README.md).
+var ErrIncompleteEmbeddedToolchain = errors.New("incomplete embedded toolchain (see internal/embed/README.md)")

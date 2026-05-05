@@ -58,6 +58,12 @@ Value fuji_copy_string(const char* chars, int length);
 Value fuji_allocate_object(int property_count);
 Value fuji_object_get(Value obj, Value key);
 Value fuji_object_set(Value obj, Value key, Value value);
+Value fuji_object_remove(Value obj, Value key);
+
+/** Native lowering for `for-in` / `for-of` over arrays and tables (slot order). */
+Value fuji_forof_length(Value v);
+Value fuji_forof_key_at(Value v, Value idx_val);
+Value fuji_forof_value_at(Value v, Value idx_val);
 
 /** NaN-box helpers for LLVM codegen — never bitcast i64 to double without these. */
 double fuji_unbox_number(Value v);

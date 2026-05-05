@@ -1,12 +1,13 @@
 print("Testing String Method:");
+
 let s = "hello";
-print(s.upper()); // Expected: HELLO
 
+print(s.upper());
 print("Testing Array Method:");
-let arr = [1, 2, 3];
-// push returns the new array in our current implementation
-arr = arr.push(4); 
-print(arr); // Expected: [1, 2, 3, 4]
 
+let arr = [1, 2, 3];
+
+arr = arr.push(4);
+print(arr);
 print("Chained Methods (if we had more):");
-print("abc".upper().upper()); // Should work!
+print(("abc".upper()).upper());

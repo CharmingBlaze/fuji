@@ -21,6 +21,17 @@ func parseForTest(t *testing.T, source string) *parser.Program {
 	return program
 }
 
+func TestSemaDuplicateBindingSameScope(t *testing.T) {
+	src := `let x = 1;
+let X = 2;
+`
+	program := parseForTest(t, src)
+	err := NewAnalyzer().Analyze(program)
+	if err == nil {
+		t.Fatal("expected duplicate binding error")
+	}
+}
+
 func TestSemaBasicScoping(t *testing.T) {
 	source := `
 		let x = 10;

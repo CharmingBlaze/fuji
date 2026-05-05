@@ -19,9 +19,6 @@ func ClangWithSource() (path, source string) {
 	if s := strings.TrimSpace(os.Getenv("FUJI_CLANG")); s != "" {
 		return s, "FUJI_CLANG"
 	}
-	if s := strings.TrimSpace(os.Getenv("FUJI_CLANG")); s != "" {
-		return s, "FUJI_CLANG (deprecated; use FUJI_CLANG)"
-	}
 	if cc := strings.TrimSpace(os.Getenv("CC")); cc != "" {
 		return cc, "CC"
 	}
@@ -44,9 +41,6 @@ func ClangWithSource() (path, source string) {
 func LLCWithSource() (path, source string) {
 	if s := strings.TrimSpace(os.Getenv("FUJI_LLC")); s != "" {
 		return s, "FUJI_LLC"
-	}
-	if s := strings.TrimSpace(os.Getenv("FUJI_LLC")); s != "" {
-		return s, "FUJI_LLC (deprecated; use FUJI_LLC)"
 	}
 	dir, err := InstallDir()
 	if err == nil {

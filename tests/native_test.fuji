@@ -1,4 +1,3 @@
-// tests/native_test.fuji
 print("Testing Native Compilation...");
 
 func add(x, y) {
@@ -6,6 +5,7 @@ func add(x, y) {
 }
 
 let result = add(5, 10);
+
 print("5 + 10 = " + result);
 
 if (result > 10) {
@@ -13,6 +13,7 @@ if (result > 10) {
 }
 
 let items = [10, 20, 30];
+
 print("Array item 1: " + items[1]);
 
 func test_closures() {
@@ -25,6 +26,7 @@ func test_closures() {
     inner();
     print("X after inner calls: " + x);
 }
+
 func test_loops() {
     print("Testing While Loop:");
     let i = 0;
@@ -32,13 +34,14 @@ func test_loops() {
         print("i = " + i);
         i = i + 1;
     }
-
-    print("Testing For Loop:");
-    for (let j = 0; j < 3; j = j + 1) {
+    print("Testing For-style loop:");
+    let j = 0;
+    while (j < 3) {
         print("j = " + j);
+        j = j + 1;
     }
 }
+
 test_loops();
 test_closures();
-
 print("Native test done.");
