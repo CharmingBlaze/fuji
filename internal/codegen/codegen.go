@@ -645,6 +645,15 @@ func (g *Generator) emitArgvRuntime(fn *ir.Func, args []value.Value) value.Value
 	return g.block.NewCall(fn, constant.NewInt(types.I32, int64(n)), argvPtr)
 }
 
+// indirectFujiFuncPtrType is i64 (i64 this, i64 × argCount)* — matches every user/closure function in this backend.
+func indirectFujiFuncPtrType(argCount int) *types.PointerType {
+	paramTys := make([]types.Type, 0, 1+argCount)
+	for i := 0; i < 1+argCount; i++ {
+		paramTys = append(paramTys, types.I64)
+	}
+	return types.NewPointer(types.NewFunc(types.I64, paramTys...))
+}
+
 func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 	// Check if this is a method call (e.g., obj.method())
 	// Set this value if the function is called on an object
@@ -755,6 +764,15 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 			_ = call
 			return constant.NewInt(types.I64, 0), nil
 		}
+		return call, nil
+	}
+
+	// Function value stored as i64 (ptrtoint of the LLVM function); recover pointer and call with this + args.
+	if fnVal.Type().Equal(types.I64) {
+		fnPtrTy := indirectFujiFuncPtrType(len(args))
+		fnPtr := g.block.NewIntToPtr(g.emitAsFujiI64(fnVal), fnPtrTy)
+		finalArgs := append([]value.Value{thisVal}, args...)
+		call := g.block.NewCall(fnPtr, finalArgs...)
 		return call, nil
 	}
 

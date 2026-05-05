@@ -35,6 +35,10 @@ type NativeEmitContext struct {
 	FreeVarsExpr map[*parser.FuncExpr][]string
 	FreeVarsDecl map[*parser.FuncDecl][]string
 
+	// FuncExprEnclosing maps each function expression to its enclosing function (FuncExpr or FuncDecl)
+	// while walking, so captures can be propagated to intermediate closures (nested lambdas).
+	FuncExprEnclosing map[*parser.FuncExpr]interface{}
+
 	ShadowFuncDecl map[*parser.FuncDecl]*ShadowLayout
 	ShadowFuncExpr map[*parser.FuncExpr]*ShadowLayout
 	ShadowEntry    *ShadowLayout
@@ -55,9 +59,10 @@ func PrepareNativeBundle(bundle *parser.ProgramBundle) (*NativeEmitContext, erro
 		StackDecls:     make(map[*parser.LetDecl]bool),
 		ParamIsCell:    make(map[ParamCellKey]bool),
 		letOwner:       make(map[*parser.LetDecl]interface{}),
-		FreeVarsExpr:   make(map[*parser.FuncExpr][]string),
-		FreeVarsDecl:   make(map[*parser.FuncDecl][]string),
-		ShadowFuncDecl: make(map[*parser.FuncDecl]*ShadowLayout),
+		FreeVarsExpr:      make(map[*parser.FuncExpr][]string),
+		FreeVarsDecl:      make(map[*parser.FuncDecl][]string),
+		FuncExprEnclosing: make(map[*parser.FuncExpr]interface{}),
+		ShadowFuncDecl:    make(map[*parser.FuncDecl]*ShadowLayout),
 		ShadowFuncExpr: make(map[*parser.FuncExpr]*ShadowLayout),
 	}
 	prepareNativeAnalysis(ctx, bundle)

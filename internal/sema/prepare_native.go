@@ -271,9 +271,24 @@ func walkBlockStmt(b *parser.BlockStmt, env *envFrame, ctx *NativeEmitContext, c
 	}
 }
 
-func visitFuncExpr(fe *parser.FuncExpr, env *envFrame, ctx *NativeEmitContext) {
+func visitFuncExpr(fe *parser.FuncExpr, env *envFrame, ctx *NativeEmitContext, enclosing interface{}) {
+	if ctx.FuncExprEnclosing != nil {
+		ctx.FuncExprEnclosing[fe] = enclosing
+	}
 	paramEnv := newParamEnvFuncExpr(env, fe)
 	walkBlockStmt(fe.Body, paramEnv, ctx, fe)
+}
+
+func nextEnclosingFunc(ctx *NativeEmitContext, cur interface{}) interface{} {
+	fe, ok := cur.(*parser.FuncExpr)
+	if !ok || ctx.FuncExprEnclosing == nil {
+		return nil
+	}
+	enc, ok := ctx.FuncExprEnclosing[fe]
+	if !ok {
+		return nil
+	}
+	return enc
 }
 
 func appendUniqueName(names []string, name string) []string {
@@ -303,6 +318,9 @@ func markIdentifierCapture(id *parser.IdentifierExpr, env *envFrame, ctx *Native
 		if owner != nil && owner != curFunc {
 			ctx.EscapingDecls[ld] = true
 			recordFreeVar(ctx, curFunc, id.Name.Lexeme)
+			for x := nextEnclosingFunc(ctx, curFunc); x != nil && x != owner; x = nextEnclosingFunc(ctx, x) {
+				recordFreeVar(ctx, x, id.Name.Lexeme)
+			}
 		}
 		return
 	}
@@ -310,6 +328,9 @@ func markIdentifierCapture(id *parser.IdentifierExpr, env *envFrame, ctx *Native
 		if pi.owner != curFunc {
 			ctx.ParamIsCell[NewParamCellKey(pi.owner, pi.idx)] = true
 			recordFreeVar(ctx, curFunc, id.Name.Lexeme)
+			for x := nextEnclosingFunc(ctx, curFunc); x != nil && x != pi.owner; x = nextEnclosingFunc(ctx, x) {
+				recordFreeVar(ctx, x, id.Name.Lexeme)
+			}
 		}
 	}
 }
@@ -321,7 +342,7 @@ func walkExpr(ex parser.Expr, env *envFrame, ctx *NativeEmitContext, curFunc int
 			markIdentifierCapture(e, env, ctx, curFunc)
 		}
 	case *parser.FuncExpr:
-		visitFuncExpr(e, env, ctx)
+		visitFuncExpr(e, env, ctx, curFunc)
 	case *parser.CallExpr:
 		walkExpr(e.Function, env, ctx, curFunc)
 		for _, a := range e.Arguments {
