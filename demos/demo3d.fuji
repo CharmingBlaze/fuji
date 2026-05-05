@@ -1,0 +1,47 @@
+#include "wrappers/raylib/raylib.fuji"
+
+let width = 800;
+let height = 450;
+InitWindow(width, height, "Fuji Native Raylib 3D Demo");
+
+let camera = {
+    position: { x: 10.0, y: 10.0, z: 10.0 },
+    target: { x: 0.0, y: 0.0, z: 0.0 },
+    up: { x: 0.0, y: 1.0, z: 0.0 },
+    fovy: 45.0,
+    projection: 0 // CAMERA_PERSPECTIVE
+};
+
+SetTargetFPS(60);
+
+// Colors (RGBA packed into int)
+let RAYWHITE  = { r: 245, g: 245, b: 245, a: 255 };
+let LIGHTGRAY = { r: 200, g: 200, b: 200, a: 255 };
+let RED       = { r: 230, g: 41,  b: 55,  a: 255 };
+let DARKGRAY  = { r: 80,  g: 80,  b: 80,  a: 255 };
+
+while (!WindowShouldClose()) {
+    // Update camera orbit
+    let t = GetTime();
+    camera.position.x = 10.0 * 0.707; // Just static for first test to avoid math dependency complexity
+    camera.position.z = 10.0 * 0.707;
+    
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+    
+    BeginMode3D(camera);
+    
+    DrawCube({x:0.0, y:0.0, z:0.0}, 2.0, 2.0, 2.0, RED);
+    DrawCubeWires({x:0.0, y:0.0, z:0.0}, 2.0, 2.0, 2.0, DARKGRAY);
+    
+    DrawGrid(10, 1.0);
+    
+    EndMode3D();
+    
+    DrawText("Welcome to Fuji Native 3D!", 10, 10, 20, DARKGRAY);
+    DrawText("Native execution via LLVM + Raylib FFI", 10, 40, 20, DARKGRAY);
+    
+    EndDrawing();
+}
+
+CloseWindow();

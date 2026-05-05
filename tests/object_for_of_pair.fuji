@@ -1,0 +1,11 @@
+let obj = { a: 10, b: 20 };
+print("Object for-of pairs:");
+for (let k, v of obj) {
+    print(k, ":", v);
+}
+
+let arr = ["X", "Y"];
+print("Array for-of pairs:");
+for (let i, v of arr) {
+    print(i, ":", v);
+}

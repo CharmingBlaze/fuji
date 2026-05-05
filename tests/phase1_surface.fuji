@@ -1,0 +1,56 @@
+// Phase 1 language surface smoke: strict eq, bitwise, compound/update, loops, switch.
+let a = 0;
+
+// Strict equality
+if (1 === 1) { a = a + 1; }
+if (1 !== "1") { a = a + 1; }
+
+// Bitwise (integral doubles)
+a = a + (3 & 1);
+a = a + (1 | 2);
+a = a + (7 ^ 2);
+a = a + (1 << 3);
+a = a + ((-8 >> 2) + 8);
+if ((-1 >>> 30) > 0) {
+  a = a + 1;
+}
+
+// Compound assign + postfix
+let x = 10;
+x += 3;
+x -= 1;
+let y = 5;
+y++;
+a = a + x + y;
+
+// do / while runs at least once
+let d = 0;
+do { d = d + 1; } while (d < 1);
+a = a + d;
+
+// switch — C-style fall-through; use explicit break when you do not want the next case to run
+let s = 0;
+switch (2) {
+  case 1: s = 10; break;
+  case 2: s = 20; break;
+  default: s = s + 1; break;
+}
+a = a + s;
+
+// for-in over array (element values; matches VM desugar + tree runtime)
+let fi = 0;
+let arr = [10, 20];
+for (let k in arr) {
+  fi = fi + k;
+}
+a = a + fi;
+
+// Numeric literal forms
+let hex = 0xff;
+let bin = 0b1010;
+let sci = 1e2;
+if (hex === 255) { a = a + 1; }
+if (bin === 10) { a = a + 1; }
+if (sci === 100) { a = a + 1; }
+
+print(a);

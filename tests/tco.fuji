@@ -1,0 +1,20 @@
+func count(n) {
+  if (n == 0) {
+    return "done";
+  }
+  return count(n - 1); // Tail call
+}
+
+print("Testing TCO with 1,000,000 recursions:");
+print(count(1000000));
+print("If you see this, TCO works! (No stack overflow)");
+
+func sum(n, acc) {
+  if (n == 0) {
+    return acc;
+  }
+  return sum(n - 1, acc + n); // Tail call
+}
+
+print("Sum of 1 to 1000:");
+print(sum(1000, 0));

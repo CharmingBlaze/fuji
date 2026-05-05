@@ -1,0 +1,27 @@
+print("While loop:");
+let i = 0;
+while (i < 5) {
+  print(i);
+  i = i + 1;
+}
+
+print("For loop:");
+for (let j = 0; j < 3; j = j + 1) {
+  print(j);
+}
+
+print("Break test:");
+for (let k = 0; k < 10; k = k + 1) {
+  if (k == 3) {
+    break;
+  }
+  print(k);
+}
+
+print("Continue test:");
+for (let m = 0; m < 5; m = m + 1) {
+  if (m == 2) {
+    continue;
+  }
+  print(m);
+}

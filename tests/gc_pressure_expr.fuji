@@ -1,0 +1,14 @@
+func allocating() {
+    return [1, 2, 3]
+}
+
+let i = 0
+while (i < 500) {
+    let x = allocating()
+    let valid = len(x) > 0 && len(x) < 10
+    if (valid == false) {
+        print("FAIL")
+    }
+    i = i + 1
+}
+print("PASS")

@@ -1,0 +1,38 @@
+// ok() creates a success result
+let r1 = ok(42);
+assert(r1.ok == true,    "ok.ok should be true");
+assert(r1.value == 42,   "ok.value should be 42");
+assert(r1.error == null, "ok.error should be null");
+
+// err() creates an error result
+let r2 = err("something failed");
+assert(r2.ok == false,                  "err.ok should be false");
+assert(r2.value == null,                "err.value should be null");
+assert(r2.error == "something failed",  "err.error should match");
+
+// assert passes when true
+assert(1 + 1 == 2, "math works");
+assert(true, "true is true");
+
+// Propagating errors
+func mightFail(fail) {
+    if (fail) {
+        return err("intentional failure");
+    }
+    return ok("success");
+}
+
+let good = mightFail(false);
+assert(good.ok, "should succeed");
+assert(good.value == "success", "value should be success");
+
+let bad = mightFail(true);
+assert(!bad.ok, "should fail");
+assert(bad.error == "intentional failure", "error should match");
+
+// readFile returns Result
+let missing = readFile("does_not_exist.txt");
+assert(!missing.ok, "missing file should fail");
+assert(missing.error != null, "error message should exist");
+
+print("PASS: error handling works");

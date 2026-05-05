@@ -1,0 +1,15 @@
+// Old-gen table gains a nursery/young reference; minor GC must not drop child.
+let old = { name: "persistent" };
+gc();
+
+old.child = { value: 42, data: [1, 2, 3] };
+
+let k = 0;
+while (k < 10000) {
+  let tmp = { throwaway: k };
+  k = k + 1;
+}
+
+print("child value:");
+print(old.child.value);
+print("PASS: write barrier correct");

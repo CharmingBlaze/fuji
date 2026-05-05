@@ -1,0 +1,29 @@
+// str.fuji - Standard String Library
+// Usage: let str = import("@str");
+
+let upper      = strUpper;
+let lower      = strLower;
+let trim       = strTrim;
+let contains   = strContains;
+let hasPrefix  = strHasPrefix;
+let hasSuffix  = strHasSuffix;
+let indexOf    = strIndex;
+let replace    = strReplace;
+let split      = strSplit;
+let join       = strJoin;
+let repeat     = strRepeat;
+let slice      = strSlice;
+let charAt     = strCharAt;
+let charCode   = strCharCode;
+let fromCode   = strFromCode;
+let padLeft    = strPadLeft;
+let padRight   = strPadRight;
+let format     = func(tmpl, obj) {
+    let k = keys(obj);
+    let i = 0;
+    while (i < len(k)) {
+        tmpl = strReplace(tmpl, "{" + k[i] + "}", string(obj[k[i]]));
+        i = i + 1;
+    }
+    return tmpl;
+};

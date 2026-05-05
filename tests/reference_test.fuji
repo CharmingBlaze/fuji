@@ -1,0 +1,70 @@
+// 1. Variable Declarations
+let x = 42;
+let name = "Jesse";
+let empty;
+
+// 2. Data Types
+let numbers = [1, 2, 3];
+let person = { name: "Alice", age: 30 };
+
+// 3. Operators
+x += 5;
+x++;
+print("Operators:", x == 48);
+
+// 4. Control Flow
+if (x > 40) {
+    print("If: OK");
+}
+
+switch (name) {
+    case "Jesse": print("Switch: OK"); break;
+}
+
+print("Iteration:");
+for (let item of numbers) {
+    print("-", item);
+}
+
+for (let i, item of ["A", "B"]) {
+    print(i, ":", item);
+}
+
+for (let k, v of person) {
+    print(k, "=", v);
+}
+
+for (let c of "hi") {
+    print("char:", c);
+}
+
+// 5. Functions & 6. Closures
+func makeCounter() {
+    let count = 0;
+    return func() {
+        count += 1;
+        return count;
+    };
+}
+let counter = makeCounter();
+print("Counter:", counter(), counter());
+
+// 7. Objects & Methods
+let player = {
+    hp: 100,
+    damage(amt) {
+        this.hp -= amt;
+    }
+};
+player.damage(20);
+print("Player HP:", player.hp);
+
+// 8. Arrays
+let arr = [10, 20];
+arr.push(30);
+print("Length:", arr.length());
+print("Pop:", arr.pop());
+
+// 11. Stdlib
+print("Type:", type(arr), "Len:", len("hello"));
+print("Reference Test Complete");

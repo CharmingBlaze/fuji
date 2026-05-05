@@ -1,0 +1,76 @@
+// 3D demo: Raylib via wrappers/raylib_shim (not embedded in kuji.c).
+// Build: set FUJI_NATIVE_SOURCES=wrappers/raylib_shim/wrapper.c and FUJI_LINKFLAGS to your Raylib -I/-L/-lraylib.
+#include "wrappers/raylib_shim/raylib.fuji"
+
+func main() {
+    let screenWidth = 800;
+    let screenHeight = 600;
+
+    let BLACK = 255;
+    let WHITE = 4294967295;
+    let LIGHTGRAY = 2426965247;
+    let RED = 4278190335;
+
+    let KEY_W = 87;
+    let KEY_S = 83;
+    let KEY_A = 65;
+    let KEY_D = 68;
+
+    let cameraPosX = 10.0;
+    let cameraPosY = 10.0;
+    let cameraPosZ = 10.0;
+    let cameraTargetX = 0.0;
+    let cameraTargetY = 0.0;
+    let cameraTargetZ = 0.0;
+    let cameraUpX = 0.0;
+    let cameraUpY = 1.0;
+    let cameraUpZ = 0.0;
+    let cameraFovy = 45.0;
+
+    let cubeRotation = 0.0;
+
+    InitWindow(screenWidth, screenHeight, "Fuji 3D Demo");
+    SetTargetFPS(60);
+
+    while (!WindowShouldClose()) {
+        let dt = deltaTime();
+
+        cubeRotation = cubeRotation + 60.0 * dt;
+
+        if (IsKeyDown(KEY_W)) {
+            cameraPosZ = cameraPosZ - 10.0 * dt;
+        }
+        if (IsKeyDown(KEY_S)) {
+            cameraPosZ = cameraPosZ + 10.0 * dt;
+        }
+        if (IsKeyDown(KEY_A)) {
+            cameraPosX = cameraPosX - 10.0 * dt;
+        }
+        if (IsKeyDown(KEY_D)) {
+            cameraPosX = cameraPosX + 10.0 * dt;
+        }
+
+        cameraTargetX = 0.0;
+        cameraTargetY = 0.0;
+        cameraTargetZ = 0.0;
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+
+        BeginMode3D(cameraPosX, cameraPosY, cameraPosZ, cameraTargetX, cameraTargetY, cameraTargetZ, cameraUpX, cameraUpY, cameraUpZ, cameraFovy);
+
+        DrawGrid(20, 1.0);
+
+        DrawCube(0.0, 0.0, 0.0, 2.0, 2.0, 2.0, RED);
+        DrawCubeWires(0.0, 0.0, 0.0, 2.0, 2.0, 2.0, WHITE);
+
+        EndMode3D();
+
+        DrawText("Fuji 3D Demo", 10, 10, 20, WHITE);
+        DrawText("WASD to move camera", 10, 40, 16, LIGHTGRAY);
+
+        EndDrawing();
+    }
+
+    CloseWindow();
+}

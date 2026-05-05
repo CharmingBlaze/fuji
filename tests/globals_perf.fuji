@@ -1,0 +1,17 @@
+let x = 10;
+let y = 20;
+
+func test() {
+  print("Inside test:");
+  print(x);
+  print(y);
+  x = x + 5;
+}
+
+test();
+print("After test:");
+print(x);
+
+let z = x + y;
+print("z =");
+print(z);

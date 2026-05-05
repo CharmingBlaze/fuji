@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+      FUJI_SKIP_TOOLCHAIN_EXTRACT: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm build-essential
+
+      - name: Build C runtime
+        run: bash scripts/build-runtime.sh
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Go test
+        run: go test ./... -count=1
+
+      - name: Build CLIs
+        run: |
+          go build -trimpath -o /tmp/fuji ./cmd/fuji
+          go build -trimpath -o /tmp/wrapgen ./cmd/wrapgen
+
+      - name: Native smoke (fuji build)
+        run: |
+          /tmp/fuji build tests/smoke_native.fuji -o /tmp/smoke_native
+          test -x /tmp/smoke_native
+          /tmp/smoke_native | head -n 5
+
+      - name: Wrapgen Raylib + link smoke
+        env:
+          FUJI_BIN: /tmp/fuji
+        run: bash scripts/ci-wrapgen-raylib.sh

@@ -1,0 +1,200 @@
+package parser
+
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"fuji/internal/lexer"
+)
+
+func TestVarReservedUseLet(t *testing.T) {
+	l := lexer.NewLexer(`var x = 1;`)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewParser(tokens)
+	_, err = p.Parse()
+	if err == nil {
+		t.Fatal("expected error for var declaration")
+	}
+	if !strings.Contains(err.Error(), "let") {
+		t.Fatalf("expected hint to use let, got: %v", err)
+	}
+}
+
+func TestVarReservedInExpression(t *testing.T) {
+	l := lexer.NewLexer(`func main() { let a = var; }`)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewParser(tokens)
+	_, err = p.Parse()
+	if err == nil {
+		t.Fatal("expected error for var in expression")
+	}
+	if !strings.Contains(err.Error(), "let") {
+		t.Fatalf("expected hint to use let, got: %v", err)
+	}
+}
+
+func TestParser(t *testing.T) {
+	source := `
+		let x = 10;
+		func add(a, b) {
+			return a + b;
+		}
+		if (x > 5) {
+			add(x, 2);
+		}
+	`
+	l := lexer.NewLexer(source)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatalf("Lexer failed: %v", err)
+	}
+
+	p := NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		t.Fatalf("Parser failed: %v", err)
+	}
+
+	if len(program.Declarations) != 3 {
+		t.Errorf("Expected 3 declarations, got %d", len(program.Declarations))
+	}
+
+	// Verify one node type
+	if _, ok := program.Declarations[0].(*LetDecl); !ok {
+		t.Errorf("Expected first decl to be LetDecl, got %T", program.Declarations[0])
+	}
+}
+
+func parseForTest(t *testing.T, source string) *Program {
+	t.Helper()
+	l := lexer.NewLexer(source)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatalf("Lexer failed: %v", err)
+	}
+	p := NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		t.Fatalf("Parser failed: %v", err)
+	}
+	return program
+}
+
+func TestParserImportAssignmentAndBlockDeclarations(t *testing.T) {
+	program := parseForTest(t, `
+		let math = import "@math";
+		let x = 1;
+		x = x + 2;
+		if (x > 1) {
+			let y = x;
+			y = y + 1;
+		}
+	`)
+	if len(program.Declarations) != 4 {
+		t.Fatalf("expected 4 declarations, got %d", len(program.Declarations))
+	}
+	first := program.Declarations[0].(*LetDecl)
+	if _, ok := first.Init.(*ImportExpr); !ok {
+		t.Fatalf("expected import initializer, got %T", first.Init)
+	}
+	assignStmt := program.Declarations[2].(*ExpressionStmt)
+	if _, ok := assignStmt.Expr.(*AssignExpr); !ok {
+		t.Fatalf("expected assignment expression, got %T", assignStmt.Expr)
+	}
+	ifStmt := program.Declarations[3].(*IfStmt)
+	block := ifStmt.Then.(*BlockStmt)
+	if len(block.Declarations) != 2 {
+		t.Fatalf("expected 2 block statements, got %d", len(block.Declarations))
+	}
+	if _, ok := block.Declarations[0].(*LetDecl); !ok {
+		t.Fatalf("expected let declaration inside block, got %T", block.Declarations[0])
+	}
+}
+
+func TestParserDefaultAndRestParams(t *testing.T) {
+	program := parseForTest(t, `
+		func collect(a, b = 2, ...rest) {
+			return a;
+		}
+	`)
+	fn := program.Declarations[0].(*FuncDecl)
+	if len(fn.Params) != 3 {
+		t.Fatalf("expected 3 params, got %d", len(fn.Params))
+	}
+	if fn.Params[1].Default == nil {
+		t.Fatal("expected default value for second param")
+	}
+	if !fn.Params[2].IsRest || fn.Params[2].Name != "rest" {
+		t.Fatalf("expected rest param, got %#v", fn.Params[2])
+	}
+}
+
+func TestParserBreakContinueAndInclude(t *testing.T) {
+	program := parseForTest(t, `
+		#include "helpers.fuji"
+		while (true) {
+			continue;
+			break;
+		}
+	`)
+	if _, ok := program.Declarations[0].(*IncludeDecl); !ok {
+		t.Fatalf("expected include declaration, got %T", program.Declarations[0])
+	}
+	loop := program.Declarations[1].(*WhileStmt)
+	body := loop.Body.(*BlockStmt)
+	if _, ok := body.Declarations[0].(*ContinueStmt); !ok {
+		t.Fatalf("expected continue statement, got %T", body.Declarations[0])
+	}
+	if _, ok := body.Declarations[1].(*BreakStmt); !ok {
+		t.Fatalf("expected break statement, got %T", body.Declarations[1])
+	}
+}
+
+func TestParserRejectsInvalidRestParams(t *testing.T) {
+	l := lexer.NewLexer(`func bad(...rest, x) { return x; }`)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatalf("Lexer failed: %v", err)
+	}
+	_, err = NewParser(tokens).Parse()
+	if err == nil {
+		t.Fatal("expected parser error for non-final rest parameter")
+	}
+}
+
+func TestProgramIncludeLoadsShim(t *testing.T) {
+	repoExamples := filepath.Join("..", "..", "examples", "raylib_shim_demo.fuji")
+	bundle, err := LoadProgram(repoExamples)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bundle.Modules) < 2 {
+		t.Fatalf("expected included module loaded, have %d modules", len(bundle.Modules))
+	}
+	if err := FlattenEntryIncludes(bundle); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, d := range bundle.Entry.Declarations {
+		if let, ok := d.(*LetDecl); ok {
+			names = append(names, let.Name.Lexeme)
+		}
+	}
+	found := false
+	for _, n := range names {
+		if n == "InitWindow" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("InitWindow not in entry after flatten; let names: %v", names)
+	}
+}

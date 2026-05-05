@@ -1,0 +1,22 @@
+if (true) {
+    print("True branch executed");
+} else {
+    print("False branch pruned");
+}
+
+if (false) {
+    print("False branch pruned");
+}
+
+let x = 10;
+if (x > 5) {
+    // This cannot be pruned yet because x is a variable, 
+    // unless we implement constant propagation.
+    print("Variable check stays");
+}
+
+while (false) {
+    print("This loop is gone");
+}
+
+1 + 2; // This expression statement should be removed

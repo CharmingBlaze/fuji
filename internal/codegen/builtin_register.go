@@ -1,0 +1,86 @@
+package codegen
+
+import "github.com/llir/llvm/ir"
+
+// registerBuiltinFuncs binds Fuji global names to runtime LLVM symbols for native emission.
+func (g *Generator) registerBuiltinFuncs() {
+	pairs := []struct {
+		name string
+		fn   *ir.Func
+	}{
+		{"ok", g.runtimeOk},
+		{"err", g.runtimeErr},
+		{"panic", g.runtimePanic},
+		{"assert", g.runtimeAssert},
+		{"deltaTime", g.runtimeDeltaTime},
+		{"print", g.runtimePrint},
+		{"len", g.runtimeLen},
+		{"type", g.runtimeType},
+		{"typeof", g.runtimeType},
+		{"time", g.runtimeTime},
+		{"clock", g.runtimeClock},
+		{"timestamp", g.runtimeTimestamp},
+		{"programTime", g.runtimeProgramTime},
+		{"sleep", g.runtimeSleep},
+		{"random", g.runtimeRandom},
+		{"randomInt", g.runtimeRandomInt},
+		{"randomChoice", g.runtimeRandomChoice},
+		{"randomSeed", g.runtimeRandomSeed},
+		{"lerp", g.runtimeLerp},
+		{"clamp", g.runtimeClamp},
+		{"distance", g.runtimeDistance},
+		{"angleBetween", g.runtimeAngleBetween},
+		{"map", g.runtimeMap},
+		{"pi", g.runtimePI},
+		{"e", g.runtimeE},
+		{"sin", g.runtimeSin},
+		{"cos", g.runtimeCos},
+		{"tan", g.runtimeTan},
+		{"asin", g.runtimeAsin},
+		{"acos", g.runtimeAcos},
+		{"atan", g.runtimeAtan},
+		{"atan2", g.runtimeAtan2},
+		{"pow", g.runtimePow},
+		{"exp", g.runtimeExp},
+		{"log", g.runtimeLog},
+		{"log10", g.runtimeLog10},
+		{"floor", g.runtimeFloor},
+		{"ceil", g.runtimeCeil},
+		{"round", g.runtimeRound},
+		{"trunc", g.runtimeTrunc},
+		{"sign", g.runtimeSign},
+		{"min", g.runtimeMin},
+		{"max", g.runtimeMax},
+		{"smoothstep", g.runtimeSmoothstep},
+		{"distanceSq", g.runtimeDistanceSq},
+		{"normalize", g.runtimeNormalize},
+		{"isNumber", g.runtimeIsNumber},
+		{"isString", g.runtimeIsString},
+		{"isBool", g.runtimeIsBool},
+		{"isNull", g.runtimeIsNull},
+		{"isArray", g.runtimeIsArray},
+		{"isObject", g.runtimeIsObject},
+		{"isFunction", g.runtimeIsFunction},
+		{"bool", g.runtimeBool},
+		{"format", g.runtimeFormat},
+		{"readFile", g.runtimeReadFile},
+		{"writeFile", g.runtimeWriteFile},
+		{"appendFile", g.runtimeAppendFile},
+		{"fileExists", g.runtimeFileExists},
+		{"deleteFile", g.runtimeDeleteFile},
+		{"trace", g.runtimeTrace},
+		{"parseJSON", g.runtimeParseJSON},
+		{"toJSON", g.runtimeToJSON},
+		{"abs", g.runtimeAbs},
+		{"sqrt", g.runtimeSqrt},
+		{"number", g.runtimeNumber},
+		{"string", g.runtimeString},
+		{"gc", g.runtimeGcCollect},
+		{"gcFrameStep", g.runtimeGcFrameStep},
+	}
+	for _, p := range pairs {
+		if p.fn != nil {
+			g.funcs[p.name] = p.fn
+		}
+	}
+}

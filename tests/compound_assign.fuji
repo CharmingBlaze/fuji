@@ -1,0 +1,17 @@
+let obj = { x: 10 };
+obj.x -= 3;
+print("obj.x:", obj.x);
+if (obj.x == 7) {
+    print("OK");
+} else {
+    print("FAILED");
+}
+
+let arr = [10, 20];
+arr[0] += 5;
+print("arr[0]:", arr[0]);
+if (arr[0] == 15) {
+    print("OK");
+} else {
+    print("FAILED");
+}

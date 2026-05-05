@@ -1,0 +1,60 @@
+// 3D spinning cube — Raylib via wrappers/raylib_shim.
+#include "../wrappers/raylib_shim/raylib.fuji"
+
+InitWindow(800, 450, "Fuji 3D Engine - Spinning Cube");
+SetTargetFPS(60);
+
+let cameraPosX = 5.0;
+let cameraPosY = 5.0;
+let cameraPosZ = 5.0;
+let cameraTargetX = 0.0;
+let cameraTargetY = 0.0;
+let cameraTargetZ = 0.0;
+let cameraUpX = 0.0;
+let cameraUpY = 1.0;
+let cameraUpZ = 0.0;
+let cameraFovy = 45.0;
+
+let angle = 0;
+
+while (!WindowShouldClose()) {
+    angle = angle + 0.02;
+
+    cameraPosX = 10 * sin(angle);
+    cameraPosZ = 10 * cos(angle);
+
+    BeginDrawing();
+    ClearBackground(0x181818FF);
+
+    BeginMode3D(cameraPosX, cameraPosY, cameraPosZ, cameraTargetX, cameraTargetY, cameraTargetZ, cameraUpX, cameraUpY, cameraUpZ, cameraFovy);
+
+    DrawGrid(20, 1.0);
+
+    DrawLine3D(0, 0, 0, 5, 0, 0, 0xFF0000FF);
+    DrawLine3D(0, 0, 0, 0, 5, 0, 0x00FF00FF);
+    DrawLine3D(0, 0, 0, 0, 0, 5, 0x0000FFFF);
+
+    DrawCube(0, 1, 0, 2, 2, 2, 0x00AAFFFF);
+    DrawCubeWires(0, 1, 0, 2.1, 2.1, 2.1, 0xFFFFFFFF);
+
+    let i = 0;
+    while (i < 5) {
+        let t = angle + i * (3.14159 * 2 / 5);
+        let fx = 4 * sin(t);
+        let fz = 4 * cos(t);
+        let fy = 1 + sin(angle * 2 + i);
+        DrawCube(fx, fy, fz, 0.5, 0.5, 0.5, 0xFFAA00FF);
+        i = i + 1;
+    }
+
+    EndMode3D();
+
+    DrawRectangle(5, 5, 230, 80, 0x00000088);
+    DrawText("KUJI NATIVE 3D", 15, 15, 20, 0x00FF00FF);
+    DrawText("Orbiting Camera", 15, 40, 18, 0xFFFFFFFF);
+    DrawText("Fuji + Raylib 6 (shim)", 15, 62, 16, 0xAAAAAAFF);
+
+    EndDrawing();
+}
+
+CloseWindow();

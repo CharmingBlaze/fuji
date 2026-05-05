@@ -1,0 +1,91 @@
+print("native conformance start");
+
+let x = 1;
+x += 2;
+x *= 3;
+print("vars", x);
+
+let hex = 0xFF;
+let bin = 0b1010;
+print("numbers", hex, bin);
+
+let text = "hello";
+print("string", text, len(text));
+
+let arr = [1, 2, 3];
+arr.push(4);
+print("array", len(arr), arr[0], arr[3]);
+
+let obj = {name: "Hero", hp: 100};
+obj.hp = obj.hp - 25;
+print("object", obj.name, obj.hp);
+
+if (x > 5) {
+    print("if", "ok");
+} else {
+    print("if", "bad");
+}
+
+let w = 0;
+while (w < 3) {
+    w += 1;
+}
+print("while", w);
+
+let total = 0;
+for (let i = 0; i < 5; i += 1) {
+    if (i == 3) {
+        continue;
+    }
+    total += i;
+}
+print("for", total);
+
+let each = 0;
+for (let item of arr) {
+    each += item;
+}
+print("forof", each);
+
+func add(a, b) {
+    return a + b;
+}
+let added = add(2, 5);
+print("func", added);
+
+func makeCounter() {
+    let count = 0;
+    return func() {
+        count += 1;
+        return count;
+    };
+}
+let counter = makeCounter();
+print("closure", counter(), counter());
+
+switch (2) {
+    case 1:
+        print("switch", "bad");
+        break;
+    case 2:
+        print("switch", "ok");
+        break;
+    default:
+        print("switch", "default");
+}
+
+let player = {
+    x: 10,
+    getX() { return this.x; }
+};
+player.x += 5;
+print("method", player.getX());
+
+let pairs = "";
+for (let k, v of {a: 1, b: 2}) {
+    pairs += k + v;
+}
+print("pairs", pairs);
+
+print("stdlib", type(arr), string(42), abs(-7), sqrt(16));
+print("native conformance end");

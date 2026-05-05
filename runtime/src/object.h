@@ -1,0 +1,97 @@
+#ifndef FUJI_OBJECT_H
+#define FUJI_OBJECT_H
+
+#include "value.h"
+#include <stddef.h>
+
+// Object types
+typedef enum {
+    OBJ_STRING,
+    OBJ_ARRAY,
+    OBJ_TABLE,
+    OBJ_CLOSURE,
+    OBJ_FUNCTION,
+    OBJ_NATIVE,
+    OBJ_CELL
+} ObjType;
+
+#define GEN_NURSERY 0
+#define GEN_YOUNG   1
+#define GEN_OLD     2
+#define GEN_DEAD    3
+
+// Base object structure
+struct Obj {
+    ObjType type;
+    bool is_marked;
+    uint8_t generation;
+    struct Obj* next;
+};
+
+// String object
+typedef struct {
+    Obj obj;
+    int length;
+    char chars[];
+} ObjString;
+
+// Array object
+typedef struct {
+    Obj obj;
+    int capacity;
+    int count;
+    Value* elements;
+} ObjArray;
+
+// Table object (hash table)
+typedef struct {
+    Obj obj;
+    int capacity;
+    int count;
+    Value* keys;
+    Value* values;
+} ObjTable;
+
+// Function object
+typedef struct {
+    Obj obj;
+    int arity;
+    int param_count;
+    Value* params;
+    Value* body;
+} ObjFunction;
+
+// Closure object
+typedef struct {
+    Obj obj;
+    ObjFunction* function;
+    Value* upvalues;
+    int upvalue_count;
+} ObjClosure;
+
+// Native function object
+typedef struct {
+    Obj obj;
+    Value (*native)(int arg_count, Value* args);
+} ObjNative;
+
+/* Mutable binding cell (closure capture / escaping local). Header is gc-managed. */
+typedef struct {
+    Obj obj;
+    Value value;
+} ObjCell;
+
+// Object allocation
+ObjString* allocate_string(int length);
+ObjArray* allocate_array(int capacity);
+ObjTable* allocate_table(int capacity);
+ObjFunction* allocate_function(int arity);
+ObjClosure* allocate_closure(ObjFunction* function, int upvalue_count);
+ObjNative* allocate_native(Value (*native)(int, Value*));
+ObjCell* allocate_cell(void);
+
+// Object operations
+void free_object(Obj* obj);
+void print_object(Value v);
+
+#endif // FUJI_OBJECT_H

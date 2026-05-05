@@ -1,0 +1,22 @@
+let io = import "@io";
+
+let testFile = "test_output.txt";
+let testContent = "Hello from Fuji Native!";
+
+print("Writing to file...");
+if (io.write(testFile, testContent)) {
+    print("Write successful.");
+} else {
+    print("Write failed.");
+}
+
+print("Reading from file...");
+let readContent = io.read(testFile);
+if (readContent == testContent) {
+    print("Read successful! Content matches.");
+    print(readContent);
+} else {
+    print("Read failed or content mismatch.");
+    print("Expected: " + testContent);
+    print("Got: " + readContent);
+}

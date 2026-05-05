@@ -1,0 +1,15 @@
+func outer() {
+  middle();
+}
+
+func middle() {
+  inner();
+}
+
+func inner() {
+  let x = 10;
+  let y = "oops";
+  print(x + y); // This should crash
+}
+
+outer();

@@ -1,0 +1,10 @@
+func with_default(a, b = 2) {
+  print(a + b);
+}
+
+func with_rest(...items) {
+  print(len(items));
+}
+
+with_default(1);
+with_rest(1, 2, 3);

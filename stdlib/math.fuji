@@ -1,0 +1,44 @@
+﻿// @math stdlib
+// Exposes the built-in math object fields as named exports.
+// Usage: let math = import "@math";
+
+let pi    = math.pi;
+let e     = math.e;
+let tau   = 6.283185307179586;
+let phi   = 1.618033988749895;
+let inf   = math.inf;
+let nan   = math.nan;
+
+let sin   = math.sin;
+let cos   = math.cos;
+let tan   = math.tan;
+let asin  = math.asin;
+let acos  = math.acos;
+let atan  = math.atan;
+let atan2 = math.atan2;
+let hypot = math.hypot;
+
+let sqrt  = math.sqrt;
+let cbrt  = math.cbrt;
+let pow   = math.pow;
+let exp   = math.exp;
+let log   = math.log;
+let log2  = math.log2;
+let log10 = math.log10;
+
+let floor = math.floor;
+let ceil  = math.ceil;
+let round = math.round;
+
+let abs   = math.abs;
+let min   = math.min;
+let max   = math.max;
+
+let clamp = math.clamp;
+let sign  = math.sign;
+let lerp  = math.lerp;
+let deg   = func(r) { return r * (180 / 3.141592653589793); };
+let rad   = func(d) { return d * (3.141592653589793 / 180); };
+let random      = math.random;
+let randomRange = math.randomRange;
+let randomInt   = math.randomInt;

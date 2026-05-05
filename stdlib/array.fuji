@@ -1,0 +1,39 @@
+// array.fuji - Standard Array Library
+// Usage: let array = import("@array");
+
+let push     = arrayPush;
+let pop      = arrayPop;
+let shift    = arrayShift;
+let unshift  = arrayUnshift;
+let concat   = arrayConcat;
+let reverse  = arrayReverse;
+let includes = arrayIncludes;
+let indexOf  = arrayIndexOf;
+let sort     = arraySort;
+let slice    = arraySlice;
+let flatten  = arrayFlatten;
+let range    = func(from, to) {
+    let arr = [];
+    let i = from;
+    while (i < to) { arrayPush(arr, i); i = i + 1; }
+    return arr;
+};
+let fill = func(n, val) {
+    let arr = [];
+    let i = 0;
+    while (i < n) { arrayPush(arr, val); i = i + 1; }
+    return arr;
+};
+let sum = func(arr) {
+    let total = 0;
+    let i = 0;
+    while (i < len(arr)) { total = total + arr[i]; i = i + 1; }
+    return total;
+};
+let zip = func(a, b) {
+    let out = [];
+    let n = min(len(a), len(b));
+    let i = 0;
+    while (i < n) { arrayPush(out, [a[i], b[i]]); i = i + 1; }
+    return out;
+};

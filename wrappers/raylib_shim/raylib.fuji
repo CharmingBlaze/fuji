@@ -1,0 +1,39 @@
+// Minimal Raylib surface for native demos (hand-maintained).
+// Build: set FUJI_NATIVE_SOURCES to wrappers/raylib_shim/wrapper.c and FUJI_LINKFLAGS to your Raylib -I/-L/-lraylib.
+
+// fuji:extern InitWindow fuji_shim_InitWindow 3
+let InitWindow = 0;
+// fuji:extern CloseWindow fuji_shim_CloseWindow 0
+let CloseWindow = 0;
+// fuji:extern WindowShouldClose fuji_shim_WindowShouldClose 0
+let WindowShouldClose = 0;
+// fuji:extern SetTargetFPS fuji_shim_SetTargetFPS 1
+let SetTargetFPS = 0;
+// fuji:extern BeginDrawing fuji_shim_BeginDrawing 0
+let BeginDrawing = 0;
+// fuji:extern EndDrawing fuji_shim_EndDrawing 0
+let EndDrawing = 0;
+// fuji:extern ClearBackground fuji_shim_ClearBackground 1
+let ClearBackground = 0;
+// fuji:extern BeginMode3D fuji_shim_BeginMode3D 10
+let BeginMode3D = 0;
+// fuji:extern EndMode3D fuji_shim_EndMode3D 0
+let EndMode3D = 0;
+// fuji:extern DrawGrid fuji_shim_DrawGrid 2
+let DrawGrid = 0;
+// fuji:extern DrawCube fuji_shim_DrawCube 7
+let DrawCube = 0;
+// fuji:extern DrawCubeWires fuji_shim_DrawCubeWires 7
+let DrawCubeWires = 0;
+// fuji:extern DrawText fuji_shim_DrawText 5
+let DrawText = 0;
+// fuji:extern IsKeyDown fuji_shim_IsKeyDown 1
+let IsKeyDown = 0;
+// fuji:extern IsKeyPressed fuji_shim_IsKeyPressed 1
+let IsKeyPressed = 0;
+// fuji:extern DrawRectangle fuji_shim_DrawRectangle 5
+let DrawRectangle = 0;
+// fuji:extern DrawCircle fuji_shim_DrawCircle 4
+let DrawCircle = 0;
+// fuji:extern DrawLine3D fuji_shim_DrawLine3D 7
+let DrawLine3D = 0;

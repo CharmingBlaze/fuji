@@ -1,0 +1,102 @@
+// Graphics Demo - This will actually show graphics once I implement the native functions
+// For now, let me create a text-based visual representation that simulates graphics
+
+print("=== KUJI GRAPHICS DEMO ===");
+print("Creating visual game window...");
+
+// Simulate window creation
+let screenWidth = 800;
+let screenHeight = 600;
+print("Window: " + screenWidth + "x" + screenHeight + " pixels");
+print("Title: Brick Breaker Game");
+
+// Game state
+let paddleX = 350;
+let ballX = 400;
+let ballY = 300;
+let score = 0;
+let lives = 3;
+
+// Draw game screen (text representation)
+func drawScreen() {
+    print("");
+    print("╔═══════════════════════════════════════════════════════════════╗");
+    print("║                     BRICK BREAKER                          ║");
+    print("║                                                             ║");
+    print("║  ██████  ██████  ██████  ██████  ██████  ██████  ██████    ║");
+    print("║  ████    ████    ████    ████    ████    ████    ████      ║");
+    print("║  ██████  ██████  ██████  ██████  ██████  ██████  ██████    ║");
+    print("║                                                             ║");
+    print("║                                                             ║");
+    print("║                                                             ║");
+    print("║                                                             ║");
+    print("║                      ●                                      ║");
+    print("║                                                             ║");
+    print("║                                                             ║");
+    print("║               ████████████                                 ║");
+    print("║                                                             ║");
+    print("║  Score: " + score + "                    Lives: " + lives + "              ║");
+    print("║                                                             ║");
+    print("╚═══════════════════════════════════════════════════════════════╝");
+    print("");
+    print("Controls: LEFT/RIGHT arrows to move paddle");
+    print("Press SPACE to start/pause");
+    print("Press ESC to exit");
+}
+
+// Update game logic
+func updateGame() {
+    // Move ball
+    ballY = ballY - 10;
+    if (ballY < 100) {
+        ballY = 400;
+    }
+    
+    // Move paddle randomly
+    paddleX = paddleX + 20;
+    if (paddleX > 600) {
+        paddleX = 200;
+    }
+    
+    // Update score
+    score = score + 1;
+}
+
+// Game loop
+func gameLoop() {
+    print("Starting game loop...");
+    
+    let frame = 0;
+    while (frame < 5) {
+        print("=== FRAME " + frame + " ===");
+        drawScreen();
+        updateGame();
+        print("Ball position: (" + ballX + ", " + ballY + ")");
+        print("Paddle position: " + paddleX);
+        frame = frame + 1;
+        
+        // Simulate frame delay
+        let i = 0;
+        while (i < 1000000) {
+            i = i + 1;
+        }
+    }
+}
+
+// Main function
+func main() {
+    print("Initializing graphics system...");
+    print("Loading textures...");
+    print("Setting up game objects...");
+    
+    gameLoop();
+    
+    print("");
+    print("=== GAME OVER ===");
+    print("Final Score: " + score);
+    print("Thanks for playing!");
+    print("Graphics window closed.");
+}
+
+// Start the game
+main();

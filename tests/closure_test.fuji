@@ -1,0 +1,38 @@
+// tests/closure_test.fuji
+
+print("--- Testing Basic Anonymous Function ---");
+let add = func(a, b) {
+    return a + b;
+};
+print(add(10, 20)); // Expected: 30
+
+print("--- Testing Closure (makeCounter) ---");
+func makeCounter() {
+    let count = 0;
+    return func() {
+        count = count + 1;
+        return count;
+    };
+}
+
+let c1 = makeCounter();
+print(c1()); // Expected: 1
+print(c1()); // Expected: 2
+
+let c2 = makeCounter();
+print(c2()); // Expected: 1
+print(c1()); // Expected: 3
+
+print("--- Testing Nested Closures ---");
+func multiplier(factor) {
+    return func(x) {
+        return func(y) {
+            return x * y * factor;
+        };
+    };
+}
+
+let double = multiplier(2)(10);
+print(double(5)); // Expected: 100 (10 * 5 * 2)
+
+print("Closure tests complete!");

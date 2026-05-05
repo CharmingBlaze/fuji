@@ -1,0 +1,4 @@
+// Minimal native smoke test (no null, no FFI).
+func main() {
+    print("smoke_ok");
+}

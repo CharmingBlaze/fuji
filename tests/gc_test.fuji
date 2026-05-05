@@ -1,0 +1,26 @@
+print("Starting GC Test...");
+
+let a = [1, 2, 3];
+gc(); // 'a' should be marked and kept
+print("A is still here:");
+print(a);
+
+func create_junk() {
+  let junk = [1, 2, 3, 4, 5];
+  return "done";
+}
+
+create_junk();
+gc(); // 'junk' should be swept
+print("After sweeping junk...");
+
+let counter = 0;
+while (counter < 100) {
+  let temp = [counter];
+  counter = counter + 1;
+  if (counter % 10 == 0) {
+    gc();
+  }
+}
+
+print("Finished stress test. Still alive!");

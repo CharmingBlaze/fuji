@@ -1,0 +1,2 @@
+assert(cbrt(27) == 3, "cbrt native failed");
+print("native release features ok");

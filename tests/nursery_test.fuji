@@ -1,0 +1,17 @@
+// Short-lived objects — nursery + minor GC; long-lived survive as old after full GC pressure.
+let i = 0;
+while (i < 50000) {
+  let tmp = { x: i, y: i * 2, tag: "temp" };
+  i = i + 1;
+}
+
+let survivors = [];
+let j = 0;
+while (j < 100) {
+  survivors.push({ id: j, data: "keep" });
+  j = j + 1;
+}
+
+print("survivors len");
+print(survivors.length());
+print("PASS: nursery working");

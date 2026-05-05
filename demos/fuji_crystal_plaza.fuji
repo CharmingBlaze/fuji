@@ -1,0 +1,121 @@
+// Fuji + Raylib shim — neon plaza, floating crystals, WASD camera.
+// Native: set FUJI_NATIVE_SOURCES=wrappers/raylib_shim/wrapper.c and FUJI_LINKFLAGS to your Raylib -I/-L/-lraylib.
+#include "../wrappers/raylib_shim/raylib.fuji"
+
+func main() {
+    let W = 960;
+    let H = 540;
+
+    // Packed Color u32 (same layout as demo_3d.fuji).
+    let VOID = 4279376575;
+    let WHITE = 4294967295;
+    let CYAN = 4294933375;
+    let MAGENTA = 4294902015;
+    let GOLD = 4278255487;
+    let LIME = 4278255615;
+    let PINK = 4291809280;
+    let DIM = 2155905279;
+
+    let KEY_W = 87;
+    let KEY_S = 83;
+    let KEY_A = 65;
+    let KEY_D = 68;
+    let KEY_SPACE = 32;
+
+    let camPX = 12.0;
+    let camPY = 9.0;
+    let camPZ = 12.0;
+    let tgtX = 0.0;
+    let tgtY = 2.0;
+    let tgtZ = 0.0;
+    let upX = 0.0;
+    let upY = 1.0;
+    let upZ = 0.0;
+    let fovy = 55.0;
+
+    let frame = 0;
+    // Avoid unary `-` on float literals (codegen expects 0.0 - x for negatives).
+    let nx25 = 0.0 - 2.5;
+    let nx433 = 0.0 - 4.33;
+    let nx5 = 0.0 - 5.0;
+
+    InitWindow(W, H, "Fuji - Crystal Plaza (Raylib)");
+    SetTargetFPS(60);
+
+    while (!WindowShouldClose()) {
+        let dt = deltaTime();
+        frame = frame + 1;
+
+        if (IsKeyDown(KEY_W)) {
+            camPZ = camPZ - 14.0 * dt;
+        }
+        if (IsKeyDown(KEY_S)) {
+            camPZ = camPZ + 14.0 * dt;
+        }
+        if (IsKeyDown(KEY_A)) {
+            camPX = camPX - 14.0 * dt;
+        }
+        if (IsKeyDown(KEY_D)) {
+            camPX = camPX + 14.0 * dt;
+        }
+        if (IsKeyPressed(KEY_SPACE)) {
+            camPY = camPY + 1.5;
+        }
+
+        tgtX = 0.0;
+        tgtY = 2.0;
+        tgtZ = 0.0;
+
+        BeginDrawing();
+        ClearBackground(VOID);
+
+        DrawRectangle(0, 0, W, 72, 3019898879);
+        DrawRectangle(0, H - 56, W, 56, 3019898879);
+
+        BeginMode3D(camPX, camPY, camPZ, tgtX, tgtY, tgtZ, upX, upY, upZ, fovy);
+
+        DrawGrid(48, 0.5);
+
+        // Central obelisk (stack of shrinking cubes).
+        DrawCube(0.0, 0.15, 0.0, 1.2, 0.35, 1.2, CYAN);
+        DrawCubeWires(0.0, 0.15, 0.0, 1.2, 0.35, 1.2, WHITE);
+        DrawCube(0.0, 0.65, 0.0, 1.0, 0.35, 1.0, MAGENTA);
+        DrawCubeWires(0.0, 0.65, 0.0, 1.0, 0.35, 1.0, WHITE);
+        DrawCube(0.0, 1.15, 0.0, 0.78, 0.35, 0.78, GOLD);
+        DrawCubeWires(0.0, 1.15, 0.0, 0.78, 0.35, 0.78, WHITE);
+        DrawCube(0.0, 1.65, 0.0, 0.55, 0.4, 0.55, LIME);
+        DrawCubeWires(0.0, 1.65, 0.0, 0.55, 0.4, 0.55, WHITE);
+
+        // Gentle bob using integer frame (avoids float % precision jitter on large spin).
+        let lift = 0.18 * ((frame % 240) / 240.0);
+
+        DrawCube(5.0, 1.0 + lift, 0.0, 0.9, 0.9, 0.9, PINK);
+        DrawCubeWires(5.0, 1.0 + lift, 0.0, 0.9, 0.9, 0.9, WHITE);
+        DrawCube(2.5, 1.0 + lift, 4.33, 0.85, 0.85, 0.85, CYAN);
+        DrawCubeWires(2.5, 1.0 + lift, 4.33, 0.85, 0.85, 0.85, WHITE);
+        DrawCube(nx25, 1.0 + lift, 4.33, 0.85, 0.85, 0.85, MAGENTA);
+        DrawCubeWires(nx25, 1.0 + lift, 4.33, 0.85, 0.85, 0.85, WHITE);
+        DrawCube(nx5, 1.0 + lift, 0.0, 0.9, 0.9, 0.9, GOLD);
+        DrawCubeWires(nx5, 1.0 + lift, 0.0, 0.9, 0.9, 0.9, WHITE);
+        DrawCube(nx25, 1.0 + lift, nx433, 0.85, 0.85, 0.85, LIME);
+        DrawCubeWires(nx25, 1.0 + lift, nx433, 0.85, 0.85, 0.85, WHITE);
+        DrawCube(2.5, 1.0 + lift, nx433, 0.85, 0.85, 0.85, PINK);
+        DrawCubeWires(2.5, 1.0 + lift, nx433, 0.85, 0.85, 0.85, WHITE);
+
+        // Neon spokes to the spire.
+        DrawLine3D(0.0, 2.0, 0.0, 5.0, 1.0 + lift, 0.0, DIM);
+        DrawLine3D(0.0, 2.0, 0.0, nx5, 1.0 + lift, 0.0, DIM);
+        DrawLine3D(0.0, 2.0, 0.0, 2.5, 1.0 + lift, 4.33, DIM);
+        DrawLine3D(0.0, 2.0, 0.0, nx25, 1.0 + lift, nx433, DIM);
+
+        EndMode3D();
+
+        DrawText("Fuji + Raylib — Crystal Plaza", 18, 14, 26, WHITE);
+        DrawText("WASD fly the camera   SPACE bob up   ESC close", 18, 46, 18, CYAN);
+        DrawText("Neon ring + spire (native LLVM build)", 18, H - 42, 16, LIME);
+
+        EndDrawing();
+    }
+
+    CloseWindow();
+}

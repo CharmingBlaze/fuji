@@ -1,0 +1,11 @@
+{
+  "raylib_pinned": {
+    "tag": "6.0",
+    "header_url": "https://raw.githubusercontent.com/raysan5/raylib/6.0/src/raylib.h",
+    "header_sha256": "047e7255f93f8c34039cab906ad76136706b5c7b4c5b5b065d84141963ee9b6b",
+    "raylib_fuji_sha256": "b4bba0ba7c38e9e9f42e7225b85018758509a3176cdee01f7f57cffbb3ee1cf7",
+    "wrapper_c_sha256": "1bd25a323e207255ccb7d8247ba733456ab9dccb8f97a25b674ba3bac77c4dcc",
+    "min_functions": 480,
+    "max_functions": 620
+  }
+}
