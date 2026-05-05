@@ -128,6 +128,8 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 
 	functions["FUJI_ok"] = argvI64(mod, "fuji_ok")
 	functions["FUJI_err"] = argvI64(mod, "fuji_err")
+	functions["FUJI_values_equal"] = mod.NewFunc("fuji_values_equal", types.I64,
+		ir.NewParam("a", types.I64), ir.NewParam("b", types.I64))
 	functions["FUJI_panic"] = mod.NewFunc("fuji_panic", types.Void,
 		ir.NewParam("arg_count", types.I32),
 		ir.NewParam("args", types.NewPointer(types.I64)))
@@ -223,6 +225,9 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 		ir.NewParam("file_name", types.NewPointer(types.I8)),
 		ir.NewParam("line", types.I32))
 	functions["FUJI_pop_call"] = mod.NewFunc("fuji_pop_call", types.Void)
+
+	// C malloc for packed closure environments (linker resolves from CRT).
+	functions["malloc"] = mod.NewFunc("malloc", types.NewPointer(types.I8), ir.NewParam("size", types.I64))
 
 	return functions
 }

@@ -7,7 +7,23 @@ bool values_equal(Value a, Value b) {
     if (IS_NUMBER(a) && IS_NUMBER(b)) {
         return AS_NUMBER(a) == AS_NUMBER(b);
     }
+    if (IS_OBJ(a) && IS_OBJ(b)) {
+        Obj* oa = AS_OBJ(a);
+        Obj* ob = AS_OBJ(b);
+        if (oa->type == OBJ_STRING && ob->type == OBJ_STRING) {
+            ObjString* sa = (ObjString*)oa;
+            ObjString* sb = (ObjString*)ob;
+            if (sa->length != sb->length) {
+                return false;
+            }
+            return memcmp(sa->chars, sb->chars, (size_t)sa->length) == 0;
+        }
+    }
     return a == b;
+}
+
+int64_t fuji_values_equal(Value a, Value b) {
+    return values_equal(a, b) ? 1 : 0;
 }
 
 void print_value(Value v) {

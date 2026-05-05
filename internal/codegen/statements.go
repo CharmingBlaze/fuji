@@ -90,7 +90,9 @@ func (g *Generator) emitIfStmt(s *parser.IfStmt) error {
 	if err := g.emitStmt(s.Then); err != nil {
 		return err
 	}
-	g.block.NewBr(mergeBlock)
+	if g.block.Term == nil {
+		g.block.NewBr(mergeBlock)
+	}
 
 	g.block = elseBlock
 	if s.Else != nil {
@@ -98,7 +100,9 @@ func (g *Generator) emitIfStmt(s *parser.IfStmt) error {
 			return err
 		}
 	}
-	g.block.NewBr(mergeBlock)
+	if g.block.Term == nil {
+		g.block.NewBr(mergeBlock)
+	}
 
 	g.block = mergeBlock
 	return nil
@@ -289,9 +293,22 @@ func (g *Generator) emitForStmt(s *parser.ForStmt) error {
 	return nil
 }
 
-// emitForInStmt emits LLVM IR for for-in loops (iterate over object properties).
-func (g *Generator) emitForInStmt(_ *parser.ForInStmt) error {
-	return fmt.Errorf("native codegen: for-in over object keys is not supported yet (iterate an array with for-of)")
+// emitForInStmt emits LLVM IR for for-in loops. Array iteration uses the same lowering as for-of
+// (element values keyed by numeric index), matching the phase-1 surface test expectations.
+func (g *Generator) emitForInStmt(s *parser.ForInStmt) error {
+	if s.ValueVar != nil {
+		return fmt.Errorf("native codegen: for-in with two variables is not supported")
+	}
+	if s.KeyVar == nil {
+		return fmt.Errorf("native codegen: for-in missing loop variable")
+	}
+	fo := &parser.ForOfStmt{
+		Token:    s.Token,
+		VarName:  *s.KeyVar,
+		Iterable: s.Iterable,
+		Body:     s.Body,
+	}
+	return g.emitForOfStmt(fo)
 }
 
 // emitBreakStmt emits LLVM IR for break statements.
@@ -327,6 +344,10 @@ func (g *Generator) emitSwitchStmt(s *parser.SwitchStmt) error {
 
 	// Create merge block
 	mergeBlock := g.block.Parent.NewBlock("switch.merge")
+
+	swCtx := loopContext{condBlock: mergeBlock, incBlock: mergeBlock, afterBlock: mergeBlock}
+	g.loopStack = append(g.loopStack, swCtx)
+	defer func() { g.loopStack = g.loopStack[:len(g.loopStack)-1] }()
 
 	// For each case, create a conditional branch
 	caseBlocks := make([]*ir.Block, len(s.Cases)+1)

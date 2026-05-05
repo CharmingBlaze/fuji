@@ -150,9 +150,11 @@ type Generator struct {
 	runtimePopFrame     *ir.Func
 	runtimeOk           *ir.Func
 	runtimeErr          *ir.Func
+	runtimeValuesEqual  *ir.Func
 	runtimePanic        *ir.Func
 	runtimePushCall     *ir.Func
 	runtimePopCall      *ir.Func
+	runtimeMalloc       *ir.Func
 	sourcePath          string
 	localIsCell         map[string]bool
 	loopStack           []loopContext
@@ -300,9 +302,11 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimePopFrame:         runtimeFuncs["FUJI_pop_frame"],
 		runtimeOk:               runtimeFuncs["FUJI_ok"],
 		runtimeErr:              runtimeFuncs["FUJI_err"],
+		runtimeValuesEqual:      runtimeFuncs["FUJI_values_equal"],
 		runtimePanic:            runtimeFuncs["FUJI_panic"],
 		runtimePushCall:         runtimeFuncs["FUJI_push_call"],
 		runtimePopCall:          runtimeFuncs["FUJI_pop_call"],
+		runtimeMalloc:           runtimeFuncs["malloc"],
 		tempN:                   0,
 	}
 
@@ -563,7 +567,7 @@ func (g *Generator) emitPrefix(e *parser.PrefixExpr) (value.Value, error) {
 	case "!":
 		truthy := g.emitTruthy(right)
 		notTruthy := g.block.NewXor(truthy, constant.NewBool(true))
-		return g.block.NewZExt(notTruthy, types.I64), nil
+		return g.emitBoxBoolNaN(notTruthy), nil
 	case "-":
 		// Unary negation on numeric values (NaN-boxed)
 		ri := g.emitAsFujiI64(right)
@@ -652,6 +656,95 @@ func indirectFujiFuncPtrType(argCount int) *types.PointerType {
 		paramTys = append(paramTys, types.I64)
 	}
 	return types.NewPointer(types.NewFunc(types.I64, paramTys...))
+}
+
+// maxClosureFreeVars is the maximum number of captured cells we can indirect-call through LLVM
+// with a fixed function-pointer type per arity (see emitIndirectI64Callee).
+const maxClosureFreeVars = 16
+
+// indirectClosureFuncPtrType is i64 (i64 this, i64* × nCells, i64 × nArgs)* for closure LLVM functions.
+func indirectClosureFuncPtrType(nCells, nArgs int) *types.PointerType {
+	paramTys := make([]types.Type, 0, 1+nCells+nArgs)
+	paramTys = append(paramTys, types.I64)
+	cellPtr := types.NewPointer(types.I64)
+	for i := 0; i < nCells; i++ {
+		paramTys = append(paramTys, cellPtr)
+	}
+	for i := 0; i < nArgs; i++ {
+		paramTys = append(paramTys, types.I64)
+	}
+	return types.NewPointer(types.NewFunc(types.I64, paramTys...))
+}
+
+// emitIndirectI64Callee calls a Fuji "function value" stored as i64: either a tagged raw function
+// pointer (LSB set) with ABI (this, args...), or an untagged heap pointer to { fn, n, cell0..n-1 }.
+func (g *Generator) emitIndirectI64Callee(fnVal, thisVal value.Value, args []value.Value) (value.Value, error) {
+	g.tempN++
+	suf := fmt.Sprintf(".ic%d", g.tempN)
+
+	v := g.emitAsFujiI64(fnVal)
+	one := constant.NewInt(types.I64, 1)
+	isRaw := g.block.NewICmp(enum.IPredEQ, g.block.NewAnd(v, one), one)
+
+	rawB := g.currentFn.NewBlock("indcall.raw" + suf)
+	heapB := g.currentFn.NewBlock("indcall.heap" + suf)
+	g.block.NewCondBr(isRaw, rawB, heapB)
+
+	mergeB := g.currentFn.NewBlock("indcall.merge" + suf)
+
+	// --- Raw (zero-capture) function pointer: (ptr | 1) ---
+	g.block = rawB
+	maskedFn := g.block.NewAnd(v, constant.NewInt(types.I64, -2))
+	rawFnPtr := g.block.NewIntToPtr(maskedFn, indirectFujiFuncPtrType(len(args)))
+	rawArgs := append([]value.Value{thisVal}, args...)
+	rawOut := g.block.NewCall(rawFnPtr, rawArgs...)
+	g.block.NewBr(mergeB)
+
+	// --- Heap closure: i64* env at ptrtoint ---
+	g.block = heapB
+	i64PtrTy := types.NewPointer(types.I64)
+	envPtr := g.block.NewIntToPtr(v, i64PtrTy)
+	fnRaw := g.block.NewLoad(types.I64, envPtr)
+	nPtr := g.block.NewGetElementPtr(types.I64, envPtr, constant.NewInt(types.I32, 1))
+	nCells := g.block.NewLoad(types.I64, nPtr)
+
+	defaultB := g.currentFn.NewBlock("indcall.bad" + suf)
+	caseBlocks := make([]*ir.Block, maxClosureFreeVars)
+	cases := make([]*ir.Case, maxClosureFreeVars)
+	outs := make([]value.Value, maxClosureFreeVars)
+	for k := 1; k <= maxClosureFreeVars; k++ {
+		bk := g.currentFn.NewBlock(fmt.Sprintf("indcall.n%d%s", k, suf))
+		caseBlocks[k-1] = bk
+		cases[k-1] = ir.NewCase(constant.NewInt(types.I64, int64(k)), bk)
+	}
+	g.block.NewSwitch(nCells, defaultB, cases...)
+
+	g.block = defaultB
+	g.block.NewUnreachable()
+
+	cellPtrTy := types.NewPointer(types.I64)
+	for k := 1; k <= maxClosureFreeVars; k++ {
+		g.block = caseBlocks[k-1]
+		finalArgs := []value.Value{thisVal}
+		for i := 0; i < k; i++ {
+			elemPtr := g.block.NewGetElementPtr(types.I64, envPtr, constant.NewInt(types.I32, int64(2+i)))
+			ci := g.block.NewLoad(types.I64, elemPtr)
+			finalArgs = append(finalArgs, g.block.NewIntToPtr(ci, cellPtrTy))
+		}
+		finalArgs = append(finalArgs, args...)
+		clTy := indirectClosureFuncPtrType(k, len(args))
+		clFnPtr := g.block.NewIntToPtr(fnRaw, clTy)
+		outs[k-1] = g.block.NewCall(clFnPtr, finalArgs...)
+		g.block.NewBr(mergeB)
+	}
+
+	g.block = mergeB
+	incomings := make([]*ir.Incoming, 0, 1+maxClosureFreeVars)
+	incomings = append(incomings, ir.NewIncoming(rawOut, rawB))
+	for k := 0; k < maxClosureFreeVars; k++ {
+		incomings = append(incomings, ir.NewIncoming(outs[k], caseBlocks[k]))
+	}
+	return g.block.NewPhi(incomings...), nil
 }
 
 func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
@@ -767,13 +860,9 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 		return call, nil
 	}
 
-	// Function value stored as i64 (ptrtoint of the LLVM function); recover pointer and call with this + args.
+	// Function value as i64: tagged raw pointer (this + args) or heap closure (this + cells + args).
 	if fnVal.Type().Equal(types.I64) {
-		fnPtrTy := indirectFujiFuncPtrType(len(args))
-		fnPtr := g.block.NewIntToPtr(g.emitAsFujiI64(fnVal), fnPtrTy)
-		finalArgs := append([]value.Value{thisVal}, args...)
-		call := g.block.NewCall(fnPtr, finalArgs...)
-		return call, nil
+		return g.emitIndirectI64Callee(fnVal, thisVal, args)
 	}
 
 	call := g.block.NewCall(fnVal, args...)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"fuji/internal/lexer"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -12,9 +13,13 @@ const (
 	PrecedenceAssign      // =
 	PrecedenceOr          // ||
 	PrecedenceAnd         // &&
-	PrecedenceEquals      // == !=
+	PrecedenceBitOr       // |
+	PrecedenceBitXor      // ^
+	PrecedenceBitAnd      // &
+	PrecedenceEquals      // == != === !==
 	PrecedenceLessGreater // < > <= >=
 	PrecedenceSum         // + -
+	PrecedenceShift       // << >> >>>
 	PrecedenceProduct     // * / %
 	PrecedencePrefix      // -X or !X
 	PrecedenceCall        // myFunction(X)
@@ -22,23 +27,41 @@ const (
 )
 
 var precedences = map[lexer.TokenType]int{
-	lexer.TokenEqual:        PrecedenceAssign,
-	lexer.TokenEqualEqual:   PrecedenceEquals,
-	lexer.TokenBangEqual:    PrecedenceEquals,
-	lexer.TokenLess:         PrecedenceLessGreater,
-	lexer.TokenLessEqual:    PrecedenceLessGreater,
-	lexer.TokenGreater:      PrecedenceLessGreater,
-	lexer.TokenGreaterEqual: PrecedenceLessGreater,
-	lexer.TokenPlus:         PrecedenceSum,
-	lexer.TokenMinus:        PrecedenceSum,
-	lexer.TokenSlash:        PrecedenceProduct,
-	lexer.TokenStar:         PrecedenceProduct,
-	lexer.TokenPercent:      PrecedenceProduct,
-	lexer.TokenAndAnd:       PrecedenceAnd,
-	lexer.TokenOrOr:         PrecedenceOr,
-	lexer.TokenLParen:       PrecedenceCall,
-	lexer.TokenLBracket:     PrecedenceIndex,
-	lexer.TokenDot:          PrecedenceIndex,
+	lexer.TokenEqual:          PrecedenceAssign,
+	lexer.TokenPlusEqual:      PrecedenceAssign,
+	lexer.TokenMinusEqual:     PrecedenceAssign,
+	lexer.TokenStarEqual:      PrecedenceAssign,
+	lexer.TokenSlashEqual:     PrecedenceAssign,
+	lexer.TokenPercentEqual:   PrecedenceAssign,
+	lexer.TokenAndEqual:       PrecedenceAssign,
+	lexer.TokenOrEqual:        PrecedenceAssign,
+	lexer.TokenCaretEqual:     PrecedenceAssign,
+	lexer.TokenLessLessEqual:  PrecedenceAssign,
+	lexer.TokenGreaterGreaterEqual: PrecedenceAssign,
+	lexer.TokenEqualEqual:     PrecedenceEquals,
+	lexer.TokenStrictEqual:    PrecedenceEquals,
+	lexer.TokenBangEqual:      PrecedenceEquals,
+	lexer.TokenStrictNotEqual: PrecedenceEquals,
+	lexer.TokenLess:           PrecedenceLessGreater,
+	lexer.TokenLessEqual:      PrecedenceLessGreater,
+	lexer.TokenGreater:        PrecedenceLessGreater,
+	lexer.TokenGreaterEqual:   PrecedenceLessGreater,
+	lexer.TokenPlus:           PrecedenceSum,
+	lexer.TokenMinus:          PrecedenceSum,
+	lexer.TokenLessLess:       PrecedenceShift,
+	lexer.TokenGreaterGreater: PrecedenceShift,
+	lexer.TokenUnsignedShift:  PrecedenceShift,
+	lexer.TokenSlash:          PrecedenceProduct,
+	lexer.TokenStar:           PrecedenceProduct,
+	lexer.TokenPercent:        PrecedenceProduct,
+	lexer.TokenAndAnd:         PrecedenceAnd,
+	lexer.TokenOrOr:           PrecedenceOr,
+	lexer.TokenAnd:            PrecedenceBitAnd,
+	lexer.TokenOr:             PrecedenceBitOr,
+	lexer.TokenCaret:          PrecedenceBitXor,
+	lexer.TokenLParen:         PrecedenceCall,
+	lexer.TokenLBracket:       PrecedenceIndex,
+	lexer.TokenDot:            PrecedenceIndex,
 }
 
 func (p *Parser) peekPrecedence() int {
@@ -65,6 +88,12 @@ func (p *Parser) parseExpression(precedence int) (Expr, error) {
 	leftExpr, err := prefix()
 	if err != nil {
 		return nil, err
+	}
+
+	// Postfix ++ / -- (bind tighter than binary operators; same tier as calls).
+	for (p.check(lexer.TokenPlusPlus) || p.check(lexer.TokenMinusMinus)) && precedence < PrecedenceCall {
+		opTok := p.advance()
+		leftExpr = &UpdateExpr{Token: opTok, Operator: opTok, Operand: leftExpr, IsPrefix: false}
 	}
 
 	for !p.isAtEnd() && precedence < p.peekPrecedence() {
@@ -130,12 +159,17 @@ func (p *Parser) parseReservedVar() (Expr, error) {
 func (p *Parser) getInfixFn(typ lexer.TokenType) infixParseFn {
 	switch typ {
 	case lexer.TokenPlus, lexer.TokenMinus, lexer.TokenSlash, lexer.TokenStar, lexer.TokenPercent,
-		lexer.TokenEqualEqual, lexer.TokenBangEqual, lexer.TokenLess, lexer.TokenLessEqual,
-		lexer.TokenGreater, lexer.TokenGreaterEqual, lexer.TokenAndAnd, lexer.TokenOrOr:
+		lexer.TokenEqualEqual, lexer.TokenStrictEqual, lexer.TokenBangEqual, lexer.TokenStrictNotEqual,
+		lexer.TokenLess, lexer.TokenLessEqual,
+		lexer.TokenGreater, lexer.TokenGreaterEqual, lexer.TokenAndAnd, lexer.TokenOrOr,
+		lexer.TokenAnd, lexer.TokenOr, lexer.TokenCaret,
+		lexer.TokenLessLess, lexer.TokenGreaterGreater, lexer.TokenUnsignedShift:
 		return p.parseInfixExpression
 	case lexer.TokenLParen:
 		return p.parseCallExpression
-	case lexer.TokenEqual:
+	case lexer.TokenEqual, lexer.TokenPlusEqual, lexer.TokenMinusEqual, lexer.TokenStarEqual,
+		lexer.TokenSlashEqual, lexer.TokenPercentEqual, lexer.TokenAndEqual, lexer.TokenOrEqual,
+		lexer.TokenCaretEqual, lexer.TokenLessLessEqual, lexer.TokenGreaterGreaterEqual:
 		return p.parseAssignExpression
 	case lexer.TokenDot:
 		return p.parseDotExpression
@@ -153,9 +187,20 @@ func (p *Parser) parseIdentifier() (Expr, error) {
 
 func (p *Parser) parseNumberLiteral() (Expr, error) {
 	token := p.advance()
-	value, err := strconv.ParseFloat(token.Lexeme, 64)
-	if err != nil {
-		return nil, p.error(token, "could not parse number literal")
+	lex := token.Lexeme
+	var value float64
+	if strings.ContainsAny(lex, "eE.") {
+		v, err := strconv.ParseFloat(lex, 64)
+		if err != nil {
+			return nil, p.error(token, "could not parse number literal")
+		}
+		value = v
+	} else {
+		i, err := strconv.ParseInt(lex, 0, 64)
+		if err != nil {
+			return nil, p.error(token, "could not parse number literal")
+		}
+		value = float64(i)
 	}
 	return &LiteralExpr{Token: token, Value: value}, nil
 }

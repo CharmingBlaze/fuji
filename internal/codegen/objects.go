@@ -7,6 +7,7 @@ import (
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
+	"fuji/internal/lexer"
 	"fuji/internal/parser"
 )
 
@@ -80,6 +81,10 @@ func (g *Generator) emitIndex(e *parser.IndexExpr) (value.Value, error) {
 
 // emitAssign emits LLVM IR for assignment expressions.
 func (g *Generator) emitAssign(e *parser.AssignExpr) (value.Value, error) {
+	if e.Token.Type != lexer.TokenEqual {
+		return g.emitCompoundAssign(e, e.Token.Lexeme)
+	}
+
 	val, err := g.emitExpr(e.Value)
 	if err != nil {
 		return nil, err
@@ -132,17 +137,23 @@ func (g *Generator) emitCompoundAssign(e *parser.AssignExpr, op string) (value.V
 		return nil, err
 	}
 
-	// Perform operation
+	// Perform operation on unboxed numbers, then re-box (same semantics as emitInfix for + - * /).
+	leftI := g.emitAsFujiI64(current)
+	rightI := g.emitAsFujiI64(newVal)
+	ld := g.block.NewCall(g.runtimeUnboxNumber, leftI)
+	rd := g.block.NewCall(g.runtimeUnboxNumber, rightI)
 	var result value.Value
 	switch op {
 	case "+=":
-		result = g.block.NewAdd(current, newVal)
+		result = g.block.NewCall(g.runtimeBoxNumber, g.block.NewFAdd(ld, rd))
 	case "-=":
-		result = g.block.NewSub(current, newVal)
+		result = g.block.NewCall(g.runtimeBoxNumber, g.block.NewFSub(ld, rd))
 	case "*=":
-		result = g.block.NewMul(current, newVal)
+		result = g.block.NewCall(g.runtimeBoxNumber, g.block.NewFMul(ld, rd))
 	case "/=":
-		result = g.block.NewSDiv(current, newVal)
+		result = g.block.NewCall(g.runtimeBoxNumber, g.block.NewFDiv(ld, rd))
+	case "%=":
+		result = g.block.NewCall(g.runtimeBoxNumber, g.block.NewFRem(ld, rd))
 	default:
 		return nil, fmt.Errorf("unsupported compound operator: %s", op)
 	}

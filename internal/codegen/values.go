@@ -19,9 +19,10 @@ func (g *Generator) emitLiteral(e *parser.LiteralExpr) (value.Value, error) {
 		// parser.LiteralExpr for `null` — must match NIL_VAL (see shadow.llvmNilTagged, runtime/value.h).
 		return constant.NewInt(types.I64, llvmNilTagged), nil
 	case float64:
-		return constant.NewFloat(types.Double, v), nil
+		return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, v)), nil
 	case int:
-		return constant.NewInt(types.I64, int64(v)), nil
+		// Integer literals must be NaN-boxed numbers (same representation as runtime NUMBER_VAL).
+		return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, float64(v))), nil
 	case bool:
 		// Must match runtime TRUE_VAL / FALSE_VAL (see emitBoxBoolNaN, value.h).
 		if v {
@@ -120,11 +121,13 @@ func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 		ld := g.block.NewCall(g.runtimeUnboxNumber, leftI)
 		rd := g.block.NewCall(g.runtimeUnboxNumber, rightI)
 		return g.block.NewCall(g.runtimeBoxNumber, g.block.NewFRem(ld, rd)), nil
-	case "==":
-		cmp := g.block.NewICmp(enum.IPredEQ, leftI, rightI)
+	case "==", "===":
+		eq := g.block.NewCall(g.runtimeValuesEqual, leftI, rightI)
+		cmp := g.block.NewICmp(enum.IPredEQ, eq, constant.NewInt(types.I64, 1))
 		return g.emitBoxBoolNaN(cmp), nil
-	case "!=":
-		cmp := g.block.NewICmp(enum.IPredNE, leftI, rightI)
+	case "!=", "!==":
+		eq := g.block.NewCall(g.runtimeValuesEqual, leftI, rightI)
+		cmp := g.block.NewICmp(enum.IPredEQ, eq, constant.NewInt(types.I64, 0))
 		return g.emitBoxBoolNaN(cmp), nil
 	case "<":
 		ld := g.block.NewCall(g.runtimeUnboxNumber, leftI)
@@ -146,6 +149,46 @@ func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 		rd := g.block.NewCall(g.runtimeUnboxNumber, rightI)
 		cmp := g.block.NewFCmp(enum.FPredOGE, ld, rd)
 		return g.emitBoxBoolNaN(cmp), nil
+	case "&", "|", "^":
+		ld := g.block.NewCall(g.runtimeUnboxNumber, leftI)
+		rd := g.block.NewCall(g.runtimeUnboxNumber, rightI)
+		l32 := g.block.NewFPToSI(ld, types.I32)
+		r32 := g.block.NewFPToSI(rd, types.I32)
+		var res32 value.Value
+		switch e.Operator {
+		case "&":
+			res32 = g.block.NewAnd(l32, r32)
+		case "|":
+			res32 = g.block.NewOr(l32, r32)
+		case "^":
+			res32 = g.block.NewXor(l32, r32)
+		}
+		rf := g.block.NewSIToFP(res32, types.Double)
+		return g.block.NewCall(g.runtimeBoxNumber, rf), nil
+	case "<<", ">>":
+		ld := g.block.NewCall(g.runtimeUnboxNumber, leftI)
+		rd := g.block.NewCall(g.runtimeUnboxNumber, rightI)
+		l32 := g.block.NewFPToSI(ld, types.I32)
+		r32 := g.block.NewFPToSI(rd, types.I32)
+		shiftMask := constant.NewInt(types.I32, 31)
+		rM := g.block.NewAnd(r32, shiftMask)
+		var res32 value.Value
+		if e.Operator == "<<" {
+			res32 = g.block.NewShl(l32, rM)
+		} else {
+			res32 = g.block.NewAShr(l32, rM)
+		}
+		rf := g.block.NewSIToFP(res32, types.Double)
+		return g.block.NewCall(g.runtimeBoxNumber, rf), nil
+	case ">>>":
+		ld := g.block.NewCall(g.runtimeUnboxNumber, leftI)
+		rd := g.block.NewCall(g.runtimeUnboxNumber, rightI)
+		l32 := g.block.NewFPToSI(ld, types.I32)
+		r32 := g.block.NewFPToSI(rd, types.I32)
+		rM := g.block.NewAnd(r32, constant.NewInt(types.I32, 31))
+		ures := g.block.NewLShr(l32, rM)
+		rf := g.block.NewUIToFP(ures, types.Double)
+		return g.block.NewCall(g.runtimeBoxNumber, rf), nil
 	default:
 		return nil, fmt.Errorf("unsupported operator: %s", e.Operator)
 	}
@@ -397,32 +440,35 @@ func (g *Generator) emitSwitchCaseExpr(e *parser.SwitchCaseExpr) (value.Value, e
 
 // emitUpdate emits LLVM IR for increment/decrement operators (++, --).
 func (g *Generator) emitUpdate(e *parser.UpdateExpr) (value.Value, error) {
-	// Get current value
 	current, err := g.emitExpr(e.Operand)
 	if err != nil {
 		return nil, err
 	}
-
-	// Perform increment or decrement
-	var result value.Value
+	curI := g.emitAsFujiI64(current)
+	ld := g.block.NewCall(g.runtimeUnboxNumber, curI)
+	var rd value.Value
 	switch e.Operator.Lexeme {
 	case "++":
-		result = g.block.NewAdd(current, constant.NewInt(types.I64, 1))
+		rd = g.block.NewFAdd(ld, constant.NewFloat(types.Double, 1))
 	case "--":
-		result = g.block.NewSub(current, constant.NewInt(types.I64, 1))
+		rd = g.block.NewFSub(ld, constant.NewFloat(types.Double, 1))
 	default:
 		return nil, fmt.Errorf("unsupported update operator: %s", e.Operator.Lexeme)
 	}
+	result := g.block.NewCall(g.runtimeBoxNumber, rd)
 
-	// Assign result back to variable if it's an identifier
 	if ident, ok := e.Operand.(*parser.IdentifierExpr); ok {
 		name := ident.Name.Lexeme
 		if slot, ok := g.locals[name]; ok {
-			g.block.NewStore(result, slot)
+			boxed := g.emitAsFujiI64(result)
+			if g.localIsCell != nil && g.localIsCell[name] {
+				g.block.NewCall(g.runtimeCellWrite, slot, boxed)
+			} else {
+				g.block.NewStore(boxed, slot)
+			}
 		}
 	}
 
-	// Return old value for postfix, new value for prefix
 	if e.IsPrefix {
 		return result, nil
 	}

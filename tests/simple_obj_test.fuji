@@ -1,0 +1,3 @@
+let obj = { x: 42, flag: true };
+print(obj.x);
+print(obj.flag);

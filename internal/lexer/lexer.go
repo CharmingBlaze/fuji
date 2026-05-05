@@ -153,13 +153,21 @@ func (l *Lexer) scanToken() error {
 		l.addToken(TokenTilde)
 	case '!':
 		if l.match('=') {
-			l.addToken(TokenBangEqual)
+			if l.match('=') {
+				l.addToken(TokenStrictNotEqual)
+			} else {
+				l.addToken(TokenBangEqual)
+			}
 		} else {
 			l.addToken(TokenBang)
 		}
 	case '=':
 		if l.match('=') {
-			l.addToken(TokenEqualEqual)
+			if l.match('=') {
+				l.addToken(TokenStrictEqual)
+			} else {
+				l.addToken(TokenEqualEqual)
+			}
 		} else if l.match('>') {
 			l.addToken(TokenArrow)
 		} else {
@@ -183,6 +191,8 @@ func (l *Lexer) scanToken() error {
 		} else if l.match('>') {
 			if l.match('=') {
 				l.addToken(TokenGreaterGreaterEqual)
+			} else if l.match('>') {
+				l.addToken(TokenUnsignedShift)
 			} else {
 				l.addToken(TokenGreaterGreater)
 			}
@@ -232,12 +242,51 @@ func (l *Lexer) string() error {
 }
 
 func (l *Lexer) number() error {
+	// Leading digit was consumed before this call; l.source[l.start] is the first digit.
+	if l.source[l.start] == '0' && (l.peek() == 'x' || l.peek() == 'X') {
+		l.advance() // x / X
+		startHex := l.current
+		for isHexDigit(l.peek()) {
+			l.advance()
+		}
+		if l.current == startHex {
+			return fmt.Errorf("invalid hex literal at %d:%d", l.line, l.start-l.lineStart+1)
+		}
+		l.addToken(TokenNumber)
+		return nil
+	}
+	if l.source[l.start] == '0' && (l.peek() == 'b' || l.peek() == 'B') {
+		l.advance()
+		startBin := l.current
+		for l.peek() == '0' || l.peek() == '1' {
+			l.advance()
+		}
+		if l.current == startBin {
+			return fmt.Errorf("invalid binary literal at %d:%d", l.line, l.start-l.lineStart+1)
+		}
+		l.addToken(TokenNumber)
+		return nil
+	}
+
 	for isDigit(l.peek()) {
 		l.advance()
 	}
 
 	if l.peek() == '.' && isDigit(l.peekNext()) {
 		l.advance() // Consume the "."
+		for isDigit(l.peek()) {
+			l.advance()
+		}
+	}
+
+	if l.peek() == 'e' || l.peek() == 'E' {
+		l.advance()
+		if l.peek() == '+' || l.peek() == '-' {
+			l.advance()
+		}
+		if !isDigit(l.peek()) {
+			return fmt.Errorf("invalid exponent in number at %d:%d", l.line, l.start-l.lineStart+1)
+		}
 		for isDigit(l.peek()) {
 			l.advance()
 		}
@@ -373,6 +422,10 @@ func (l *Lexer) addTokenWithLexeme(typ TokenType, lexeme string) {
 
 func isDigit(c byte) bool {
 	return c >= '0' && c <= '9'
+}
+
+func isHexDigit(c byte) bool {
+	return isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
 
 func isAlpha(c byte) bool {

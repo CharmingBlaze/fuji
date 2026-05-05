@@ -122,8 +122,13 @@ func (g *Generator) emitFuncExpr(e *parser.FuncExpr) (value.Value, error) {
 	name := fmt.Sprintf("closure_%d", g.tempN)
 	g.tempN++
 
-	// Create function parameters, always starting with 'this'
+	freeVars := g.ctx.FreeVarsExpr[e]
+	cellPtrTy := types.NewPointer(types.I64)
+
 	params := []*ir.Param{ir.NewParam("this", types.I64)}
+	for _, fv := range freeVars {
+		params = append(params, ir.NewParam("__cap_"+fv, cellPtrTy))
+	}
 	for _, param := range e.Params {
 		params = append(params, ir.NewParam(param.Name, types.I64))
 	}
@@ -148,14 +153,13 @@ func (g *Generator) emitFuncExpr(e *parser.FuncExpr) (value.Value, error) {
 	g.locals = make(map[string]value.Value)
 	g.localIsCell = make(map[string]bool)
 
-	for _, name := range g.ctx.FreeVarsExpr[e] {
-		if slot, ok := prevLocals[name]; ok {
-			g.locals[name] = slot
-			if prevLocalIsCell != nil {
-				g.localIsCell[name] = prevLocalIsCell[name]
-			}
-		}
+	for i, fv := range freeVars {
+		cellParam := fn.Params[1+i]
+		g.locals[fv] = cellParam
+		g.localIsCell[fv] = true
 	}
+
+	paramOffset := 1 + len(freeVars)
 
 	thisSlot := g.block.NewAlloca(types.I64)
 	g.locals["this"] = thisSlot
@@ -166,12 +170,12 @@ func (g *Generator) emitFuncExpr(e *parser.FuncExpr) (value.Value, error) {
 		key := sema.NewParamCellKey(e, i)
 		if g.ctx.ParamIsCell[key] {
 			cell := g.block.NewCall(g.runtimeAllocCell)
-			g.block.NewCall(g.runtimeCellWrite, cell, g.emitAsFujiI64(fn.Params[i+1]))
+			g.block.NewCall(g.runtimeCellWrite, cell, g.emitAsFujiI64(fn.Params[paramOffset+i]))
 			g.locals[param.Name] = cell
 			g.localIsCell[param.Name] = true
 		} else {
 			slot := g.block.NewAlloca(types.I64)
-			g.block.NewStore(fn.Params[i+1], slot)
+			g.block.NewStore(fn.Params[paramOffset+i], slot)
 			g.locals[param.Name] = slot
 			g.localIsCell[param.Name] = false
 		}
@@ -219,7 +223,29 @@ func (g *Generator) emitFuncExpr(e *parser.FuncExpr) (value.Value, error) {
 	g.locals = prevLocals
 	g.localIsCell = prevLocalIsCell
 
-	// For now, return the function as a value
-	// In a full implementation, this would create a closure object
-	return fn, nil
+	nFV := len(freeVars)
+	if nFV == 0 {
+		// Tag raw function pointers so indirect calls use (this, args…) without cell slots.
+		fnI64 := g.block.NewPtrToInt(fn, types.I64)
+		return g.block.NewOr(fnI64, constant.NewInt(types.I64, 1)), nil
+	}
+	if nFV > maxClosureFreeVars {
+		return nil, fmt.Errorf("closure %s: too many captured variables (%d > %d)", name, nFV, maxClosureFreeVars)
+	}
+
+	sz := int64(8 * (2 + nFV))
+	raw := g.block.NewCall(g.runtimeMalloc, constant.NewInt(types.I64, sz))
+	pI64 := g.block.NewBitCast(raw, types.NewPointer(types.I64))
+	g.block.NewStore(g.block.NewPtrToInt(fn, types.I64), pI64)
+	pN := g.block.NewGetElementPtr(types.I64, pI64, constant.NewInt(types.I32, 1))
+	g.block.NewStore(constant.NewInt(types.I64, int64(nFV)), pN)
+	for i, fv := range freeVars {
+		slot, ok := prevLocals[fv]
+		if !ok {
+			return nil, fmt.Errorf("closure %s: missing parent slot for captured %q", name, fv)
+		}
+		pSlot := g.block.NewGetElementPtr(types.I64, pI64, constant.NewInt(types.I32, int64(2+i)))
+		g.block.NewStore(g.block.NewPtrToInt(slot, types.I64), pSlot)
+	}
+	return g.block.NewPtrToInt(raw, types.I64), nil
 }

@@ -70,6 +70,8 @@ static inline Value OBJ_VAL(Obj* obj) {
 
 // Value equality
 bool values_equal(Value a, Value b);
+/** Same as values_equal, exposed for native codegen (returns 1 or 0). */
+int64_t fuji_values_equal(Value a, Value b);
 
 // Value printing
 void print_value(Value v);

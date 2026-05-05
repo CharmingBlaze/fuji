@@ -33,9 +33,11 @@ const (
 	TokenBang      // !
 
 	// One or two character tokens
-	TokenEqual          // =
-	TokenEqualEqual     // ==
-	TokenBangEqual      // !=
+	TokenEqual           // =
+	TokenEqualEqual      // ==
+	TokenStrictEqual     // ===
+	TokenBangEqual       // !=
+	TokenStrictNotEqual  // !==
 	TokenGreater        // >
 	TokenGreaterEqual   // >=
 	TokenLess           // <
@@ -49,6 +51,7 @@ const (
 	TokenTripleDot      // ...
 	TokenLessLess       // <<
 	TokenGreaterGreater // >>
+	TokenUnsignedShift  // >>>
 
 	// Assignment operators
 	TokenPlusEqual           // +=
@@ -148,8 +151,12 @@ func (t TokenType) String() string {
 		return "="
 	case TokenEqualEqual:
 		return "=="
+	case TokenStrictEqual:
+		return "==="
 	case TokenBangEqual:
 		return "!="
+	case TokenStrictNotEqual:
+		return "!=="
 	case TokenGreater:
 		return ">"
 	case TokenGreaterEqual:
@@ -176,6 +183,8 @@ func (t TokenType) String() string {
 		return "<<"
 	case TokenGreaterGreater:
 		return ">>"
+	case TokenUnsignedShift:
+		return ">>>"
 	case TokenPlusEqual:
 		return "+="
 	case TokenMinusEqual:

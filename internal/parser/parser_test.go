@@ -198,3 +198,56 @@ func TestProgramIncludeLoadsShim(t *testing.T) {
 		t.Fatalf("InitWindow not in entry after flatten; let names: %v", names)
 	}
 }
+
+func TestParseNotPropertyAccess(t *testing.T) {
+	src := `assert(!bad.ok, "m");`
+	l := lexer.NewLexer(src)
+	toks, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewParser(toks)
+	prog, err := p.Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	es := prog.Declarations[0].(*ExpressionStmt)
+	call := es.Expr.(*CallExpr)
+	pfx := call.Arguments[0].(*PrefixExpr)
+	if pfx.Operator != "!" {
+		t.Fatalf("want ! prefix, got %q", pfx.Operator)
+	}
+	if _, ok := pfx.Right.(*IndexExpr); !ok {
+		t.Fatalf("want IndexExpr under !, got %T", pfx.Right)
+	}
+}
+
+func TestParseCompoundAssignStatement(t *testing.T) {
+	src := `let x = 10;
+x += 3;
+`
+	l := lexer.NewLexer(src)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewParser(tokens)
+	prog, err := p.Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(prog.Declarations) != 2 {
+		t.Fatalf("expected 2 declarations, got %d", len(prog.Declarations))
+	}
+	es, ok := prog.Declarations[1].(*ExpressionStmt)
+	if !ok {
+		t.Fatalf("second decl: got %T", prog.Declarations[1])
+	}
+	ae, ok := es.Expr.(*AssignExpr)
+	if !ok {
+		t.Fatalf("expr: got %T", es.Expr)
+	}
+	if ae.Token.Type != lexer.TokenPlusEqual {
+		t.Fatalf("assign token: got %v", ae.Token.Type)
+	}
+}

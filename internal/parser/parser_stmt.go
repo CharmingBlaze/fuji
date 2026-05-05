@@ -167,6 +167,12 @@ func (p *Parser) parseStatement() (Stmt, error) {
 	if p.match(lexer.TokenWhile) {
 		return p.parseWhileStatement()
 	}
+	if p.match(lexer.TokenDo) {
+		return p.parseDoWhileStatement()
+	}
+	if p.match(lexer.TokenFor) {
+		return p.parseForStatement()
+	}
 	if p.match(lexer.TokenReturn) {
 		return p.parseReturnStatement()
 	}
@@ -183,6 +189,9 @@ func (p *Parser) parseStatement() (Stmt, error) {
 			return nil, err
 		}
 		return &ContinueStmt{Token: token}, nil
+	}
+	if p.match(lexer.TokenSwitch) {
+		return p.parseSwitchStatement()
 	}
 	if p.check(lexer.TokenLBrace) {
 		return p.parseBlockStatement()
@@ -267,6 +276,136 @@ func (p *Parser) parseWhileStatement() (Stmt, error) {
 	}
 
 	return &WhileStmt{Token: token, Condition: condition, Body: body}, nil
+}
+
+func (p *Parser) parseDoWhileStatement() (Stmt, error) {
+	token := p.previous()
+	body, err := p.parseStatement()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenWhile, "expected 'while' after do body"); err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenLParen, "expected '(' after 'while'"); err != nil {
+		return nil, err
+	}
+	condition, err := p.parseExpression(PrecedenceLowest)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenRParen, "expected ')' after do-while condition"); err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenSemicolon, "expected ';' after do-while"); err != nil {
+		return nil, err
+	}
+	return &DoWhileStmt{Token: token, Body: body, Condition: condition}, nil
+}
+
+func (p *Parser) parseSwitchStatement() (Stmt, error) {
+	token := p.previous()
+	if _, err := p.consume(lexer.TokenLParen, "expected '(' after 'switch'"); err != nil {
+		return nil, err
+	}
+	subject, err := p.parseExpression(PrecedenceLowest)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenRParen, "expected ')' after switch subject"); err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenLBrace, "expected '{' before switch body"); err != nil {
+		return nil, err
+	}
+
+	var cases []SwitchCase
+	var def []Decl
+
+	for !p.check(lexer.TokenRBrace) && !p.isAtEnd() {
+		if p.match(lexer.TokenCase) {
+			val, err := p.parseExpression(PrecedenceLowest)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.consume(lexer.TokenColon, "expected ':' after case value"); err != nil {
+				return nil, err
+			}
+			var body []Decl
+			for !p.check(lexer.TokenCase) && !p.check(lexer.TokenDefault) && !p.check(lexer.TokenRBrace) && !p.isAtEnd() {
+				d, err := p.parseDeclaration()
+				if err != nil {
+					return nil, err
+				}
+				body = append(body, d)
+			}
+			cases = append(cases, SwitchCase{Value: val, Body: body})
+			continue
+		}
+		if p.match(lexer.TokenDefault) {
+			if _, err := p.consume(lexer.TokenColon, "expected ':' after default"); err != nil {
+				return nil, err
+			}
+			for !p.check(lexer.TokenRBrace) && !p.isAtEnd() {
+				d, err := p.parseDeclaration()
+				if err != nil {
+					return nil, err
+				}
+				def = append(def, d)
+			}
+			continue
+		}
+		return nil, p.error(p.peek(), "expected case or default in switch")
+	}
+
+	if _, err := p.consume(lexer.TokenRBrace, "expected '}' after switch"); err != nil {
+		return nil, err
+	}
+	return &SwitchStmt{Token: token, Subject: subject, Cases: cases, Default: def}, nil
+}
+
+func (p *Parser) parseForStatement() (Stmt, error) {
+	token := p.previous()
+	if _, err := p.consume(lexer.TokenLParen, "expected '(' after 'for'"); err != nil {
+		return nil, err
+	}
+	if !p.match(lexer.TokenLet) {
+		return nil, p.error(p.peek(), "expected 'let' in for-loop (only for-in / for-of is supported here)")
+	}
+	name, err := p.consume(lexer.TokenIdentifier, "expected loop variable name")
+	if err != nil {
+		return nil, err
+	}
+	if p.match(lexer.TokenIn) {
+		iter, err := p.parseExpression(PrecedenceLowest)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.consume(lexer.TokenRParen, "expected ')' after for-in iterable"); err != nil {
+			return nil, err
+		}
+		body, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		n := name
+		return &ForInStmt{Token: token, KeyVar: &n, Iterable: iter, Body: body}, nil
+	}
+	if p.match(lexer.TokenOf) {
+		iter, err := p.parseExpression(PrecedenceLowest)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.consume(lexer.TokenRParen, "expected ')' after for-of iterable"); err != nil {
+			return nil, err
+		}
+		body, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		return &ForOfStmt{Token: token, VarName: name, Iterable: iter, Body: body}, nil
+	}
+	return nil, p.error(p.peek(), "expected 'in' or 'of' after for-loop variable")
 }
 
 func (p *Parser) parseReturnStatement() (Stmt, error) {

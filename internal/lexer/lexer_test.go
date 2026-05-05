@@ -48,6 +48,14 @@ func TestLexerComplex(t *testing.T) {
 	assertTokenTypes(t, source, expected)
 }
 
+func TestLexerStrictEquality(t *testing.T) {
+	assertTokenTypes(t, `a === b; c !== d;`, []TokenType{
+		TokenIdentifier, TokenStrictEqual, TokenIdentifier, TokenSemicolon,
+		TokenIdentifier, TokenStrictNotEqual, TokenIdentifier, TokenSemicolon,
+		TokenEOF,
+	})
+}
+
 func TestLexerOperatorsAndDirectives(t *testing.T) {
 	source := `#include "x.fuji"
 let x = a++ + --b;
