@@ -3,6 +3,7 @@ package diagnostic
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,6 +22,25 @@ var (
 type Position struct {
 	Line int
 	Col  int
+}
+
+// DiagnosticError is a structured compiler error with optional hint text.
+type DiagnosticError struct {
+	File    string
+	Line    int
+	Col     int
+	Message string
+	Hint    string
+}
+
+func (e *DiagnosticError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.File == "" || e.Line <= 0 || e.Col <= 0 {
+		return e.Message
+	}
+	return fmt.Sprintf("%s:%d:%d: %s", e.File, e.Line, e.Col, e.Message)
 }
 
 // ExtractPosition parses line/column from lexer or parser error messages.
@@ -85,6 +105,62 @@ func Snippet(src string, pos Position) string {
 	return b.String()
 }
 
+func normalizeNewlines(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return strings.ReplaceAll(s, "\r", "\n")
+}
+
+func isIdentByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
+}
+
+// IdentifierSpanAt returns a best-effort byte span for an identifier starting at 1-based column col.
+func IdentifierSpanAt(line string, col int) int {
+	if col < 1 || col > len(line) {
+		return 1
+	}
+	i := col - 1
+	if !isIdentByte(line[i]) {
+		return 1
+	}
+	j := i
+	for j < len(line) && isIdentByte(line[j]) {
+		j++
+	}
+	w := j - i
+	if w < 1 {
+		return 1
+	}
+	return w
+}
+
+// RustStyleSnippet appends a rustc-like source excerpt when path is readable and line exists.
+func RustStyleSnippet(b *strings.Builder, path string, line, col int, hint string) bool {
+	if path == "" || line < 1 || col < 1 {
+		return false
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	src := normalizeNewlines(string(raw))
+	lines := strings.Split(src, "\n")
+	if line > len(lines) {
+		return false
+	}
+	lineText := lines[line-1]
+	span := IdentifierSpanAt(lineText, col)
+	ln := strconv.Itoa(line)
+	w := len(ln)
+	fmt.Fprintf(b, "\n%*d | %s", w, line, lineText)
+	under := strings.Repeat(" ", col-1) + strings.Repeat("^", span)
+	if hint != "" {
+		under += " " + hint
+	}
+	fmt.Fprintf(b, "\n%*s | %s", w, "", under)
+	return true
+}
+
 // SourceContextError attaches file contents so compile failures can print a snippet.
 type SourceContextError struct {
 	Path   string
@@ -115,4 +191,100 @@ func WrapLexer(path, src string, err error) error {
 // WrapParse wraps a parser failure with path and source.
 func WrapParse(path, src string, err error) error {
 	return &SourceContextError{Path: path, Source: src, Phase: "parse", Cause: err}
+}
+
+// LevenshteinDistance computes edit distance between two strings.
+func LevenshteinDistance(a, b string) int {
+	if a == b {
+		return 0
+	}
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+	prev := make([]int, len(b)+1)
+	cur := make([]int, len(b)+1)
+	for j := 0; j <= len(b); j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 0
+			if a[i-1] != b[j-1] {
+				cost = 1
+			}
+			del := prev[j] + 1
+			ins := cur[j-1] + 1
+			sub := prev[j-1] + cost
+			cur[j] = del
+			if ins < cur[j] {
+				cur[j] = ins
+			}
+			if sub < cur[j] {
+				cur[j] = sub
+			}
+		}
+		prev, cur = cur, prev
+	}
+	return prev[len(b)]
+}
+
+// BestSuggestion returns the closest candidate (<= maxDist edits).
+func BestSuggestion(target string, candidates []string, maxDist int) (string, bool) {
+	best := ""
+	bestDist := maxDist + 1
+	for _, c := range candidates {
+		if c == "" || c == target {
+			continue
+		}
+		d := LevenshteinDistance(strings.ToLower(target), strings.ToLower(c))
+		if d < bestDist {
+			bestDist = d
+			best = c
+		}
+	}
+	if best == "" || bestDist > maxDist {
+		return "", false
+	}
+	return best, true
+}
+
+// FormatError renders rich user-facing output when diagnostic data exists.
+func FormatError(err error) string {
+	if err == nil {
+		return ""
+	}
+	var d *DiagnosticError
+	if errors.As(err, &d) && d != nil {
+		var b strings.Builder
+		b.WriteString(d.Message)
+		if d.File != "" && d.Line > 0 && d.Col > 0 {
+			fmt.Fprintf(&b, "\n --> %s:%d:%d", d.File, d.Line, d.Col)
+			if RustStyleSnippet(&b, d.File, d.Line, d.Col, d.Hint) {
+				return b.String()
+			}
+		}
+		if d.Hint != "" {
+			b.WriteString("\n  hint: ")
+			b.WriteString(d.Hint)
+		}
+		return b.String()
+	}
+	var s *SourceContextError
+	if errors.As(err, &s) && s != nil {
+		if pos, ok := ExtractPosition(s.Cause); ok {
+			var b strings.Builder
+			b.WriteString(s.Cause.Error())
+			fmt.Fprintf(&b, "\n  --> %s:%d:%d", s.Path, pos.Line, pos.Col)
+			if sn := Snippet(s.Source, pos); sn != "" {
+				b.WriteString("\n")
+				b.WriteString(sn)
+			}
+			return b.String()
+		}
+	}
+	return err.Error()
 }

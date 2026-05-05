@@ -29,7 +29,7 @@ fuji.exe build tests\phase1_surface.fuji -o surface.exe
 surface.exe
 ```
 
-**Expected (roughly):** **`hello.fuji`** prints the Fuji runtime init line plus type lines for number, string, boolean, and null. **`error_handling_test.fuji`** ends with **`PASS: error handling works`**. **`phase1_surface.fuji`** follows whatever that test prints today (see the file under **`tests/`**).
+**Expected (roughly):** **`hello.fuji`** prints `Hello, Fuji!` plus type lines for number, string, boolean, and null. **`error_handling_test.fuji`** ends with **`PASS: error handling works`**. **`phase1_surface.fuji`** follows whatever that test prints today (see the file under **`tests/`**).
 
 From a **GitHub Release** artifact (**`fuji-windows-amd64.exe`**), the same commands work **without** installing LLVM, because the binary embeds **`llc`**, **`lld`**, and **`libfuji_runtime.a`** (**`go build -tags release`**).
 
@@ -100,3 +100,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\play-brick-breaker.ps1
 
 - **Authors:** Go **1.22+**, **Clang** and **llc** on `PATH` for native builds, plus a C toolchain to build **`runtime/libfuji_runtime.a`** (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 - **Players:** Nothing required — just your shipped executable and data files.
+
+---
+
+## Runtime Invariants (GC Safety)
+
+- Generated binaries should call **`fuji_runtime_init_ex(stack_base)`**; **`fuji_runtime_init()`** is a compatibility wrapper.
+- Any stack slot that can temporarily hold a live object across calls/allocation must be shadow-rooted.
+- Writes from old objects to younger objects must go through runtime write-barrier paths (`fuji_object_set`, `fuji_array_set`, `fuji_array_push`, `fuji_cell_write`, etc.).
+- Top-level globals in generated code are registered as global slots so GC marks current values, not stale snapshots.
+- Optional debug stats/checks are enabled with **`FUJI_GC_DEBUG=1`** (remembered-set overflow count, shadow-depth high-water mark, global slot stats, and object-header sanity checks).

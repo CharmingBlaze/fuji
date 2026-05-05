@@ -1,8 +1,12 @@
 package sema
 
 import (
-	"fuji/internal/parser"
+	"errors"
+	"fmt"
 	"reflect"
+
+	"fuji/internal/diagnostic"
+	"fuji/internal/parser"
 )
 
 // ParamCellKey identifies a function parameter for escape-driven heap-cell lowering.
@@ -49,6 +53,25 @@ func PrepareNativeBundle(bundle *parser.ProgramBundle) (*NativeEmitContext, erro
 		return nil, err
 	}
 	parser.InjectNativeMathPrelude(bundle)
+
+	entryPath := "<entry>"
+	if p, err := parser.BundleEntryPath(bundle); err == nil {
+		entryPath = p
+	}
+	if bundle.Entry != nil {
+		analyzer := NewAnalyzer()
+		if err := analyzer.Analyze(bundle.Entry); err != nil {
+			var de *diagnostic.DiagnosticError
+			if errors.As(err, &de) {
+				if de.File == "" {
+					de.File = entryPath
+				}
+				return nil, err
+			}
+			return nil, fmt.Errorf("%s: %w", entryPath, err)
+		}
+	}
+
 	ctx := &NativeEmitContext{
 		Bundle:         bundle,
 		locals:         make(map[parser.Expr]parser.Decl),

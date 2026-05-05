@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Classic `for (init; cond; step)`** — parsed and lowered alongside `while` / `for-in` / `for-of` (`internal/parser`, `internal/codegen`).
 - **`for (let [k, v] of iterable)`** — destructuring **`for-of`** for **arrays** (numeric index + element) and **objects/tables** (insertion-order key + value); runtime helpers **`fuji_forof_length`**, **`fuji_forof_key_at`**, **`fuji_forof_value_at`** (`runtime/src/fuji_runtime.c`).
 - **Release binaries (`-tags release`)** — embedded Clang + runtime under **`internal/embed/`** (Windows also bundles **`lld.exe`** for linking); **`scripts/build-release.ps1`** / **`scripts/build-release.sh`**; **`release.yml`** publishes **`fujiwrap`** where applicable (`CHANGELOG` superseded notes under 0.1.0 remain historical).
+- **Runtime hardening (GC/debug):** dynamic global-slot root registration (`fuji_register_global_slot` + generated top-level slot wiring), opt-in **`FUJI_GC_DEBUG`** stats/checks (remembered-set overflow counter, shadow stack depth high-water mark, global slot stats, object-header sanity checks), and new stress scenarios (`tests/gc_pressure_expr.fuji`, `tests/globals_perf.fuji`, `tests/gc_soak.fuji`).
 
 ### Changed
 
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation** — loop-style guide (`docs/user_guide.md`), **`for-of`** / **`syntax.md`** examples, single-line vs multi-line braced bodies.
 - **Language (case):** reserved words and ASCII identifiers are **case-insensitive** (identifiers and object property keys are normalized to lowercase in the AST). **`@` module** specifiers and **`#include`** are matched case-insensitively; **`// fuji:…`** lines treat the `fuji:` prefix and the **`extern`** keyword case-insensitively, while the **C symbol** on extern lines stays spelled exactly for the linker. **`main`** / **`Main`** / etc. still map to the native entry (`fuji_user_main`) case-insensitively. Whitespace between tokens remains free-form; **semicolons between statements are still required.**
 - **Branding and paths:** sources use the **`.fuji`** extension; C runtime and LLVM symbols use the **`fuji_`** prefix; static archive **`runtime/libfuji_runtime.a`**. The desktop IDE module is **`fuji-ide`** (Wails app **`fuji-ide`**). **Wrapper generator:** canonical binary name **`fujiwrap`** (`go build -o fujiwrap ./cmd/wrapgen`); generated files credit **`fujiwrap`**. **`fuji wrap`** prefers **`fujiwrap`** next to **`fuji`**, then **`wrapgen`**, then legacy **`kujiwrap`**.
+- **CI hardening:** Linux CI now runs a serialized, time-bounded GC soak pass (`gc_pressure_expr`, `globals_perf`, `gc_soak`) to catch long-run/rooting regressions.
 
 ### Fixed
 

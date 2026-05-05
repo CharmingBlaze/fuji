@@ -11,11 +11,14 @@
 /* Stack base for conservative root scan; set in fuji_runtime_init before any allocation. */
 extern void* gc_stack_base;
 
-extern Value fuji_globals[];
+extern Value* fuji_globals;
 extern int fuji_globals_count;
+extern Value** fuji_global_slots;
+extern int fuji_global_slots_count;
 
 void fuji_mark_module_cache(void);
 void fuji_mark_open_upvalues(void);
+void fuji_mark_interned_strings(void);
 
 #define REMEMBERED_SET_MAX 4096
 #define NURSERY_SIZE (256u * 1024u)
@@ -36,6 +39,7 @@ typedef struct {
 
     Obj* remembered[REMEMBERED_SET_MAX];
     int remembered_count;
+    uint64_t remembered_overflow_count;
 } GCState;
 
 static GCState gc_state = {
@@ -49,6 +53,7 @@ static GCState gc_state = {
     .nursery_end = NULL,
     .nursery_live_bytes = 0,
     .remembered_count = 0,
+    .remembered_overflow_count = 0,
 };
 
 static size_t gc_obj_total_bytes(Obj* obj);
@@ -57,6 +62,8 @@ static Obj* gc_find_containing_obj(void* p);
 static void maybe_mark_stack_word(uint64_t word);
 static void maybe_mark_stack_addr(uintptr_t addr);
 static void gc_unmark_all(void);
+static bool gc_debug_enabled(void);
+static void gc_debug_validate_objects(void);
 
 void gc_collect_minor(void);
 
@@ -152,8 +159,10 @@ static void remembered_set_add(Obj* obj) {
         gc_state.remembered[gc_state.remembered_count++] = obj;
         return;
     }
+    gc_state.remembered_overflow_count++;
     gc_collect();
     gc_state.remembered_count = 0;
+    gc_state.remembered[gc_state.remembered_count++] = obj;
 }
 
 static void gc_reset_nursery(void) {
@@ -203,8 +212,16 @@ void gc_collect_minor(void) {
             gc_mark_value(fuji_globals[i]);
         }
     }
+    if (fuji_global_slots_count > 0) {
+        for (int i = 0; i < fuji_global_slots_count; i++) {
+            if (fuji_global_slots[i] != NULL) {
+                gc_mark_value(*fuji_global_slots[i]);
+            }
+        }
+    }
     fuji_mark_module_cache();
     fuji_mark_open_upvalues();
+    fuji_mark_interned_strings();
 
     for (int i = 0; i < gc_state.remembered_count; i++) {
         if (gc_state.remembered[i] != NULL) {
@@ -231,6 +248,9 @@ void gc_collect_minor(void) {
     }
 
     gc_unmark_all();
+    if (gc_debug_enabled()) {
+        gc_debug_validate_objects();
+    }
     gc_state.stats.collections++;
     gc_state.collecting = false;
 }
@@ -287,6 +307,9 @@ void gc_mark_object(Obj* obj) {
     switch (obj->type) {
         case OBJ_ARRAY: {
             ObjArray* array = (ObjArray*)obj;
+            if (array->elements == NULL) {
+                break;
+            }
             for (int i = 0; i < array->count; i++) {
                 gc_mark_value(array->elements[i]);
             }
@@ -294,6 +317,9 @@ void gc_mark_object(Obj* obj) {
         }
         case OBJ_TABLE: {
             ObjTable* table = (ObjTable*)obj;
+            if (table->keys == NULL || table->values == NULL) {
+                break;
+            }
             for (int i = 0; i < table->count; i++) {
                 gc_mark_value(table->keys[i]);
                 gc_mark_value(table->values[i]);
@@ -448,8 +474,16 @@ void gc_mark_roots(void) {
             gc_mark_value(fuji_globals[i]);
         }
     }
+    if (fuji_global_slots_count > 0) {
+        for (int i = 0; i < fuji_global_slots_count; i++) {
+            if (fuji_global_slots[i] != NULL) {
+                gc_mark_value(*fuji_global_slots[i]);
+            }
+        }
+    }
     fuji_mark_module_cache();
     fuji_mark_open_upvalues();
+    fuji_mark_interned_strings();
 }
 
 static void gc_unmark_all(void) {
@@ -482,6 +516,9 @@ void gc_collect(void) {
 
     gc_unmark_all();
     gc_mark_roots();
+    if (gc_debug_enabled()) {
+        gc_debug_validate_objects();
+    }
     gc_sweep();
 
     for (Obj* obj = gc_state.objects; obj != NULL; obj = obj->next) {
@@ -520,6 +557,7 @@ void gc_init(void) {
     gc_state.nursery_end = gc_state.nursery_buf + sizeof(gc_state.nursery_buf);
     gc_state.nursery_live_bytes = 0;
     gc_state.remembered_count = 0;
+    gc_state.remembered_overflow_count = 0;
     memset(&gc_state.stats, 0, sizeof(gc_state.stats));
 }
 
@@ -538,4 +576,35 @@ bool gc_is_disabled(void) {
 
 void gc_set_next_threshold(size_t bytes) {
     gc_state.next_gc = bytes;
+}
+
+uint64_t gc_debug_remembered_overflow_count(void) {
+    return gc_state.remembered_overflow_count;
+}
+
+static bool gc_debug_enabled(void) {
+    static int cached = -1;
+    if (cached >= 0) {
+        return cached != 0;
+    }
+    const char* env = getenv("FUJI_GC_DEBUG");
+    if (env == NULL || env[0] == '\0' || env[0] == '0') {
+        cached = 0;
+    } else {
+        cached = 1;
+    }
+    return cached != 0;
+}
+
+static void gc_debug_validate_objects(void) {
+    for (Obj* obj = gc_state.objects; obj != NULL; obj = obj->next) {
+        if (obj->type < OBJ_STRING || obj->type > OBJ_CELL) {
+            fprintf(stderr, "fuji gc debug: invalid object header type=%d\n", (int)obj->type);
+            abort();
+        }
+        if (obj->generation > GEN_DEAD) {
+            fprintf(stderr, "fuji gc debug: invalid generation=%u\n", (unsigned)obj->generation);
+            abort();
+        }
+    }
 }

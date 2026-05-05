@@ -179,6 +179,14 @@ func (g *Generator) emitDoWhileStmt(s *parser.DoWhileStmt) error {
 
 // emitForOfStmt emits LLVM IR for for-of loops over arrays and tables (slot order).
 func (g *Generator) emitForOfStmt(s *parser.ForOfStmt) error {
+	if s.ValueVar == nil {
+		if r, ok := s.Iterable.(*parser.RangeExpr); ok {
+			if from, to, ok := rangeConstBounds(r); ok {
+				return g.emitForOfConstRange(s, from, to)
+			}
+		}
+	}
+
 	iterable, err := g.emitExpr(s.Iterable)
 	if err != nil {
 		return err
@@ -244,6 +252,76 @@ func (g *Generator) emitForOfStmt(s *parser.ForOfStmt) error {
 
 	g.block = afterBlock
 
+	g.loopStack = g.loopStack[:len(g.loopStack)-1]
+	return nil
+}
+
+func rangeConstBounds(r *parser.RangeExpr) (int64, int64, bool) {
+	fromLit, ok := r.From.(*parser.LiteralExpr)
+	if !ok {
+		return 0, 0, false
+	}
+	toLit, ok := r.To.(*parser.LiteralExpr)
+	if !ok {
+		return 0, 0, false
+	}
+	var from int64
+	switch v := fromLit.Value.(type) {
+	case int:
+		from = int64(v)
+	case float64:
+		from = int64(v)
+	default:
+		return 0, 0, false
+	}
+	var to int64
+	switch v := toLit.Value.(type) {
+	case int:
+		to = int64(v)
+	case float64:
+		to = int64(v)
+	default:
+		return 0, 0, false
+	}
+	return from, to, true
+}
+
+func (g *Generator) emitForOfConstRange(s *parser.ForOfStmt, from int64, to int64) error {
+	idxSlot := g.entryAlloca(types.I64)
+	valSlot := g.entryAlloca(types.I64)
+	g.locals[s.VarName.Lexeme] = valSlot
+	g.block.NewStore(constant.NewInt(types.I64, from), idxSlot)
+
+	g.tempN++
+	condBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.range.cond.%d", g.tempN))
+	bodyBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.range.body.%d", g.tempN))
+	incBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.range.inc.%d", g.tempN))
+	afterBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.range.after.%d", g.tempN))
+	ctx := loopContext{condBlock: condBlock, incBlock: incBlock, afterBlock: afterBlock}
+	g.loopStack = append(g.loopStack, ctx)
+
+	g.block.NewBr(condBlock)
+
+	g.block = condBlock
+	cur := g.block.NewLoad(types.I64, idxSlot)
+	cmp := g.block.NewICmp(enum.IPredSLT, cur, constant.NewInt(types.I64, to))
+	g.block.NewCondBr(cmp, bodyBlock, afterBlock)
+
+	g.block = bodyBlock
+	curD := g.block.NewSIToFP(cur, types.Double)
+	curBoxed := g.block.NewCall(g.runtimeBoxNumber, curD)
+	g.block.NewStore(curBoxed, valSlot)
+	if err := g.emitStmt(s.Body); err != nil {
+		return err
+	}
+	g.block.NewBr(incBlock)
+
+	g.block = incBlock
+	next := g.block.NewAdd(g.block.NewLoad(types.I64, idxSlot), constant.NewInt(types.I64, 1))
+	g.block.NewStore(next, idxSlot)
+	g.block.NewBr(condBlock)
+
+	g.block = afterBlock
 	g.loopStack = g.loopStack[:len(g.loopStack)-1]
 	return nil
 }

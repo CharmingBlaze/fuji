@@ -10,6 +10,7 @@ import (
 
 	"fuji/api"
 	"fuji/internal/codegen"
+	"fuji/internal/diagnostic"
 	"fuji/internal/fujihome"
 	"fuji/internal/nativebuild"
 	"fuji/internal/parser"
@@ -62,25 +63,25 @@ func main() {
 		cmd := args[0]
 		requireArg(args, cmd, "<file.fuji>")
 		if err := api.Run(args[1], ""); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 
 	case "check":
 		requireArg(args, "check", "<file.fuji>")
 		if err := checkFile(args[1]); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 		fmt.Println("OK")
 
 	case "fmt":
 		if err := runFmtCmd(args[1:]); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 
 	case "disasm":
 		requireArg(args, "disasm", "<file.fuji>")
 		if err := disasmFile(args[1]); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 
 	case "build":
@@ -90,7 +91,7 @@ func main() {
 		}
 		opts := nativebuild.BuildOptions{NoOpt: noOpt}
 		if err := buildFileOpts(src, output, opts); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 
 	case "bundle":
@@ -100,22 +101,22 @@ func main() {
 			outputDir = args[3]
 		}
 		if err := bundleFile(args[1], outputDir); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 
 	case "wrap":
 		if err := runWrapgen(args[1:]); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 
 	case "paths":
 		if err := printResolvedPaths(); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 
 	case "doctor":
 		if err := runDoctor(); err != nil {
-			fatal(err.Error())
+			fatalErr(err)
 		}
 
 	case "version", "--version", "-v":
@@ -507,4 +508,8 @@ func toolResolveStatus(tool string) string {
 func fatal(msg string) {
 	fmt.Fprintf(os.Stderr, "\nerror: %s\n\nRun 'fuji help' for usage.\n", msg)
 	os.Exit(1)
+}
+
+func fatalErr(err error) {
+	fatal(diagnostic.FormatError(err))
 }

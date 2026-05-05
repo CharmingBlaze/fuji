@@ -1,6 +1,8 @@
 #include "object.h"
 #include "gc.h"
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 ObjString* allocate_string(int length) {
@@ -16,6 +18,10 @@ ObjString* allocate_string(int length) {
 }
 
 ObjArray* allocate_array(int capacity) {
+    if (capacity < 0 || (size_t)capacity > (SIZE_MAX / sizeof(Value))) {
+        fprintf(stderr, "fuji: array capacity overflow\n");
+        exit(1);
+    }
     ObjArray* array = (ObjArray*)gc_alloc(sizeof(ObjArray));
     array->obj.type = OBJ_ARRAY;
     array->obj.is_marked = false;
@@ -29,6 +35,10 @@ ObjArray* allocate_array(int capacity) {
 }
 
 ObjTable* allocate_table(int capacity) {
+    if (capacity < 0 || (size_t)capacity > (SIZE_MAX / sizeof(Value))) {
+        fprintf(stderr, "fuji: table capacity overflow\n");
+        exit(1);
+    }
     ObjTable* table = (ObjTable*)gc_alloc(sizeof(ObjTable));
     table->obj.type = OBJ_TABLE;
     table->obj.is_marked = false;

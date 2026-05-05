@@ -56,12 +56,13 @@ func (g *Generator) emitFuncDecl(d *parser.FuncDecl) error {
 
 	g.locals = make(map[string]value.Value)
 	g.localIsCell = make(map[string]bool)
-
-	for _, name := range g.ctx.FreeVarsDecl[d] {
-		if slot, ok := prevLocals[name]; ok {
-			g.locals[name] = slot
-			if prevLocalIsCell != nil {
-				g.localIsCell[name] = prevLocalIsCell[name]
+	if prevFn != nil && prevFn != g.funcs["user_main"] {
+		for _, name := range g.ctx.FreeVarsDecl[d] {
+			if slot, ok := prevLocals[name]; ok {
+				g.locals[name] = slot
+				if prevLocalIsCell != nil {
+					g.localIsCell[name] = prevLocalIsCell[name]
+				}
 			}
 		}
 	}

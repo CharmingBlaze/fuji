@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"fuji/internal/diagnostic"
 	"fuji/internal/parser"
 	"fuji/internal/sema"
 
@@ -18,6 +19,33 @@ import (
 // capture analysis and local variable mapping.
 func PrepareNativeBundle(bundle *parser.ProgramBundle) (*sema.NativeEmitContext, error) {
 	return sema.PrepareNativeBundle(bundle)
+}
+
+func (g *Generator) undefinedVarError(name string, line int, col int) error {
+	candidates := make([]string, 0, len(g.locals)+len(g.moduleGlobals)+len(g.globals)+len(g.funcs))
+	for k := range g.locals {
+		candidates = append(candidates, k)
+	}
+	for k := range g.moduleGlobals {
+		candidates = append(candidates, k)
+	}
+	for k := range g.globals {
+		candidates = append(candidates, k)
+	}
+	for k := range g.funcs {
+		candidates = append(candidates, k)
+	}
+	hint := ""
+	if s, ok := diagnostic.BestSuggestion(name, candidates, 2); ok {
+		hint = fmt.Sprintf("did you mean '%s'?", s)
+	}
+	return &diagnostic.DiagnosticError{
+		File:    g.sourcePath,
+		Line:    line,
+		Col:     col,
+		Message: fmt.Sprintf("undefined variable '%s'", name),
+		Hint:    hint,
+	}
 }
 
 // EmitLLVMIR generates LLVM IR for the bundle carried by ctx.
@@ -35,7 +63,10 @@ type Generator struct {
 	globals                 map[string]*ir.Global  // Global variables
 	currentFn               *ir.Func
 	runtimeInit             *ir.Func
+	runtimeInitEx           *ir.Func
 	runtimeShutdown         *ir.Func
+	runtimeRegisterGlobal   *ir.Func
+	runtimeSetStackBase     *ir.Func
 	runtimeDeltaTime        *ir.Func
 	runtimeProgramTime      *ir.Func
 	runtimeTimestamp        *ir.Func
@@ -77,6 +108,13 @@ type Generator struct {
 	runtimeSmoothstep       *ir.Func
 	runtimeDistanceSq       *ir.Func
 	runtimeNormalize        *ir.Func
+	runtimeHypot            *ir.Func
+	runtimeFmod             *ir.Func
+	runtimeDegrees          *ir.Func
+	runtimeRadians          *ir.Func
+	runtimeWrap             *ir.Func
+	runtimeApproach         *ir.Func
+	runtimeSmoothdamp       *ir.Func
 	runtimeIsNumber         *ir.Func
 	runtimeIsString         *ir.Func
 	runtimeIsBool           *ir.Func
@@ -163,6 +201,8 @@ type Generator struct {
 	runtimeMalloc       *ir.Func
 	sourcePath          string
 	localIsCell         map[string]bool
+	moduleGlobals       map[string]value.Value
+	moduleGlobalIsCell  map[string]bool
 	loopStack           []loopContext
 	tempN               int
 
@@ -192,9 +232,14 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		ctx:                     ctx,
 		funcs:                   make(map[string]*ir.Func),
 		locals:                  make(map[string]value.Value),
+		moduleGlobals:           make(map[string]value.Value),
+		moduleGlobalIsCell:      make(map[string]bool),
 		globals:                 make(map[string]*ir.Global),
 		runtimeInit:             runtimeFuncs["FUJI_runtime_init"],
+		runtimeInitEx:           runtimeFuncs["FUJI_runtime_init_ex"],
 		runtimeShutdown:         runtimeFuncs["FUJI_runtime_shutdown"],
+		runtimeRegisterGlobal:   runtimeFuncs["FUJI_register_global_slot"],
+		runtimeSetStackBase:     runtimeFuncs["FUJI_runtime_set_stack_base"],
 		runtimeDeltaTime:        runtimeFuncs["FUJI_delta_time"],
 		runtimeProgramTime:      runtimeFuncs["FUJI_program_time"],
 		runtimeTimestamp:        runtimeFuncs["FUJI_timestamp"],
@@ -236,6 +281,13 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimeSmoothstep:       runtimeFuncs["FUJI_smoothstep"],
 		runtimeDistanceSq:       runtimeFuncs["FUJI_distanceSq"],
 		runtimeNormalize:        runtimeFuncs["FUJI_normalize"],
+		runtimeHypot:            runtimeFuncs["FUJI_hypot"],
+		runtimeFmod:             runtimeFuncs["FUJI_fmod"],
+		runtimeDegrees:          runtimeFuncs["FUJI_degrees"],
+		runtimeRadians:          runtimeFuncs["FUJI_radians"],
+		runtimeWrap:             runtimeFuncs["FUJI_wrap"],
+		runtimeApproach:         runtimeFuncs["FUJI_approach"],
+		runtimeSmoothdamp:       runtimeFuncs["FUJI_smoothdamp"],
 		runtimeIsNumber:         runtimeFuncs["FUJI_isNumber"],
 		runtimeIsString:         runtimeFuncs["FUJI_isString"],
 		runtimeIsBool:           runtimeFuncs["FUJI_isBool"],
@@ -396,13 +448,16 @@ func (g *Generator) Generate(bundle *parser.ProgramBundle) (*ir.Module, error) {
 	g.currentFn = mainFn
 
 	// Call runtime init
-	g.block.NewCall(g.runtimeInit)
+	stackBaseSlot := g.block.NewAlloca(types.I8)
+	stackBase := g.block.NewBitCast(stackBaseSlot, types.NewPointer(types.I8))
+	g.block.NewCall(g.runtimeInitEx, stackBase)
 
 	// Call the user's main function if it exists
 	if um := g.funcs["user_main"]; um != nil {
 		g.block.NewCall(um, constant.NewInt(types.I64, 0))
 	}
 
+	g.block.NewCall(g.runtimeShutdown)
 	g.block.NewRet(constant.NewInt(types.I32, 0))
 	g.currentFn = nil
 
@@ -435,6 +490,24 @@ func (g *Generator) emitLetDecl(d *parser.LetDecl) error {
 
 	if d.Native != nil {
 		return g.emitNativeExternLet(d)
+	}
+
+	if g.currentFn == g.funcs["user_main"] {
+		global := g.mod.NewGlobalDef("fuji_global_"+name, constant.NewInt(types.I64, llvmNilTagged))
+		g.globals[name] = global
+		g.locals[name] = global
+		g.localIsCell[name] = false
+		if g.runtimeRegisterGlobal != nil {
+			g.block.NewCall(g.runtimeRegisterGlobal, global)
+		}
+		if d.Init != nil {
+			initVal, err := g.emitExpr(d.Init)
+			if err != nil {
+				return err
+			}
+			g.block.NewStore(g.emitAsFujiI64(initVal), global)
+		}
+		return nil
 	}
 
 	// If we're not in a function (g.block is nil), create a global variable
@@ -479,6 +552,19 @@ func (g *Generator) emitLetDecl(d *parser.LetDecl) error {
 	}
 	g.locals[name] = storageSlot
 	g.shadowStoreLet(d, storageSlot)
+	if g.currentFn == g.funcs["user_main"] {
+		g.moduleGlobals[name] = storageSlot
+		g.moduleGlobalIsCell[name] = !useStack
+	}
+	if g.currentFn == g.funcs["user_main"] && g.runtimeRegisterGlobal != nil {
+		g.block.NewCall(g.runtimeRegisterGlobal, storageSlot)
+	}
+
+	if useStack {
+		g.block.NewStore(constant.NewInt(types.I64, llvmNilTagged), storageSlot)
+	} else {
+		g.block.NewCall(g.runtimeCellWrite, storageSlot, constant.NewInt(types.I64, llvmNilTagged))
+	}
 
 	if d.Init != nil {
 		initVal, err := g.emitExpr(d.Init)
@@ -790,6 +876,9 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	fnSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(fnSlot)
+	g.block.NewStore(g.emitAsFujiI64(fnVal), fnSlot)
 
 	// Set this for this call (JavaScript-like behavior)
 	var thisVal value.Value
@@ -799,6 +888,9 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 		// In standalone function calls, this is undefined/null
 		thisVal = constant.NewInt(types.I64, 0)
 	}
+	thisSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(thisSlot)
+	g.block.NewStore(g.emitAsFujiI64(thisVal), thisSlot)
 
 	var args []value.Value
 	for _, arg := range e.Arguments {
@@ -808,6 +900,8 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 		}
 		args = append(args, val)
 	}
+	fnLive := g.block.NewLoad(types.I64, fnSlot)
+	thisLive := g.block.NewLoad(types.I64, thisSlot)
 
 	if fn, ok := fnVal.(*ir.Func); ok && fn == g.runtimePrint {
 		zero := constant.NewInt(types.I64, 0)
@@ -857,7 +951,7 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 	}
 
 	if fn, ok := fnVal.(*ir.Func); ok && len(fn.Params) == len(args)+1 {
-		finalArgs := []value.Value{thisVal}
+		finalArgs := []value.Value{thisLive}
 		finalArgs = append(finalArgs, args...)
 		call := g.block.NewCall(fn, finalArgs...)
 		if types.Equal(fn.Sig.RetType, types.Void) {
@@ -869,7 +963,7 @@ func (g *Generator) emitCall(e *parser.CallExpr) (value.Value, error) {
 
 	// Function value as i64: tagged raw pointer (this + args) or heap closure (this + cells + args).
 	if fnVal.Type().Equal(types.I64) {
-		return g.emitIndirectI64Callee(fnVal, thisVal, args)
+		return g.emitIndirectI64Callee(fnLive, thisLive, args)
 	}
 
 	call := g.block.NewCall(fnVal, args...)

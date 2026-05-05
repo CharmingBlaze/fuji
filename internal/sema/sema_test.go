@@ -1,6 +1,8 @@
 package sema
 
 import (
+	"errors"
+	"fuji/internal/diagnostic"
 	"fuji/internal/lexer"
 	"fuji/internal/parser"
 	"testing"
@@ -113,5 +115,20 @@ func TestSemaAssignmentTarget(t *testing.T) {
 	err := analyzer.Analyze(program)
 	if err != nil {
 		t.Fatalf("Sema failed: %v", err)
+	}
+}
+
+func TestPrepareNativeBundleRunsSemaEarly(t *testing.T) {
+	src := `let x = 1;
+y + 1;
+`
+	program := parseForTest(t, src)
+	_, err := PrepareNativeBundle(&parser.ProgramBundle{Entry: program})
+	if err == nil {
+		t.Fatal("expected undefined y")
+	}
+	var de *diagnostic.DiagnosticError
+	if !errors.As(err, &de) || de.File != "<entry>" {
+		t.Fatalf("want DiagnosticError with file, got %v", err)
 	}
 }

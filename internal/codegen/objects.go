@@ -21,15 +21,23 @@ func (g *Generator) emitObject(e *parser.ObjectExpr) (value.Value, error) {
 	}
 	count := constant.NewInt(types.I32, int64(nKeys))
 	obj := g.block.NewCall(g.runtimeAllocObj, count)
+	objSlot := g.entryAlloca(types.I64)
+	g.block.NewStore(obj, objSlot)
+	g.shadowStoreTemp(objSlot)
 
 	// Set properties
 	for i, key := range e.Keys {
 		keyVal := g.emitStringLiteral(key.Lexeme)
+		keySlot := g.entryAlloca(types.I64)
+		g.shadowStoreTemp(keySlot)
+		g.block.NewStore(g.emitAsFujiI64(keyVal), keySlot)
 		val, err := g.emitExpr(e.Values[i])
 		if err != nil {
 			return nil, err
 		}
-		g.block.NewCall(g.runtimeObjSet, obj, keyVal, g.emitAsFujiI64(val))
+		objLive := g.block.NewLoad(types.I64, objSlot)
+		keyLive := g.block.NewLoad(types.I64, keySlot)
+		g.block.NewCall(g.runtimeObjSet, objLive, keyLive, g.emitAsFujiI64(val))
 	}
 
 	// Set computed keys (if any)
@@ -38,15 +46,20 @@ func (g *Generator) emitObject(e *parser.ObjectExpr) (value.Value, error) {
 		if err != nil {
 			return nil, err
 		}
+		keySlot := g.entryAlloca(types.I64)
+		g.shadowStoreTemp(keySlot)
+		g.block.NewStore(g.emitAsFujiI64(keyVal), keySlot)
 		valIdx := len(e.Keys) + i
 		val, err := g.emitExpr(e.Values[valIdx])
 		if err != nil {
 			return nil, err
 		}
-		g.block.NewCall(g.runtimeObjSet, obj, keyVal, g.emitAsFujiI64(val))
+		objLive := g.block.NewLoad(types.I64, objSlot)
+		keyLive := g.block.NewLoad(types.I64, keySlot)
+		g.block.NewCall(g.runtimeObjSet, objLive, keyLive, g.emitAsFujiI64(val))
 	}
 
-	return obj, nil
+	return g.block.NewLoad(types.I64, objSlot), nil
 }
 
 // emitIndex emits LLVM IR for index expressions (property or array access).
@@ -55,24 +68,28 @@ func (g *Generator) emitIndex(e *parser.IndexExpr) (value.Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	objSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(objSlot)
+	g.block.NewStore(g.emitAsFujiI64(obj), objSlot)
 
 	if !e.Optional {
 		key, err := g.emitExpr(e.Index)
 		if err != nil {
 			return nil, err
 		}
-		return g.block.NewCall(g.runtimeArrayGet, g.emitAsFujiI64(obj), g.emitAsFujiI64(key)), nil
+		objLive := g.block.NewLoad(types.I64, objSlot)
+		return g.block.NewCall(g.runtimeArrayGet, objLive, g.emitAsFujiI64(key)), nil
 	}
 
 	nilTag := constant.NewInt(types.I64, llvmNilTagged)
-	objI := g.emitAsFujiI64(obj)
+	objI := g.block.NewLoad(types.I64, objSlot)
 	isNil := g.block.NewICmp(enum.IPredEQ, objI, nilTag)
 
 	g.tempN++
 	suf := fmt.Sprintf(".opt%d", g.tempN)
-	skip := g.currentFn.NewBlock("optnil"+suf)
-	cont := g.currentFn.NewBlock("optget"+suf)
-	merge := g.currentFn.NewBlock("optmg"+suf)
+	skip := g.currentFn.NewBlock("optnil" + suf)
+	cont := g.currentFn.NewBlock("optget" + suf)
+	merge := g.currentFn.NewBlock("optmg" + suf)
 	g.block.NewCondBr(isNil, skip, cont)
 
 	g.block = skip
@@ -116,7 +133,20 @@ func (g *Generator) emitAssign(e *parser.AssignExpr) (value.Value, error) {
 			}
 			return val, nil
 		}
-		return nil, fmt.Errorf("undefined variable: %s", name)
+		if slot, ok := g.moduleGlobals[name]; ok {
+			boxed := g.emitAsFujiI64(val)
+			if g.moduleGlobalIsCell != nil && g.moduleGlobalIsCell[name] {
+				g.block.NewCall(g.runtimeCellWrite, slot, boxed)
+			} else {
+				g.block.NewStore(boxed, slot)
+			}
+			return val, nil
+		}
+		if global, ok := g.globals[name]; ok {
+			g.block.NewStore(g.emitAsFujiI64(val), global)
+			return val, nil
+		}
+		return nil, g.undefinedVarError(name, left.Name.Line, left.Name.Col)
 	case *parser.IndexExpr:
 		// Property or array assignment
 		obj, err := g.emitExpr(left.Object)
@@ -185,7 +215,20 @@ func (g *Generator) emitCompoundAssign(e *parser.AssignExpr, op string) (value.V
 			}
 			return result, nil
 		}
-		return nil, fmt.Errorf("undefined variable: %s", name)
+		if slot, ok := g.moduleGlobals[name]; ok {
+			boxed := g.emitAsFujiI64(result)
+			if g.moduleGlobalIsCell != nil && g.moduleGlobalIsCell[name] {
+				g.block.NewCall(g.runtimeCellWrite, slot, boxed)
+			} else {
+				g.block.NewStore(boxed, slot)
+			}
+			return result, nil
+		}
+		if global, ok := g.globals[name]; ok {
+			g.block.NewStore(g.emitAsFujiI64(result), global)
+			return result, nil
+		}
+		return nil, g.undefinedVarError(name, left.Name.Line, left.Name.Col)
 	case *parser.IndexExpr:
 		obj, err := g.emitExpr(left.Object)
 		if err != nil {

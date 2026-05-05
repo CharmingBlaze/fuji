@@ -404,6 +404,7 @@ type FuncExpr struct {
 }
 
 func (e *FuncExpr) exprNode()      {}
+func (e *FuncExpr) declNode()      {} // Params are bound as Decl in semantic analysis
 func (e *FuncExpr) String() string { return "func-expr" }
 
 type IndexExpr struct {

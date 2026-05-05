@@ -18,7 +18,13 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 	functions := make(map[string]*ir.Func)
 
 	functions["FUJI_runtime_init"] = mod.NewFunc("fuji_runtime_init", types.Void)
+	functions["FUJI_runtime_init_ex"] = mod.NewFunc("fuji_runtime_init_ex", types.Void,
+		ir.NewParam("stack_base", types.NewPointer(types.I8)))
 	functions["FUJI_runtime_shutdown"] = mod.NewFunc("fuji_runtime_shutdown", types.Void)
+	functions["FUJI_register_global_slot"] = mod.NewFunc("fuji_register_global_slot", types.Void,
+		ir.NewParam("slot", types.NewPointer(types.I64)))
+	functions["FUJI_runtime_set_stack_base"] = mod.NewFunc("fuji_runtime_set_stack_base", types.Void,
+		ir.NewParam("base", types.NewPointer(types.I8)))
 
 	// print: fuji_print_val for one value; fuji_print_argv for multiple (space-separated, one newline).
 	functions["FUJI_print"] = mod.NewFunc("fuji_print_val", types.I64,
@@ -80,6 +86,13 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 	functions["FUJI_smoothstep"] = argvI64(mod, "fuji_smoothstep")
 	functions["FUJI_distanceSq"] = argvI64(mod, "fuji_distanceSq")
 	functions["FUJI_normalize"] = argvI64(mod, "fuji_normalize")
+	functions["FUJI_hypot"] = argvI64(mod, "fuji_hypot")
+	functions["FUJI_fmod"] = argvI64(mod, "fuji_fmod")
+	functions["FUJI_degrees"] = argvI64(mod, "fuji_degrees")
+	functions["FUJI_radians"] = argvI64(mod, "fuji_radians")
+	functions["FUJI_wrap"] = argvI64(mod, "fuji_wrap")
+	functions["FUJI_approach"] = argvI64(mod, "fuji_approach")
+	functions["FUJI_smoothdamp"] = argvI64(mod, "fuji_smoothdamp")
 
 	// Type checks (argv in C)
 	functions["FUJI_isNumber"] = argvI64(mod, "fuji_isNumber")

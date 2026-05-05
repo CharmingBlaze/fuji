@@ -1,0 +1,17 @@
+let keep = [];
+let i = 0;
+
+while (i < 1200) {
+    let node = {
+        id: i,
+        data: [i, i + 1, i + 2, {nested: [i * 2, i * 3, i * 4]}],
+        flag: i % 2 == 0
+    };
+    keep = [keep, node];
+    if (len(keep) > 32) {
+        keep = [];
+    }
+    i = i + 1;
+}
+
+print("soak ok");

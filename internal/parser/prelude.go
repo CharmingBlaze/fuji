@@ -30,7 +30,8 @@ floor: floor, ceil: ceil, round: round, trunc: trunc,
 sin: sin, cos: cos, tan: tan, asin: asin, acos: acos, atan: atan, atan2: atan2,
 pow: pow, exp: exp, log: log, log10: log10,
 sqrt: sqrt, abs: abs, min: min, max: max, sign: sign,
-random: random, pi: pi, e: e, lerp: lerp, clamp: clamp
+random: random, pi: pi, e: e, lerp: lerp, clamp: clamp,
+hypot: hypot, fmod: fmod, degrees: degrees, radians: radians, wrap: wrap, approach: approach, smoothdamp: smoothdamp
 };`
 	l := lexer.NewLexer(src)
 	toks, err := l.Tokenize()

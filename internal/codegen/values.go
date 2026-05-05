@@ -46,6 +46,12 @@ func (g *Generator) emitIdentifier(e *parser.IdentifierExpr) (value.Value, error
 		}
 		return g.block.NewLoad(types.I64, slot), nil
 	}
+	if slot, ok := g.moduleGlobals[name]; ok {
+		if g.moduleGlobalIsCell != nil && g.moduleGlobalIsCell[name] {
+			return g.block.NewCall(g.runtimeCellRead, slot), nil
+		}
+		return g.block.NewLoad(types.I64, slot), nil
+	}
 
 	// Check if it's a global variable
 	if global, ok := g.globals[name]; ok {
@@ -57,7 +63,7 @@ func (g *Generator) emitIdentifier(e *parser.IdentifierExpr) (value.Value, error
 		return fn, nil
 	}
 
-	return nil, fmt.Errorf("undefined variable: %s", name)
+	return nil, g.undefinedVarError(name, e.Name.Line, e.Name.Col)
 }
 
 // emitStringLiteral creates a string object using the runtime.
@@ -287,6 +293,9 @@ func (g *Generator) emitArray(e *parser.ArrayExpr) (value.Value, error) {
 	}
 
 	out := value.Value(nil)
+	outSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(outSlot)
+	g.block.NewStore(constant.NewInt(types.I64, llvmNilTagged), outSlot)
 	for _, elem := range e.Elements {
 		if sp, ok := elem.(*parser.SpreadExpr); ok {
 			part, err := g.emitExpr(sp.Expr)
@@ -295,8 +304,11 @@ func (g *Generator) emitArray(e *parser.ArrayExpr) (value.Value, error) {
 			}
 			if out == nil {
 				out = part
+				g.block.NewStore(g.emitAsFujiI64(out), outSlot)
 			} else {
-				out = g.emitArgvRuntime(g.runtimeArrayConcat, []value.Value{out, part})
+				prevOut := g.block.NewLoad(types.I64, outSlot)
+				out = g.emitArgvRuntime(g.runtimeArrayConcat, []value.Value{prevOut, part})
+				g.block.NewStore(g.emitAsFujiI64(out), outSlot)
 			}
 			continue
 		}
@@ -308,8 +320,11 @@ func (g *Generator) emitArray(e *parser.ArrayExpr) (value.Value, error) {
 		g.block.NewCall(g.runtimeArraySet, singleton, constant.NewInt(types.I64, 0), g.emitAsFujiI64(elemVal))
 		if out == nil {
 			out = singleton
+			g.block.NewStore(g.emitAsFujiI64(out), outSlot)
 		} else {
-			out = g.emitArgvRuntime(g.runtimeArrayConcat, []value.Value{out, singleton})
+			prevOut := g.block.NewLoad(types.I64, outSlot)
+			out = g.emitArgvRuntime(g.runtimeArrayConcat, []value.Value{prevOut, singleton})
+			g.block.NewStore(g.emitAsFujiI64(out), outSlot)
 		}
 	}
 	if out == nil {
@@ -389,7 +404,10 @@ func (g *Generator) emitTemplate(e *parser.TemplateExpr) (value.Value, error) {
 	}
 
 	fmtVal := g.emitStringLiteral(fmtBuilder.String())
-	argv := []value.Value{fmtVal}
+	fmtSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(fmtSlot)
+	g.block.NewStore(g.emitAsFujiI64(fmtVal), fmtSlot)
+	argv := []value.Value{g.block.NewLoad(types.I64, fmtSlot)}
 	for _, ex := range holeExprs {
 		v, err := g.emitExpr(ex)
 		if err != nil {

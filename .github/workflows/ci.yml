@@ -49,6 +49,12 @@ jobs:
           test -x /tmp/for_of_pairs
           /tmp/for_of_pairs | head -n 10
 
+      - name: GC soak (serialized, time-bounded)
+        run: |
+          timeout 90s /tmp/fuji run tests/gc_pressure_expr.fuji
+          timeout 90s /tmp/fuji run tests/globals_perf.fuji
+          timeout 90s /tmp/fuji run tests/gc_soak.fuji
+
       - name: Wrapgen Raylib + link smoke
         env:
           FUJI_BIN: /tmp/fuji

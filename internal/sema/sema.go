@@ -3,6 +3,7 @@ package sema
 import (
 	"fmt"
 
+	"fuji/internal/diagnostic"
 	"fuji/internal/parser"
 )
 
@@ -43,12 +44,29 @@ func (s *Scope) Resolve(name string) (parser.Decl, bool) {
 	return nil, false
 }
 
+func (s *Scope) VisibleNames() []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for cur := s; cur != nil; cur = cur.parent {
+		for name := range cur.symbols {
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 // NewAnalyzer creates a new semantic analyzer.
 func NewAnalyzer() *Analyzer {
-	globalScope := NewScope(nil)
+	builtinRoot := NewScope(nil)
+	seedGlobalBuiltins(builtinRoot)
+	globalScope := NewScope(builtinRoot)
 	return &Analyzer{
 		currentScope: globalScope,
-		scopes:       []*Scope{globalScope},
+		scopes:       []*Scope{builtinRoot, globalScope},
 		errors:       []error{},
 	}
 }
@@ -90,6 +108,8 @@ func (a *Analyzer) analyzeDecl(decl parser.Decl) error {
 		return a.analyzeLetDecl(d)
 	case *parser.FuncDecl:
 		return a.analyzeFuncDecl(d)
+	case *parser.FuncExpr:
+		return a.analyzeFuncExpr(d)
 	case *parser.IncludeDecl:
 		return nil
 	case parser.Stmt:
@@ -101,7 +121,11 @@ func (a *Analyzer) analyzeDecl(decl parser.Decl) error {
 func (a *Analyzer) analyzeLetDecl(d *parser.LetDecl) error {
 	name := d.Name.Lexeme
 	if _, ok := a.currentScope.symbols[name]; ok {
-		return fmt.Errorf("duplicate binding %q in the same scope", name)
+		return &diagnostic.DiagnosticError{
+			Line:    d.Name.Line,
+			Col:     d.Name.Col,
+			Message: fmt.Sprintf("duplicate binding '%s' in the same scope", name),
+		}
 	}
 	a.currentScope.Define(name, d)
 	if d.Init != nil {
@@ -113,7 +137,11 @@ func (a *Analyzer) analyzeLetDecl(d *parser.LetDecl) error {
 func (a *Analyzer) analyzeFuncDecl(d *parser.FuncDecl) error {
 	name := d.Name.Lexeme
 	if _, ok := a.currentScope.symbols[name]; ok {
-		return fmt.Errorf("duplicate function %q in the same scope", name)
+		return &diagnostic.DiagnosticError{
+			Line:    d.Name.Line,
+			Col:     d.Name.Col,
+			Message: fmt.Sprintf("duplicate function '%s' in the same scope", name),
+		}
 	}
 	a.currentScope.Define(name, d)
 
@@ -135,6 +163,20 @@ func (a *Analyzer) analyzeFuncDecl(d *parser.FuncDecl) error {
 
 	a.exitScope()
 	return nil
+}
+
+func (a *Analyzer) analyzeFuncExpr(e *parser.FuncExpr) error {
+	a.enterScope()
+	defer a.exitScope()
+	for _, param := range e.Params {
+		a.currentScope.Define(param.Name, e)
+		if param.Default != nil {
+			if err := a.analyzeExpr(param.Default); err != nil {
+				return err
+			}
+		}
+	}
+	return a.analyzeStmt(e.Body)
 }
 
 func (a *Analyzer) analyzeStmt(stmt parser.Stmt) error {
@@ -164,6 +206,58 @@ func (a *Analyzer) analyzeStmt(stmt parser.Stmt) error {
 			return err
 		}
 		return a.analyzeStmt(s.Body)
+	case *parser.DoWhileStmt:
+		if err := a.analyzeStmt(s.Body); err != nil {
+			return err
+		}
+		return a.analyzeExpr(s.Condition)
+	case *parser.ForStmt:
+		for _, ini := range s.Inits {
+			if err := a.analyzeDecl(ini); err != nil {
+				return err
+			}
+		}
+		if s.Condition != nil {
+			if err := a.analyzeExpr(s.Condition); err != nil {
+				return err
+			}
+		}
+		for _, inc := range s.Increments {
+			if err := a.analyzeExpr(inc); err != nil {
+				return err
+			}
+		}
+		return a.analyzeStmt(s.Body)
+	case *parser.ForInStmt:
+		if err := a.analyzeExpr(s.Iterable); err != nil {
+			return err
+		}
+		return a.analyzeStmt(s.Body)
+	case *parser.ForOfStmt:
+		if err := a.analyzeExpr(s.Iterable); err != nil {
+			return err
+		}
+		return a.analyzeStmt(s.Body)
+	case *parser.SwitchStmt:
+		if err := a.analyzeExpr(s.Subject); err != nil {
+			return err
+		}
+		for _, c := range s.Cases {
+			if err := a.analyzeExpr(c.Value); err != nil {
+				return err
+			}
+			for _, cd := range c.Body {
+				if err := a.analyzeDecl(cd); err != nil {
+					return err
+				}
+			}
+		}
+		for _, cd := range s.Default {
+			if err := a.analyzeDecl(cd); err != nil {
+				return err
+			}
+		}
+		return nil
 	case *parser.DeleteStmt:
 		return a.analyzeExpr(s.Target)
 	case *parser.BreakStmt, *parser.ContinueStmt:
@@ -190,7 +284,16 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) error {
 	case *parser.IdentifierExpr:
 		name := e.Name.Lexeme
 		if _, ok := a.currentScope.Resolve(name); !ok {
-			return fmt.Errorf("undefined variable '%s'", name)
+			hint := ""
+			if s, ok := diagnostic.BestSuggestion(name, a.currentScope.VisibleNames(), 2); ok {
+				hint = fmt.Sprintf("did you mean '%s'?", s)
+			}
+			return &diagnostic.DiagnosticError{
+				Line:    e.Name.Line,
+				Col:     e.Name.Col,
+				Message: fmt.Sprintf("undefined variable '%s'", name),
+				Hint:    hint,
+			}
 		}
 		return nil
 	case *parser.LiteralExpr:
@@ -224,11 +327,31 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) error {
 		if ident, ok := e.Left.(*parser.IdentifierExpr); ok {
 			name := ident.Name.Lexeme
 			if _, ok := a.currentScope.Resolve(name); !ok {
-				return fmt.Errorf("undefined variable '%s'", name)
+				hint := ""
+				if s, ok := diagnostic.BestSuggestion(name, a.currentScope.VisibleNames(), 2); ok {
+					hint = fmt.Sprintf("did you mean '%s'?", s)
+				}
+				return &diagnostic.DiagnosticError{
+					Line:    ident.Name.Line,
+					Col:     ident.Name.Col,
+					Message: fmt.Sprintf("undefined variable '%s'", name),
+					Hint:    hint,
+				}
 			}
 			return nil
 		}
-		return fmt.Errorf("invalid assignment target")
+		if ix, ok := e.Left.(*parser.IndexExpr); ok {
+			if err := a.analyzeExpr(ix.Object); err != nil {
+				return err
+			}
+			return a.analyzeExpr(ix.Index)
+		}
+		return &diagnostic.DiagnosticError{
+			Line:    e.Token.Line,
+			Col:     e.Token.Col,
+			Message: "invalid assignment target",
+			Hint:    "left side of '=' must be a variable or index expression",
+		}
 	case *parser.GroupingExpr:
 		return a.analyzeExpr(e.Expr)
 	case *parser.ImportExpr:
@@ -247,6 +370,94 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) error {
 			}
 		}
 		return nil
+	case *parser.ThisExpr:
+		return nil
+	case *parser.ArrayExpr:
+		for _, el := range e.Elements {
+			if err := a.analyzeExpr(el); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *parser.ObjectExpr:
+		for _, v := range e.Values {
+			if err := a.analyzeExpr(v); err != nil {
+				return err
+			}
+		}
+		for _, ck := range e.ComputedKeys {
+			if ck == nil {
+				continue
+			}
+			if err := a.analyzeExpr(ck); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *parser.FuncExpr:
+		return a.analyzeFuncExpr(e)
+	case *parser.RangeExpr:
+		if err := a.analyzeExpr(e.From); err != nil {
+			return err
+		}
+		return a.analyzeExpr(e.To)
+	case *parser.UpdateExpr:
+		return a.analyzeExpr(e.Operand)
+	case *parser.TupleExpr:
+		for _, el := range e.Elements {
+			if err := a.analyzeExpr(el); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *parser.IfExpr:
+		if err := a.analyzeExpr(e.Condition); err != nil {
+			return err
+		}
+		if err := a.analyzeExpr(e.Then); err != nil {
+			return err
+		}
+		if e.Else != nil {
+			return a.analyzeExpr(e.Else)
+		}
+		return nil
+	case *parser.SwitchExpr:
+		if err := a.analyzeExpr(e.Subject); err != nil {
+			return err
+		}
+		for _, c := range e.Cases {
+			if err := a.analyzeExpr(c.Value); err != nil {
+				return err
+			}
+			if err := a.analyzeExpr(c.Body); err != nil {
+				return err
+			}
+		}
+		if e.Default != nil {
+			return a.analyzeExpr(e.Default)
+		}
+		return nil
+	case *parser.SliceExpr:
+		if err := a.analyzeExpr(e.Object); err != nil {
+			return err
+		}
+		if e.Start != nil {
+			if err := a.analyzeExpr(e.Start); err != nil {
+				return err
+			}
+		}
+		if e.End != nil {
+			return a.analyzeExpr(e.End)
+		}
+		return nil
+	case *parser.TernaryExpr:
+		if err := a.analyzeExpr(e.Condition); err != nil {
+			return err
+		}
+		if err := a.analyzeExpr(e.Then); err != nil {
+			return err
+		}
+		return a.analyzeExpr(e.Else)
 	default:
 		return fmt.Errorf("unsupported expression type: %T", expr)
 	}

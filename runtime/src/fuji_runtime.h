@@ -8,14 +8,24 @@
 #include <stdbool.h>
 
 extern void* gc_stack_base;
-extern Value fuji_globals[];
+extern Value* fuji_globals;
 extern int fuji_globals_count;
+extern int fuji_globals_capacity;
+extern Value** fuji_global_slots;
+extern int fuji_global_slots_count;
+extern int fuji_global_slots_capacity;
 
 // Runtime initialization
+void fuji_runtime_set_stack_base(void* base);
+void fuji_runtime_init_ex(void* stack_base);
 void fuji_runtime_init(void);
 
 // Runtime cleanup
 void fuji_runtime_shutdown(void);
+void fuji_globals_init(void);
+void fuji_globals_free(void);
+void fuji_register_global(Value v);
+void fuji_register_global_slot(Value* slot);
 
 void fuji_gc_set_threshold(size_t bytes);
 void fuji_gc_disable(void);
@@ -45,6 +55,7 @@ void fuji_panic(int argc, Value* argv);
 Value fuji_assert(int argc, Value* argv);
 Value fuji_err_str(const char* msg);
 void fuji_panic_str(const char* msg);
+void fuji_mark_interned_strings(void);
 
 /** Optional call stack for panic stack traces (native codegen). */
 void fuji_push_call(const char* fn_name, const char* file_name, int line);
@@ -72,6 +83,7 @@ Value fuji_box_number(double d);
 /** Unified index read / write (arrays, strings, tables). */
 Value fuji_get(Value obj, Value key);
 Value fuji_set(Value obj, Value key, Value value);
+int fuji_get_shadow_depth(void);
 
 // Bool value helper (not in value.h, needed for wrapper)
 static inline Value BOOL_VAL(bool b) {

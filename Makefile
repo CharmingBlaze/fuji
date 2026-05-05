@@ -8,7 +8,7 @@ SHELL := sh.exe
 #   make runtime-lib  — only runtime/libfuji_runtime.a
 #   make raylib-lib   — CMake Raylib into third_party/raylib_static/stage/ (needs raylib/ + cmake)
 
-.PHONY: all build fuji fujiwrap wrapgen runtime-lib raylib-lib raylib-clean test fmt clean
+.PHONY: all build fuji fujiwrap wrapgen runtime-lib raylib-lib raylib-clean test soak-test fmt clean
 
 all: build test
 
@@ -38,6 +38,11 @@ raylib-clean:
 
 test: runtime-lib
 	go test ./... -count=1
+
+soak-test: fuji runtime-lib
+	./bin/fuji run tests/gc_pressure_expr.fuji
+	./bin/fuji run tests/globals_perf.fuji
+	./bin/fuji run tests/gc_soak.fuji
 
 fmt:
 	gofmt -w .

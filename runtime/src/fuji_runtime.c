@@ -40,17 +40,68 @@ void* gc_stack_base = NULL;
 
 Value fuji_bool(int argc, Value* args);
 
-FujiShadowFrame fuji_shadow_stack[FUJI_SHADOW_STACK_MAX];
+FujiShadowFrame* fuji_shadow_stack = NULL;
 int fuji_shadow_depth = 0;
+int fuji_shadow_capacity = 0;
+static int fuji_shadow_depth_high_water = 0;
+
+typedef struct {
+    ObjString** entries;
+    int count;
+    int capacity;
+} FujiStringInternTable;
+
+static FujiStringInternTable fuji_string_intern = { NULL, 0, 0 };
+
+static int fuji_gc_debug_enabled(void) {
+    const char* env = getenv("FUJI_GC_DEBUG");
+    return env != NULL && env[0] != '\0' && env[0] != '0';
+}
+
+static int fuji_stack_base_plausible(void* stack_base) {
+    if (stack_base == NULL) {
+        return 0;
+    }
+    uintptr_t a = (uintptr_t)stack_base;
+    uintptr_t b = (uintptr_t)&a;
+    uintptr_t dist = (a > b) ? (a - b) : (b - a);
+    return dist <= ((uintptr_t)1u << 30);
+}
+
+static void fuji_shadow_stack_init(void) {
+    if (fuji_shadow_stack != NULL) {
+        return;
+    }
+    fuji_shadow_capacity = FUJI_SHADOW_STACK_INITIAL_CAPACITY;
+    fuji_shadow_stack = (FujiShadowFrame*)malloc(sizeof(FujiShadowFrame) * (size_t)fuji_shadow_capacity);
+    if (fuji_shadow_stack == NULL) {
+        fuji_panic_str("out of memory allocating shadow stack");
+    }
+}
 
 void fuji_push_frame(Value** slot_ptrs, int count) {
-    if (fuji_shadow_depth >= FUJI_SHADOW_STACK_MAX) {
-        fprintf(stderr, "fuji: shadow stack overflow\n");
-        exit(1);
+    fuji_shadow_stack_init();
+    if (fuji_shadow_depth >= fuji_shadow_capacity) {
+        if (fuji_shadow_capacity >= FUJI_SHADOW_STACK_MAX_CAPACITY) {
+            fuji_panic_str("stack overflow");
+        }
+        int next_capacity = fuji_shadow_capacity * 2;
+        if (next_capacity > FUJI_SHADOW_STACK_MAX_CAPACITY) {
+            next_capacity = FUJI_SHADOW_STACK_MAX_CAPACITY;
+        }
+        FujiShadowFrame* next = (FujiShadowFrame*)realloc(fuji_shadow_stack, sizeof(FujiShadowFrame) * (size_t)next_capacity);
+        if (next == NULL) {
+            fuji_panic_str("out of memory growing shadow stack");
+        }
+        fuji_shadow_stack = next;
+        fuji_shadow_capacity = next_capacity;
     }
     fuji_shadow_stack[fuji_shadow_depth].slot_ptrs = slot_ptrs;
     fuji_shadow_stack[fuji_shadow_depth].count = count;
     fuji_shadow_depth++;
+    if (fuji_shadow_depth > fuji_shadow_depth_high_water) {
+        fuji_shadow_depth_high_water = fuji_shadow_depth;
+    }
 }
 
 void fuji_pop_frame(void) {
@@ -59,6 +110,10 @@ void fuji_pop_frame(void) {
         abort();
     }
     fuji_shadow_depth--;
+}
+
+int fuji_get_shadow_depth(void) {
+    return fuji_shadow_depth;
 }
 
 #define FUJI_CALL_STACK_MAX 256
@@ -71,6 +126,46 @@ typedef struct {
 
 static FujiCallFrame fuji_call_stack[FUJI_CALL_STACK_MAX];
 static int fuji_call_stack_depth = 0;
+
+static ObjString* fuji_intern_find(const char* chars, int length) {
+    if (chars == NULL || length < 0) {
+        return NULL;
+    }
+    for (int i = 0; i < fuji_string_intern.count; i++) {
+        ObjString* s = fuji_string_intern.entries[i];
+        if (s == NULL) {
+            continue;
+        }
+        if (s->length == length && memcmp(s->chars, chars, (size_t)length) == 0) {
+            return s;
+        }
+    }
+    return NULL;
+}
+
+static void fuji_intern_add(ObjString* str) {
+    if (str == NULL) {
+        return;
+    }
+    if (fuji_string_intern.count >= fuji_string_intern.capacity) {
+        int next_capacity = fuji_string_intern.capacity == 0 ? 256 : fuji_string_intern.capacity * 2;
+        ObjString** next = (ObjString**)realloc(fuji_string_intern.entries, sizeof(ObjString*) * (size_t)next_capacity);
+        if (next == NULL) {
+            fuji_panic_str("out of memory growing string intern table");
+        }
+        fuji_string_intern.entries = next;
+        fuji_string_intern.capacity = next_capacity;
+    }
+    fuji_string_intern.entries[fuji_string_intern.count++] = str;
+}
+
+void fuji_mark_interned_strings(void) {
+    for (int i = 0; i < fuji_string_intern.count; i++) {
+        if (fuji_string_intern.entries[i] != NULL) {
+            gc_mark_object((Obj*)fuji_string_intern.entries[i]);
+        }
+    }
+}
 
 void fuji_push_call(const char* fn_name, const char* file_name, int line) {
     if (fuji_call_stack_depth < FUJI_CALL_STACK_MAX) {
@@ -195,8 +290,12 @@ void fuji_gc_use_shadow_stack(bool enable) {
     gc_set_use_shadow_stack(enable);
 }
 
-Value fuji_globals[256];
+Value* fuji_globals = NULL;
 int fuji_globals_count = 0;
+int fuji_globals_capacity = 0;
+Value** fuji_global_slots = NULL;
+int fuji_global_slots_count = 0;
+int fuji_global_slots_capacity = 0;
 
 void fuji_mark_module_cache(void) {}
 
@@ -216,12 +315,107 @@ static void fuji_frame_clock_ensure_init(void) {
     fuji_frame_clock_inited = 1;
 }
 
-void fuji_runtime_init(void) {
-    gc_stack_base = __builtin_frame_address(0);
+void fuji_runtime_set_stack_base(void* base) {
+    gc_stack_base = base;
+}
+
+void fuji_globals_init(void) {
+    if (fuji_globals != NULL && fuji_globals_capacity > 0) {
+        return;
+    }
+    fuji_globals_capacity = 256;
+    fuji_globals_count = 0;
+    fuji_globals = (Value*)malloc(sizeof(Value) * (size_t)fuji_globals_capacity);
+    if (fuji_globals == NULL) {
+        fprintf(stderr, "fuji: out of memory allocating globals array\n");
+        exit(1);
+    }
+    fuji_global_slots_capacity = 256;
+    fuji_global_slots_count = 0;
+    fuji_global_slots = (Value**)malloc(sizeof(Value*) * (size_t)fuji_global_slots_capacity);
+    if (fuji_global_slots == NULL) {
+        fprintf(stderr, "fuji: out of memory allocating global slots array\n");
+        exit(1);
+    }
+}
+
+void fuji_globals_free(void) {
+    if (fuji_globals != NULL) {
+        free(fuji_globals);
+        fuji_globals = NULL;
+    }
+    if (fuji_global_slots != NULL) {
+        free(fuji_global_slots);
+        fuji_global_slots = NULL;
+    }
+    fuji_globals_count = 0;
+    fuji_globals_capacity = 0;
+    fuji_global_slots_count = 0;
+    fuji_global_slots_capacity = 0;
+}
+
+void fuji_register_global(Value v) {
+    if (fuji_globals == NULL || fuji_globals_capacity <= 0) {
+        fuji_globals_init();
+    }
+    if (fuji_globals_count >= fuji_globals_capacity) {
+        int new_cap = fuji_globals_capacity * 2;
+        if (new_cap < 256) {
+            new_cap = 256;
+        }
+        Value* next = (Value*)realloc(fuji_globals, sizeof(Value) * (size_t)new_cap);
+        if (next == NULL) {
+            fprintf(stderr, "fuji: out of memory growing globals array\n");
+            exit(1);
+        }
+        fuji_globals = next;
+        fuji_globals_capacity = new_cap;
+    }
+    fuji_globals[fuji_globals_count++] = v;
+}
+
+void fuji_register_global_slot(Value* slot) {
+    if (slot == NULL) {
+        return;
+    }
+    if (fuji_global_slots == NULL || fuji_global_slots_capacity <= 0) {
+        fuji_globals_init();
+    }
+    if (fuji_global_slots_count >= fuji_global_slots_capacity) {
+        int new_cap = fuji_global_slots_capacity * 2;
+        if (new_cap < 256) {
+            new_cap = 256;
+        }
+        Value** next = (Value**)realloc(fuji_global_slots, sizeof(Value*) * (size_t)new_cap);
+        if (next == NULL) {
+            fprintf(stderr, "fuji: out of memory growing global slots array\n");
+            exit(1);
+        }
+        fuji_global_slots = next;
+        fuji_global_slots_capacity = new_cap;
+    }
+    fuji_global_slots[fuji_global_slots_count++] = slot;
+}
+
+void fuji_runtime_init_ex(void* stack_base) {
+    if (!fuji_stack_base_plausible(stack_base)) {
+        fprintf(stderr, "fuji: invalid stack base passed to fuji_runtime_init_ex\n");
+        abort();
+    }
+    gc_stack_base = stack_base;
     gc_init();
+    fuji_globals_init();
+    fuji_shadow_stack_init();
     fuji_gc_use_shadow_stack(true);
-    printf("Fuji runtime initialized\n");
-    fflush(stdout);
+}
+
+void fuji_runtime_init(void) {
+#if defined(__clang__) || defined(__GNUC__)
+    fuji_runtime_init_ex(__builtin_frame_address(0));
+#else
+    uintptr_t anchor = 0;
+    fuji_runtime_init_ex(&anchor);
+#endif
 }
 
 void fuji_gc_set_threshold(size_t bytes) {
@@ -266,6 +460,29 @@ void fuji_cell_write(Value* cell, Value v) {
 
 void fuji_runtime_shutdown(void) {
     gc_collect();
+    if (fuji_gc_debug_enabled()) {
+        fprintf(stderr,
+            "fuji gc debug: remembered_overflow=%llu shadow_depth_hwm=%d globals=%d/%d global_slots=%d/%d\n",
+            (unsigned long long)gc_debug_remembered_overflow_count(),
+            fuji_shadow_depth_high_water,
+            fuji_globals_count,
+            fuji_globals_capacity,
+            fuji_global_slots_count,
+            fuji_global_slots_capacity);
+    }
+    fuji_globals_free();
+    if (fuji_string_intern.entries != NULL) {
+        free(fuji_string_intern.entries);
+        fuji_string_intern.entries = NULL;
+    }
+    fuji_string_intern.count = 0;
+    fuji_string_intern.capacity = 0;
+    if (fuji_shadow_stack != NULL) {
+        free(fuji_shadow_stack);
+        fuji_shadow_stack = NULL;
+    }
+    fuji_shadow_capacity = 0;
+    fuji_shadow_depth = 0;
 }
 
 Value fuji_print_val(Value v) {
@@ -332,6 +549,15 @@ Value fuji_allocate_object(int property_count) {
 }
 
 Value fuji_object_get(Value obj, Value key) {
+    if (IS_NIL(obj)) {
+        const char* prop = "?";
+        if (IS_OBJ(key) && AS_OBJ(key)->type == OBJ_STRING) {
+            prop = ((ObjString*)AS_OBJ(key))->chars;
+        }
+        char msg[256];
+        snprintf(msg, sizeof(msg), "cannot read property '%s' of null", prop);
+        fuji_panic_str(msg);
+    }
     if (!IS_OBJ(obj)) return NIL_VAL;
     Obj* o = AS_OBJ(obj);
     if (o->type != OBJ_TABLE) return NIL_VAL;
@@ -405,9 +631,14 @@ Value fuji_object_set(Value obj, Value key, Value value) {
 }
 
 Value fuji_allocate_string(int length, char* chars) {
+    ObjString* interned = fuji_intern_find(chars, length);
+    if (interned != NULL) {
+        return OBJ_VAL((Obj*)interned);
+    }
     ObjString* str = allocate_string(length);
     memcpy(str->chars, chars, length);
     str->chars[length] = '\0';
+    fuji_intern_add(str);
     return OBJ_VAL((Obj*)str);
 }
 
@@ -415,9 +646,14 @@ Value fuji_copy_string(const char* chars, int length) {
     if (chars == NULL || length < 0) {
         return NIL_VAL;
     }
+    ObjString* interned = fuji_intern_find(chars, length);
+    if (interned != NULL) {
+        return OBJ_VAL((Obj*)interned);
+    }
     ObjString* str = allocate_string(length);
     memcpy(str->chars, chars, (size_t)length);
     str->chars[length] = '\0';
+    fuji_intern_add(str);
     return OBJ_VAL((Obj*)str);
 }
 
@@ -432,7 +668,11 @@ Value fuji_array_get(Value arr, int index) {
     if (obj->type != OBJ_ARRAY) return NIL_VAL;
     
     ObjArray* array = (ObjArray*)obj;
-    if (index < 0 || index >= array->count) return NIL_VAL;
+    if (index < 0 || index >= array->count) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "index %d out of bounds (array length %d)", index, array->count);
+        fuji_panic_str(msg);
+    }
     
     return array->elements[index];
 }
@@ -1045,6 +1285,70 @@ Value fuji_normalize(int arg_count, Value* args) {
     // Return object {x: normalized_x, y: normalized_y}
     // For now, return nil (proper implementation would create a table with properties)
     return NIL_VAL;
+}
+
+Value fuji_hypot(int arg_count, Value* args) {
+    if (arg_count != 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return NIL_VAL;
+    return NUMBER_VAL(hypot(AS_NUMBER(args[0]), AS_NUMBER(args[1])));
+}
+
+Value fuji_fmod(int arg_count, Value* args) {
+    if (arg_count != 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return NIL_VAL;
+    return NUMBER_VAL(fmod(AS_NUMBER(args[0]), AS_NUMBER(args[1])));
+}
+
+Value fuji_degrees(int arg_count, Value* args) {
+    if (arg_count != 1 || !IS_NUMBER(args[0])) return NIL_VAL;
+    return NUMBER_VAL(AS_NUMBER(args[0]) * (180.0 / 3.141592653589793));
+}
+
+Value fuji_radians(int arg_count, Value* args) {
+    if (arg_count != 1 || !IS_NUMBER(args[0])) return NIL_VAL;
+    return NUMBER_VAL(AS_NUMBER(args[0]) * (3.141592653589793 / 180.0));
+}
+
+Value fuji_wrap(int arg_count, Value* args) {
+    if (arg_count != 1 || !IS_NUMBER(args[0])) return NIL_VAL;
+    double x = AS_NUMBER(args[0]);
+    const double pi = 3.141592653589793;
+    const double two_pi = 2.0 * pi;
+    x = fmod(x + pi, two_pi);
+    if (x < 0.0) x += two_pi;
+    return NUMBER_VAL(x - pi);
+}
+
+Value fuji_approach(int arg_count, Value* args) {
+    if (arg_count != 3 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) return NIL_VAL;
+    double value = AS_NUMBER(args[0]);
+    double target = AS_NUMBER(args[1]);
+    double delta = AS_NUMBER(args[2]);
+    if (delta < 0.0) delta = -delta;
+    if (value < target) {
+        value += delta;
+        if (value > target) value = target;
+    } else if (value > target) {
+        value -= delta;
+        if (value < target) value = target;
+    }
+    return NUMBER_VAL(value);
+}
+
+Value fuji_smoothdamp(int arg_count, Value* args) {
+    if (arg_count != 4 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2]) || !IS_NUMBER(args[3])) return NIL_VAL;
+    double current = AS_NUMBER(args[0]);
+    double target = AS_NUMBER(args[1]);
+    double velocity = AS_NUMBER(args[2]);
+    double smooth_time = AS_NUMBER(args[3]);
+    if (smooth_time <= 0.0001) smooth_time = 0.0001;
+    double omega = 2.0 / smooth_time;
+    double x = omega * (1.0 / 60.0);
+    double exp_term = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+    double change = current - target;
+    double temp = (velocity + omega * change) * (1.0 / 60.0);
+    double next_velocity = (velocity - omega * temp) * exp_term;
+    double output = target + (change + temp) * exp_term;
+    (void)next_velocity;
+    return NUMBER_VAL(output);
 }
 
 // Type checking functions

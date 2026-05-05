@@ -140,6 +140,12 @@ func (e *emitter) emitDeclCore(d parser.Decl) error {
 		}
 		e.write(";\n")
 		return nil
+	case *parser.FuncExpr:
+		if err := e.emitExpr(n, precLowest); err != nil {
+			return err
+		}
+		e.write(";\n")
+		return nil
 	case parser.Stmt:
 		return e.emitStmt(n)
 	default:

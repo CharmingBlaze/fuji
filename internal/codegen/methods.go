@@ -41,7 +41,7 @@ func (g *Generator) tryEmitMethodCall(member *parser.IndexExpr, recvVal value.Va
 		v, err := g.emitStringMethod(name, recvVal, call.Arguments)
 		return v, true, err
 
-	case "join", "sort", "reverse":
+	case "join", "sort", "reverse", "push", "pop":
 		v, err := g.emitArrayOnlyMethod(name, recvVal, call.Arguments)
 		return v, true, err
 
@@ -66,6 +66,11 @@ func (g *Generator) tryEmitMethodCall(member *parser.IndexExpr, recvVal value.Va
 }
 
 func (g *Generator) emitStringMethod(name string, recv value.Value, args []parser.Expr) (value.Value, error) {
+	recvSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(recvSlot)
+	g.block.NewStore(g.emitAsFujiI64(recv), recvSlot)
+	loadRecv := func() value.Value { return g.block.NewLoad(types.I64, recvSlot) }
+
 	switch name {
 	case "split":
 		if len(args) != 1 {
@@ -75,13 +80,13 @@ func (g *Generator) emitStringMethod(name string, recv value.Value, args []parse
 		if err != nil {
 			return nil, err
 		}
-		return g.emitArgvRuntime(g.runtimeStringSplit, []value.Value{recv, a0}), nil
+		return g.emitArgvRuntime(g.runtimeStringSplit, []value.Value{loadRecv(), a0}), nil
 	case "trim":
-		return g.emitArgvRuntime(g.runtimeStringTrim, []value.Value{recv}), nil
+		return g.emitArgvRuntime(g.runtimeStringTrim, []value.Value{loadRecv()}), nil
 	case "toupper":
-		return g.emitArgvRuntime(g.runtimeStringUpper, []value.Value{recv}), nil
+		return g.emitArgvRuntime(g.runtimeStringUpper, []value.Value{loadRecv()}), nil
 	case "tolower":
-		return g.emitArgvRuntime(g.runtimeStringLower, []value.Value{recv}), nil
+		return g.emitArgvRuntime(g.runtimeStringLower, []value.Value{loadRecv()}), nil
 	case "replace":
 		if len(args) != 2 {
 			return nil, fmt.Errorf("replace expects 2 arguments")
@@ -94,7 +99,7 @@ func (g *Generator) emitStringMethod(name string, recv value.Value, args []parse
 		if err != nil {
 			return nil, err
 		}
-		return g.emitArgvRuntime(g.runtimeStringReplace, []value.Value{recv, a0, a1}), nil
+		return g.emitArgvRuntime(g.runtimeStringReplace, []value.Value{loadRecv(), a0, a1}), nil
 	case "replaceall":
 		if len(args) != 2 {
 			return nil, fmt.Errorf("replaceAll expects 2 arguments")
@@ -107,7 +112,7 @@ func (g *Generator) emitStringMethod(name string, recv value.Value, args []parse
 		if err != nil {
 			return nil, err
 		}
-		return g.emitArgvRuntime(g.runtimeStringReplaceAll, []value.Value{recv, a0, a1}), nil
+		return g.emitArgvRuntime(g.runtimeStringReplaceAll, []value.Value{loadRecv(), a0, a1}), nil
 	case "startswith":
 		if len(args) != 1 {
 			return nil, fmt.Errorf("startsWith expects 1 argument")
@@ -116,7 +121,7 @@ func (g *Generator) emitStringMethod(name string, recv value.Value, args []parse
 		if err != nil {
 			return nil, err
 		}
-		return g.emitArgvRuntime(g.runtimeStringStartsWith, []value.Value{recv, a0}), nil
+		return g.emitArgvRuntime(g.runtimeStringStartsWith, []value.Value{loadRecv(), a0}), nil
 	case "endswith":
 		if len(args) != 1 {
 			return nil, fmt.Errorf("endsWith expects 1 argument")
@@ -125,13 +130,18 @@ func (g *Generator) emitStringMethod(name string, recv value.Value, args []parse
 		if err != nil {
 			return nil, err
 		}
-		return g.emitArgvRuntime(g.runtimeStringEndsWith, []value.Value{recv, a0}), nil
+		return g.emitArgvRuntime(g.runtimeStringEndsWith, []value.Value{loadRecv(), a0}), nil
 	default:
 		return nil, fmt.Errorf("unknown string method %q", name)
 	}
 }
 
 func (g *Generator) emitArrayOnlyMethod(name string, recv value.Value, args []parser.Expr) (value.Value, error) {
+	recvSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(recvSlot)
+	g.block.NewStore(g.emitAsFujiI64(recv), recvSlot)
+	loadRecv := func() value.Value { return g.block.NewLoad(types.I64, recvSlot) }
+
 	switch name {
 	case "join":
 		if len(args) != 1 {
@@ -141,11 +151,26 @@ func (g *Generator) emitArrayOnlyMethod(name string, recv value.Value, args []pa
 		if err != nil {
 			return nil, err
 		}
-		return g.emitArgvRuntime(g.runtimeArrayJoin, []value.Value{recv, a0}), nil
+		return g.emitArgvRuntime(g.runtimeArrayJoin, []value.Value{loadRecv(), a0}), nil
 	case "sort":
-		return g.emitArgvRuntime(g.runtimeArraySort, []value.Value{recv}), nil
+		return g.emitArgvRuntime(g.runtimeArraySort, []value.Value{loadRecv()}), nil
 	case "reverse":
-		return g.emitArgvRuntime(g.runtimeArrayReverse, []value.Value{recv}), nil
+		return g.emitArgvRuntime(g.runtimeArrayReverse, []value.Value{loadRecv()}), nil
+	case "push":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("push expects 1 argument")
+		}
+		a0, err := g.emitExpr(args[0])
+		if err != nil {
+			return nil, err
+		}
+		g.block.NewCall(g.runtimeArrayPush, loadRecv(), g.emitAsFujiI64(a0))
+		return loadRecv(), nil
+	case "pop":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("pop expects 0 arguments")
+		}
+		return g.block.NewCall(g.runtimeArrayPop, loadRecv()), nil
 	default:
 		return nil, fmt.Errorf("unknown array method %q", name)
 	}
@@ -163,8 +188,12 @@ func (g *Generator) emitSliceAmbiguous(recv value.Value, args []parser.Expr) (va
 	if err != nil {
 		return nil, err
 	}
-	return g.emitArgvNilTaggedFallback(g.emitArgvRuntime(g.runtimeArraySlice, []value.Value{recv, a0, a1}), func() value.Value {
-		return g.emitArgvRuntime(g.runtimeStringSlice, []value.Value{recv, a0, a1})
+	recvSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(recvSlot)
+	g.block.NewStore(g.emitAsFujiI64(recv), recvSlot)
+	loadRecv := func() value.Value { return g.block.NewLoad(types.I64, recvSlot) }
+	return g.emitArgvNilTaggedFallback(g.emitArgvRuntime(g.runtimeArraySlice, []value.Value{loadRecv(), a0, a1}), func() value.Value {
+		return g.emitArgvRuntime(g.runtimeStringSlice, []value.Value{loadRecv(), a0, a1})
 	}), nil
 }
 
@@ -176,7 +205,11 @@ func (g *Generator) emitIndexOrIncludesAmbiguous(name string, recv value.Value, 
 	if err != nil {
 		return nil, err
 	}
-	argv := []value.Value{recv, a0}
+	recvSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(recvSlot)
+	g.block.NewStore(g.emitAsFujiI64(recv), recvSlot)
+	loadRecv := func() value.Value { return g.block.NewLoad(types.I64, recvSlot) }
+	argv := []value.Value{loadRecv(), a0}
 	switch name {
 	case "indexof":
 		va := g.emitArgvRuntime(g.runtimeArrayIndexOf, argv)
@@ -235,15 +268,23 @@ func (g *Generator) emitArrayMethodMap(recv value.Value, args []parser.Expr) (va
 	if len(args) != 1 {
 		return nil, true, fmt.Errorf("map expects 1 callback")
 	}
+	recvSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(recvSlot)
+	g.block.NewStore(g.emitAsFujiI64(recv), recvSlot)
+
 	fnVal, err := g.emitExpr(args[0])
 	if err != nil {
 		return nil, true, err
 	}
 	nThis := constant.NewInt(types.I64, 0)
 
-	lenF := g.emitArrayLenAsDouble(recv)
+	recvLive := g.block.NewLoad(types.I64, recvSlot)
+	lenF := g.emitArrayLenAsDouble(recvLive)
 	capI := g.block.NewFPToSI(lenF, types.I32)
 	out := g.block.NewCall(g.runtimeAllocArray, capI)
+	outSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(outSlot)
+	g.block.NewStore(g.emitAsFujiI64(out), outSlot)
 
 	g.tempN++
 	suf := fmt.Sprintf(".map%d", g.tempN)
@@ -263,13 +304,18 @@ func (g *Generator) emitArrayMethodMap(recv value.Value, args []parser.Expr) (va
 
 	g.block = body
 	idxBox := g.block.NewCall(g.runtimeBoxNumber, idxNow)
-	el := g.block.NewCall(g.runtimeArrayGet, g.emitAsFujiI64(recv), g.emitAsFujiI64(idxBox))
-	mv, err := g.emitIndirectI64Callee(fnVal, nThis, []value.Value{el})
+	el := g.block.NewCall(g.runtimeArrayGet, recvLive, g.emitAsFujiI64(idxBox))
+	elSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(elSlot)
+	g.block.NewStore(g.emitAsFujiI64(el), elSlot)
+	elLive := g.block.NewLoad(types.I64, elSlot)
+	mv, err := g.emitIndirectI64Callee(fnVal, nThis, []value.Value{elLive})
 	if err != nil {
 		return nil, true, err
 	}
 	idxInt := g.block.NewFPToSI(idxNow, types.I64)
-	g.block.NewCall(g.runtimeArraySet, g.emitAsFujiI64(out), idxInt, g.emitAsFujiI64(mv))
+	outLive := g.block.NewLoad(types.I64, outSlot)
+	g.block.NewCall(g.runtimeArraySet, outLive, idxInt, g.emitAsFujiI64(mv))
 	g.block.NewBr(step)
 
 	g.block = step
@@ -279,21 +325,29 @@ func (g *Generator) emitArrayMethodMap(recv value.Value, args []parser.Expr) (va
 	g.block.NewBr(hdr)
 
 	g.block = done
-	return out, true, nil
+	return g.block.NewLoad(types.I64, outSlot), true, nil
 }
 
 func (g *Generator) emitArrayMethodFilter(recv value.Value, args []parser.Expr) (value.Value, bool, error) {
 	if len(args) != 1 {
 		return nil, true, fmt.Errorf("filter expects 1 callback")
 	}
+	recvSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(recvSlot)
+	g.block.NewStore(g.emitAsFujiI64(recv), recvSlot)
+
 	fnVal, err := g.emitExpr(args[0])
 	if err != nil {
 		return nil, true, err
 	}
 	out := g.block.NewCall(g.runtimeAllocArray, constant.NewInt(types.I32, 1))
+	outSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(outSlot)
+	g.block.NewStore(g.emitAsFujiI64(out), outSlot)
 	nThis := constant.NewInt(types.I64, 0)
 
-	lenF := g.emitArrayLenAsDouble(recv)
+	recvLive := g.block.NewLoad(types.I64, recvSlot)
+	lenF := g.emitArrayLenAsDouble(recvLive)
 
 	g.tempN++
 	suf := fmt.Sprintf(".filt%d", g.tempN)
@@ -315,8 +369,12 @@ func (g *Generator) emitArrayMethodFilter(recv value.Value, args []parser.Expr) 
 
 	g.block = body
 	idxBox := g.block.NewCall(g.runtimeBoxNumber, idxNow)
-	el := g.block.NewCall(g.runtimeArrayGet, g.emitAsFujiI64(recv), g.emitAsFujiI64(idxBox))
-	predV, err := g.emitIndirectI64Callee(fnVal, nThis, []value.Value{el})
+	el := g.block.NewCall(g.runtimeArrayGet, recvLive, g.emitAsFujiI64(idxBox))
+	elSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(elSlot)
+	g.block.NewStore(g.emitAsFujiI64(el), elSlot)
+	elLive := g.block.NewLoad(types.I64, elSlot)
+	predV, err := g.emitIndirectI64Callee(fnVal, nThis, []value.Value{elLive})
 	if err != nil {
 		return nil, true, err
 	}
@@ -324,7 +382,9 @@ func (g *Generator) emitArrayMethodFilter(recv value.Value, args []parser.Expr) 
 	g.block.NewCondBr(brOk, pushB, skipB)
 
 	g.block = pushB
-	g.block.NewCall(g.runtimeArrayPush, g.emitAsFujiI64(out), g.emitAsFujiI64(el))
+	outLive := g.block.NewLoad(types.I64, outSlot)
+	pushVal := g.block.NewLoad(types.I64, elSlot)
+	g.block.NewCall(g.runtimeArrayPush, outLive, pushVal)
 	g.block.NewBr(step)
 
 	g.block = skipB
@@ -337,19 +397,24 @@ func (g *Generator) emitArrayMethodFilter(recv value.Value, args []parser.Expr) 
 	g.block.NewBr(hdr)
 
 	g.block = done
-	return out, true, nil
+	return g.block.NewLoad(types.I64, outSlot), true, nil
 }
 
 func (g *Generator) emitArrayMethodFind(recv value.Value, args []parser.Expr) (value.Value, bool, error) {
 	if len(args) != 1 {
 		return nil, true, fmt.Errorf("find expects 1 callback")
 	}
+	recvSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(recvSlot)
+	g.block.NewStore(g.emitAsFujiI64(recv), recvSlot)
+
 	fnVal, err := g.emitExpr(args[0])
 	if err != nil {
 		return nil, true, err
 	}
 	nThis := constant.NewInt(types.I64, 0)
-	lenF := g.emitArrayLenAsDouble(recv)
+	recvLive := g.block.NewLoad(types.I64, recvSlot)
+	lenF := g.emitArrayLenAsDouble(recvLive)
 
 	g.tempN++
 	suf := fmt.Sprintf(".find%d", g.tempN)
@@ -371,8 +436,12 @@ func (g *Generator) emitArrayMethodFind(recv value.Value, args []parser.Expr) (v
 
 	g.block = body
 	idxBox := g.block.NewCall(g.runtimeBoxNumber, idxNow)
-	el := g.block.NewCall(g.runtimeArrayGet, g.emitAsFujiI64(recv), g.emitAsFujiI64(idxBox))
-	predV, err := g.emitIndirectI64Callee(fnVal, nThis, []value.Value{el})
+	el := g.block.NewCall(g.runtimeArrayGet, recvLive, g.emitAsFujiI64(idxBox))
+	elSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(elSlot)
+	g.block.NewStore(g.emitAsFujiI64(el), elSlot)
+	elLive := g.block.NewLoad(types.I64, elSlot)
+	predV, err := g.emitIndirectI64Callee(fnVal, nThis, []value.Value{elLive})
 	if err != nil {
 		return nil, true, err
 	}
@@ -394,7 +463,7 @@ func (g *Generator) emitArrayMethodFind(recv value.Value, args []parser.Expr) (v
 
 	g.block = merge
 	return merge.NewPhi(
-		ir.NewIncoming(el, foundHit),
+		ir.NewIncoming(elLive, foundHit),
 		ir.NewIncoming(nilV, miss),
 	), true, nil
 }
@@ -403,13 +472,18 @@ func (g *Generator) emitArrayMethodReduce(recv value.Value, args []parser.Expr) 
 	if len(args) != 1 && len(args) != 2 {
 		return nil, true, fmt.Errorf("reduce expects 1 or 2 arguments")
 	}
+	recvSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(recvSlot)
+	g.block.NewStore(g.emitAsFujiI64(recv), recvSlot)
+
 	fnVal, err := g.emitExpr(args[0])
 	if err != nil {
 		return nil, true, err
 	}
 	nThis := constant.NewInt(types.I64, 0)
 
-	lenF := g.emitArrayLenAsDouble(recv)
+	recvLive := g.block.NewLoad(types.I64, recvSlot)
+	lenF := g.emitArrayLenAsDouble(recvLive)
 	zero := constant.NewFloat(types.Double, 0)
 	isEmpty := g.block.NewFCmp(enum.FPredOEQ, lenF, zero)
 
@@ -439,8 +513,9 @@ func (g *Generator) emitArrayMethodReduce(recv value.Value, args []parser.Expr) 
 	var startIdx value.Value
 	if len(args) == 1 {
 		zBox := g.block.NewCall(g.runtimeBoxNumber, zero)
-		firstEl := g.block.NewCall(g.runtimeArrayGet, g.emitAsFujiI64(recv), g.emitAsFujiI64(zBox))
+		firstEl := g.block.NewCall(g.runtimeArrayGet, recvLive, g.emitAsFujiI64(zBox))
 		accSlot = g.entryAlloca(types.I64)
+		g.shadowStoreTemp(accSlot)
 		g.block.NewStore(g.emitAsFujiI64(firstEl), accSlot)
 		startIdx = constant.NewFloat(types.Double, 1)
 	} else {
@@ -449,6 +524,7 @@ func (g *Generator) emitArrayMethodReduce(recv value.Value, args []parser.Expr) 
 			return nil, true, err
 		}
 		accSlot = g.entryAlloca(types.I64)
+		g.shadowStoreTemp(accSlot)
 		g.block.NewStore(g.emitAsFujiI64(initV), accSlot)
 		startIdx = zero
 	}
@@ -469,9 +545,13 @@ func (g *Generator) emitArrayMethodReduce(recv value.Value, args []parser.Expr) 
 
 	g.block = body
 	idxBox := g.block.NewCall(g.runtimeBoxNumber, idxNow)
-	el := g.block.NewCall(g.runtimeArrayGet, g.emitAsFujiI64(recv), g.emitAsFujiI64(idxBox))
+	el := g.block.NewCall(g.runtimeArrayGet, recvLive, g.emitAsFujiI64(idxBox))
+	elSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(elSlot)
+	g.block.NewStore(g.emitAsFujiI64(el), elSlot)
+	elLive := g.block.NewLoad(types.I64, elSlot)
 	accLoad := g.block.NewLoad(types.I64, accSlot)
-	rv, err := g.emitIndirectI64Callee(fnVal, nThis, []value.Value{accLoad, el})
+	rv, err := g.emitIndirectI64Callee(fnVal, nThis, []value.Value{accLoad, elLive})
 	if err != nil {
 		return nil, true, err
 	}

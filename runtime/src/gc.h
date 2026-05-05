@@ -50,5 +50,6 @@ size_t gc_nursery_capacity_bytes(void);
 GCStats gc_get_stats(void);
 void gc_set_disabled(bool disabled);
 void gc_set_next_threshold(size_t bytes);
+uint64_t gc_debug_remembered_overflow_count(void);
 
 #endif
