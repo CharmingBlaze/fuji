@@ -1,0 +1,43 @@
+func create(x, y, z) {
+    return { x: x, y: y, z: z };
+}
+
+func add(a, b) {
+    return create(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+
+func sub(a, b) {
+    return create(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+func scale(v, s) {
+    return create(v.x * s, v.y * s, v.z * s);
+}
+
+func dot(a, b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+func cross(a, b) {
+    return create(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
+
+func lengthsq(v) {
+    return dot(v, v);
+}
+
+func length(v) {
+    return sqrt(lengthsq(v));
+}
+
+func normalize(v) {
+    let len = length(v);
+    if (len == 0.0) {
+        return create(0, 0, 0);
+    }
+    return scale(v, 1.0 / len);
+}
+
+func lerp(a, b, t) {
+    return create(math.lerp(a.x, b.x, t), math.lerp(a.y, b.y, t), math.lerp(a.z, b.z, t));
+}

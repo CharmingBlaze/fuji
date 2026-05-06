@@ -90,9 +90,9 @@ func (l *Lexer) scanToken() error {
 			l.addToken(TokenQuestion)
 		}
 	case '`':
+		// Opening backtick already consumed above; avoid a second advance (EOF panic on "`").
 		line := l.line
-		col := l.current - l.lineStart + 1
-		l.advance()
+		col := l.current - l.lineStart
 		l.tokens = append(l.tokens, Token{
 			Type:   TokenTemplateStart,
 			Lexeme: "`",
@@ -260,6 +260,11 @@ func (l *Lexer) string() error {
 		}
 		if l.peek() == '\\' {
 			l.advance()
+			if l.isAtEnd() {
+				return fmt.Errorf("unterminated string at %d", l.line)
+			}
+			l.advance()
+			continue
 		}
 		l.advance()
 	}

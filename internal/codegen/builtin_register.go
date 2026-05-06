@@ -88,6 +88,9 @@ func (g *Generator) registerBuiltinFuncs() {
 		{"number", g.runtimeNumber},
 		{"string", g.runtimeString},
 		{"gc", g.runtimeGcCollect},
+		{"gcCollect", g.runtimeGcCollect},
+		{"gcDisable", g.runtimeGcDisable},
+		{"gcEnable", g.runtimeGcEnable},
 		{"gcFrameStep", g.runtimeGcFrameStep},
 		{"gcStats", g.runtimeGcStats},
 	}

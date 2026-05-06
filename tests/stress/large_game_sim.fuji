@@ -1,0 +1,101 @@
+func spawn_entities(count) {
+    let out = [];
+    let i = 0;
+    while (i < count) {
+        let t = 0;
+        if (i >= count / 2) {
+            t = 1;
+        }
+        out.push({
+            id: i,
+            x: i * 1.7,
+            y: i * 0.9,
+            vx: 0.3 + (i * 0.001),
+            vy: 0.2 + (i * 0.0007),
+            hp: 100.0,
+            team: t,
+            cooldown: 0
+        });
+        i = i + 1;
+    }
+    return out;
+}
+
+func main() {
+    let entities = spawn_entities(1800);
+    let projectiles = [];
+    let frame = 0;
+
+    while (frame < 420) {
+        let i = 0;
+        while (i < len(entities)) {
+            let e = entities[i];
+
+            e.x = e.x + e.vx;
+            e.y = e.y + e.vy;
+            if (e.x > 4096) {
+                e.x = 0;
+            }
+            if (e.y > 4096) {
+                e.y = 0;
+            }
+
+            e.cooldown = e.cooldown + 1;
+            if (e.cooldown >= 24) {
+                projectiles.push({
+                    owner: e.id,
+                    team: e.team,
+                    x: e.x,
+                    y: e.y,
+                    vx: e.vx * 2.0,
+                    vy: e.vy * 2.0,
+                    ttl: 90
+                });
+                e.cooldown = 0;
+            }
+
+            if (frame > 100 && e.hp > 0.0) {
+                e.hp = e.hp - 0.03;
+                if (e.hp < 0.0) {
+                    e.hp = 0.0;
+                }
+            }
+
+            entities[i] = e;
+            i = i + 1;
+        }
+
+        let nextProjectiles = [];
+        let p = 0;
+        while (p < len(projectiles)) {
+            let pr = projectiles[p];
+            pr.x = pr.x + pr.vx;
+            pr.y = pr.y + pr.vy;
+            pr.ttl = pr.ttl - 1;
+            if (pr.ttl > 0) {
+                nextProjectiles.push(pr);
+            }
+            p = p + 1;
+        }
+        projectiles = nextProjectiles;
+
+        if (len(projectiles) > 9000) {
+            projectiles = projectiles.slice(0, 7000);
+        }
+
+        gcframestep(0.25);
+        frame = frame + 1;
+    }
+
+    let checksum = 0.0;
+    let k = 0;
+    while (k < 20) {
+        let e = entities[k];
+        checksum = checksum + e.x + e.y + e.hp;
+        k = k + 1;
+    }
+
+    assert(len(entities) == 1800, "entity-count");
+    assert(checksum > 0.0, "checksum");
+    print("PASS large_game_sim");
+}

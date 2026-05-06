@@ -56,6 +56,12 @@ void fuji_panic(int argc, Value* argv);
 Value fuji_assert(int argc, Value* argv);
 Value fuji_err_str(const char* msg);
 void fuji_panic_str(const char* msg);
+
+/** Short type name for diagnostics (static buffer — do not free). */
+const char* fuji_value_type_name(Value v);
+/** Format a type error and panic (via [fuji_panic_str]). */
+void fuji_type_error(const char* op, const char* expected, Value got);
+void fuji_null_error(const char* op);
 /** After a full mark pass, drop intern slots for unmarked strings (weak refs); call before gc_sweep. */
 void fuji_sweep_intern_table(void);
 

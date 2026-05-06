@@ -1,0 +1,15 @@
+// Short-lived allocations + gcFrameStep — verifies incremental GC sees consistent roots each frame.
+func main() {
+    let last = null;
+    let i = 0;
+    while (i < 600) {
+        let pair = [{ n: i }, { n: i + 7 }];
+        gcframestep(0.05);
+        assert(pair[0].n == i, "a");
+        assert(pair[1].n == i + 7, "b");
+        last = pair[1];
+        i = i + 1;
+    }
+    assert(last.n == 606, "last");
+    print("PASS incremental_gc");
+}

@@ -247,6 +247,8 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 		ir.NewParam("cell", cellPtr),
 		ir.NewParam("val", types.I64))
 	functions["FUJI_gc_collect"] = mod.NewFunc("fuji_gc_collect", types.Void)
+	functions["FUJI_gc_disable"] = mod.NewFunc("fuji_gc_disable", types.Void)
+	functions["FUJI_gc_enable"] = mod.NewFunc("fuji_gc_enable", types.Void)
 	functions["FUJI_gc_frame_step"] = mod.NewFunc("fuji_gc_frame_step", types.Void,
 		ir.NewParam("budget_ms", types.Double))
 	functions["FUJI_gc_stats"] = argvI64(mod, "fuji_gc_stats")

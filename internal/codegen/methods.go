@@ -25,6 +25,10 @@ func (g *Generator) tryEmitMethodCall(member *parser.IndexExpr, recvVal value.Va
 	}
 	name = strings.ToLower(name)
 
+	if v, handled, err := g.tryEmitNativeNamespaceCall(member, name, call.Arguments); handled {
+		return v, true, err
+	}
+
 	switch name {
 	case "concat":
 		args := []value.Value{recvVal}
@@ -51,6 +55,11 @@ func (g *Generator) tryEmitMethodCall(member *parser.IndexExpr, recvVal value.Va
 	case "indexof", "includes":
 		v, err := g.emitIndexOrIncludesAmbiguous(name, recvVal, call.Arguments)
 		return v, true, err
+	case "length":
+		if len(call.Arguments) != 0 {
+			return nil, true, fmt.Errorf("length expects 0 arguments")
+		}
+		return g.block.NewCall(g.runtimeLen, g.emitAsFujiI64(recvVal)), true, nil
 
 	case "map":
 		return g.emitArrayMethodMap(recvVal, call.Arguments)
@@ -63,6 +72,104 @@ func (g *Generator) tryEmitMethodCall(member *parser.IndexExpr, recvVal value.Va
 	}
 
 	return nil, false, nil
+}
+
+// tryEmitNativeNamespaceCall handles calls like math.lerp(...), where method dispatch
+// should route to a known argv-native symbol instead of generic indirect-call ABI.
+func (g *Generator) tryEmitNativeNamespaceCall(member *parser.IndexExpr, name string, args []parser.Expr) (value.Value, bool, error) {
+	id, ok := member.Object.(*parser.IdentifierExpr)
+	if !ok {
+		return nil, false, nil
+	}
+	if strings.ToLower(id.Name.Lexeme) != "math" {
+		return nil, false, nil
+	}
+	fn := g.mathNamespaceNative(name)
+	if fn == nil || !isNativeArgvCallee(fn) {
+		return nil, false, nil
+	}
+	argv := make([]value.Value, 0, len(args))
+	for _, a := range args {
+		v, err := g.emitExpr(a)
+		if err != nil {
+			return nil, true, err
+		}
+		argv = append(argv, v)
+	}
+	return g.emitArgvRuntime(fn, argv), true, nil
+}
+
+func (g *Generator) mathNamespaceNative(name string) *ir.Func {
+	switch name {
+	case "lerp":
+		return g.runtimeLerp
+	case "clamp":
+		return g.runtimeClamp
+	case "distance":
+		return g.runtimeDistance
+	case "anglebetween":
+		return g.runtimeAngleBetween
+	case "map":
+		return g.runtimeMap
+	case "sin":
+		return g.runtimeSin
+	case "cos":
+		return g.runtimeCos
+	case "tan":
+		return g.runtimeTan
+	case "asin":
+		return g.runtimeAsin
+	case "acos":
+		return g.runtimeAcos
+	case "atan":
+		return g.runtimeAtan
+	case "atan2":
+		return g.runtimeAtan2
+	case "pow":
+		return g.runtimePow
+	case "exp":
+		return g.runtimeExp
+	case "log":
+		return g.runtimeLog
+	case "log10":
+		return g.runtimeLog10
+	case "floor":
+		return g.runtimeFloor
+	case "ceil":
+		return g.runtimeCeil
+	case "round":
+		return g.runtimeRound
+	case "trunc":
+		return g.runtimeTrunc
+	case "sign":
+		return g.runtimeSign
+	case "min":
+		return g.runtimeMin
+	case "max":
+		return g.runtimeMax
+	case "smoothstep":
+		return g.runtimeSmoothstep
+	case "distancesq":
+		return g.runtimeDistanceSq
+	case "normalize":
+		return g.runtimeNormalize
+	case "hypot":
+		return g.runtimeHypot
+	case "fmod":
+		return g.runtimeFmod
+	case "degrees":
+		return g.runtimeDegrees
+	case "radians":
+		return g.runtimeRadians
+	case "wrap":
+		return g.runtimeWrap
+	case "approach":
+		return g.runtimeApproach
+	case "smoothdamp":
+		return g.runtimeSmoothdamp
+	default:
+		return nil
+	}
 }
 
 func (g *Generator) emitStringMethod(name string, recv value.Value, args []parser.Expr) (value.Value, error) {

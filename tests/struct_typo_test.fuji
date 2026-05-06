@@ -1,0 +1,6 @@
+struct player { x, y, health }
+
+func main() {
+    let p = player { x: 0, y: 0, health: 100 };
+    print(p.zz);
+}

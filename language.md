@@ -324,6 +324,9 @@ The compiler **prepends** a prelude **`let math = { floor: floor, … };`** (nam
 | Name | Role |
 |------|------|
 | `gc` | **`fuji_gc_collect`** |
+| `gcCollect` | Same as **`gc`** (**`fuji_gc_collect`**) |
+| `gcDisable` | **`fuji_gc_disable`** — pause allocator-triggered collections |
+| `gcEnable` | **`fuji_gc_enable`** — resume |
 | `gcFrameStep` | Budgeted incremental step |
 
 Symbols exist in **`runtime.go`** declarations without a Fuji **`registerBuiltinFuncs`** entry until wired (example: **`fuji_wall_time`**). Treat **`builtin_register.go`** as the **user-visible native surface**.

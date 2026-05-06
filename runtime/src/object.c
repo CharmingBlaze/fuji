@@ -5,6 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void validate_value_slot_count(int n, const char* ctx) {
+    if (n < 0 || (sizeof(Value) > 0 && (size_t)n > SIZE_MAX / sizeof(Value))) {
+        fprintf(stderr, "fuji: %s capacity overflow: %d\n", ctx, n);
+        exit(1);
+    }
+}
+
 ObjString* allocate_string(int length) {
     size_t total = sizeof(ObjString) + (size_t)length + 1u;
     ObjString* string = (ObjString*)gc_alloc(total);
@@ -19,10 +26,7 @@ ObjString* allocate_string(int length) {
 }
 
 ObjArray* allocate_array(int capacity) {
-    if (capacity < 0 || (size_t)capacity > (SIZE_MAX / sizeof(Value))) {
-        fprintf(stderr, "fuji: array capacity overflow\n");
-        exit(1);
-    }
+    validate_value_slot_count(capacity, "array");
     ObjArray* array = (ObjArray*)gc_alloc(sizeof(ObjArray));
     array->obj.type = OBJ_ARRAY;
     array->obj.is_marked = false;
@@ -36,10 +40,7 @@ ObjArray* allocate_array(int capacity) {
 }
 
 ObjTable* allocate_table(int capacity) {
-    if (capacity < 0 || (size_t)capacity > (SIZE_MAX / sizeof(Value))) {
-        fprintf(stderr, "fuji: table capacity overflow\n");
-        exit(1);
-    }
+    validate_value_slot_count(capacity, "table");
     ObjTable* table = (ObjTable*)gc_alloc(sizeof(ObjTable));
     table->obj.type = OBJ_TABLE;
     table->obj.is_marked = false;
@@ -67,10 +68,7 @@ ObjTable* allocate_struct_table(int field_count) {
     if (field_count < 1) {
         field_count = 1;
     }
-    if (field_count < 0 || (size_t)field_count > (SIZE_MAX / sizeof(Value))) {
-        fprintf(stderr, "fuji: struct field count overflow\n");
-        exit(1);
-    }
+    validate_value_slot_count(field_count, "struct fields");
     ObjTable* table = (ObjTable*)gc_alloc(sizeof(ObjTable));
     table->obj.type = OBJ_TABLE;
     table->obj.is_marked = false;
@@ -103,6 +101,7 @@ ObjFunction* allocate_function(int arity) {
 }
 
 ObjClosure* allocate_closure(ObjFunction* function, int upvalue_count) {
+    validate_value_slot_count(upvalue_count, "closure upvalues");
     ObjClosure* closure = (ObjClosure*)gc_alloc(sizeof(ObjClosure));
     closure->obj.type = OBJ_CLOSURE;
     closure->obj.is_marked = false;

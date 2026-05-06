@@ -22,6 +22,28 @@ func assertTokenTypes(t *testing.T, source string, expected []TokenType) {
 	}
 }
 
+func TestLexerStringUnterminatedEscapeEOF(t *testing.T) {
+	l := NewLexer("\"\\", "")
+	_, err := l.Tokenize()
+	if err == nil {
+		t.Fatal(`want error for "\"" + "\\" at EOF`)
+	}
+	if !strings.Contains(err.Error(), "unterminated") {
+		t.Fatalf("want unterminated string error, got %v", err)
+	}
+}
+
+func TestLexerLoneOpeningBacktickUnterminatedTemplate(t *testing.T) {
+	l := NewLexer("`", "")
+	_, err := l.Tokenize()
+	if err == nil {
+		t.Fatal("want error for lone opening backtick / unterminated template")
+	}
+	if !strings.Contains(err.Error(), "unterminated") {
+		t.Fatalf("want unterminated template error, got %v", err)
+	}
+}
+
 func TestLexerTemplateTokensCarryFile(t *testing.T) {
 	const path = "/tmp/tpl.fuji"
 	l := NewLexer("`a${x}b`", path)

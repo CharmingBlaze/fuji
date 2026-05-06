@@ -39,7 +39,8 @@ These properties are expected today; treat regressions as release blockers.
 - Globals + **`fuji_register_global_slot`** wiring.
 - **`FUJI_GC_DEBUG`** diagnostics where implemented.
 - **`stdlib/math.fuji`**, **`stdlib/vec2.fuji`**, **`stdlib/timer.fuji`**.
-- **`ok` / `err`**, **`panic`**, **`assert`**, **`readFile`**, **`writeFile`**, **`parseJSON`**, **`gcFrameStep`**, **`gcStats()`**.
+- **`ok` / `err`**, **`panic`**, **`assert`**, **`readFile`**, **`writeFile`**, **`parseJSON`**, **`gcFrameStep`**, **`gcStats()`**, **`gcDisable` / `gcEnable` / `gcCollect`** (GC pressure relief).
+- **Runtime diagnostics** — out-of-bounds array/string index **`fuji_panic_str`**; **`fuji_type_error`** / **`fuji_unbox_number`** on bad types for core **`[]` / unbox** paths.
 - Release **`-tags release`** embed story; **CI** (`go test`, fmt, check, native smokes, GC soak).
 
 ---
@@ -51,33 +52,33 @@ Legend: **Done** = meets plan intent in tree today · **Partial** = exists but m
 | Ref | Topic | Status | Notes |
 |-----|--------|--------|------|
 | **A1** | “Did you mean?” for undefined names | **Done** | `internal/sema/levenshtein.go`, `suggestName` hints; `tests/typo_suggestion.fuji` |
-| **A2** | `struct` types + literals + field checks | **Partial** | Parser/sema/codegen + `fuji_struct_get/set`; add **`tests/struct_typo_test.fuji`** (`fuji check` field typo) |
+| **A2** | `struct` types + literals + field checks | **Done** | `tests/struct_typo_test.fuji` + CI expects **`fuji check`** failure |
 | **A3** | `enum` + constant folding + switch hints | **Partial** | Parser AST + lowering; verify formatter + exhaustiveness **warning** story |
 | **A4** | `math.lerp` / `clamp` / `hypot` | **Done** | C + `stdlib/math.fuji` + tests elsewhere |
 | **A5** | `stdlib/timer.fuji` | **Done** | Library + `tests/timer_test.fuji` |
-| **B1** | Incremental major GC | **Partial** | `gc_collect_incremental`, `fuji_gc_frame_step`; validate game-loop budgets vs plan |
+| **B1** | Incremental major GC | **Partial** | `gc_collect_incremental`, `fuji_gc_frame_step`; **`tests/incremental_gc_test.fuji`** (CI **`--no-opt`**); validate game-loop budgets vs plan |
 | **B2** | ObjTable open addressing | **Partial** | `hashes[]` path exists in `object.c`; confirm threshold/probing vs plan + `tests/table_hash_test.fuji` |
-| **B3** | `gcDisable` / `gcEnable` / `gcCollect` builtins | **Open** | C has `fuji_gc_disable` etc.; not wired as first-class Fuji builtins per plan |
+| **B3** | `gcDisable` / `gcEnable` / `gcCollect` builtins | **Done** | Aliases to **`fuji_gc_disable` / `fuji_gc_enable` / `fuji_gc_collect`**; **`tests/gc_control_test.fuji`** |
 | **B4** | `gcStats()` object | **Done** | Lowercase keys; `tests/gc_stats_frame_test.fuji` |
-| **B5** | Write-barrier static audit | **Open** | Add CI **`go test`** scanner over `fuji_runtime.c` as described |
-| **B6** | `tests/stress/` suite + CI job | **Open** | Dedicated long-run tests + wall-clock timeout job |
-| **C1** | Typed runtime errors (`fuji_type_error`, …) | **Open** | Broad audit of argv natives |
-| **C2** | OOB array access → panic w/ index | **Open** | Today may return nil; plan wants explicit panic |
-| **C3** | Capacity overflow guards | **Open** | `validate_capacity` style hardening |
+| **B5** | Write-barrier static audit | **Done** | **`internal/codegen/write_barrier_test.go`** |
+| **B6** | `tests/stress/` suite + CI job | **Partial** | **`tests/stress/stress_mixed_alloc.fuji`** + Linux CI (**`timeout 90s`**); expand directory over time |
+| **C1** | Typed runtime errors (`fuji_type_error`, …) | **Partial** | **`fuji_value_type_name`**, **`fuji_type_error`**, **`fuji_null_error`**; **`fuji_get` / `fuji_set` / `fuji_unbox_number`**; argv/runtime audit remains |
+| **C2** | OOB array access → panic w/ index | **Done** | Array read/write + string index; **`tests/array_oob_*`**, **`api` tests** |
+| **C3** | Capacity overflow guards | **Done** | **`validate_value_slot_count`** in **`object.c`** (array/table/struct/closure upvalues) |
 | **C4** | Shadow push/pop balance (debug) | **Open** | Extra checks under `FUJI_GC_DEBUG` / shutdown |
 | **D1** | LLVM debug **source locations** (DI) | **Partial** | **`--debug`** emits **`-g`**; full **`DIFile` / `DISubprogram`** not implemented |
 | **D2** | `fuji watch` | **Done** | Polling watcher (not `fsnotify`); upgrade optional |
 | **D3** | `fuji bench` | **Open** | |
 | **D4** | Property “did you mean?” at runtime | **Open** | Needs debug runtime path + key enumeration |
-| **E1** | Parse cache (`mtime`) | **Open** | |
+| **E1** | Parse cache (`mtime`) | **Done** | **`internal/parser/loader.go`** (abs path + **`mtime`**); overlays bypass cache; **`loader_parse_cache_test.go`** |
 | **E2** | Parallel module parse | **Open** | |
 | **E3** | Wider constant folding | **Partial** | Extend beyond current literal rules |
 | **E4** | Dead-code elimination + `--warn-unused` | **Open** | |
 | **E5** | Unused binding warnings | **Open** | |
-| **F1–F7** | stdlib `vec3`, `color`, `input`, `easing`, `pool`, `str`, `array` | **Open** | Pure Fuji / small native additions as needed |
+| **F1–F7** | stdlib `vec3`, `color`, `input`, `easing`, `pool`, `str`, `array` | **Partial** | **`stdlib/vec3.fuji`** + **`tests/vec3_test.fuji`** (rest **Open**) |
 | **G4** | Asset embedding in `fuji bundle` | **Open** | |
 | **G5** | `fuji doctor` depth | **Partial** | Extend probes (disk, lld freshness, etc.) |
-| **H1** | Parser fuzzing | **Open** | `go test -fuzz` target + CI budget |
+| **H1** | Parser fuzzing | **Partial** | **`internal/parser/FuzzParse`** + Linux CI smoke (**`-fuzztime=5s`**); extend corpus/time |
 | **H2** | ASAN / Valgrind CI | **Open** | |
 | **H3** | Final integrated smoke script | **Partial** | Much covered by **`.github/workflows/ci.yml`**; unify doc list |
 
@@ -127,7 +128,7 @@ Legend: **Done** = meets plan intent in tree today · **Partial** = exists but m
 
 **Goal:** spread major collection work across frames; keep stop-the-world **`gc_collect()`** for shutdown/explicit full collect.
 
-**Work:** validate **`gc_collect_incremental`** + **`fuji_gc_frame_step`** against large workloads; add **`tests/incremental_gc_test.fuji`** (or `tests/stress/` variant) per plan.
+**Work:** **`tests/incremental_gc_test.fuji`** exercises **`gcCollectIncremental`** + **`gcFrameStep`** in a loop (Linux CI: **`fuji run --no-opt`**, time-bounded). Remaining: larger workloads and game-loop budget validation (and optional `tests/stress/` variant).
 
 ---
 
@@ -201,7 +202,9 @@ Near-match hints on missing keys (debug-gated; may require enumerating table key
 
 ### E1–E2. Parse cache + parallel parse
 
-Speed up **`PrepareNativeBundle`** / **`LoadProgram`** for large multi-file projects.
+**E1 (done):** per-file AST cache keyed by path + **`mtime`** in **`internal/parser/loader.go`** (overlays bypass).
+
+**E2:** parallel module parse remains **Open**.
 
 ### E3–E5. Constant folding, DCE, unused warnings
 
@@ -211,7 +214,7 @@ Broaden folds safely; add reachability / unused-symbol passes behind **`--warn-u
 
 # SECTION F — Standard library completeness
 
-Ship **`vec3`**, **`color`**, **`input`**, **`easing`**, **`pool`**, expanded **`str`** / **`array`** helpers as **pure Fuji** where possible; add **`tests/*.fuji`** for each module.
+**`vec3`** shipped (**`stdlib/vec3.fuji`**, **`tests/vec3_test.fuji`**); ship **`color`**, **`input`**, **`easing`**, **`pool`**, expanded **`str`** / **`array`** helpers as **pure Fuji** where possible and add **`tests/*.fuji`** for each module.
 
 ---
 

@@ -1,7 +1,9 @@
 package nativebuild
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,12 +72,18 @@ func runCompileAndLink(tc *fujihome.Toolchain, irFile, outAbs, rootDir string, o
 
 	// On Windows, direct clang compilation from LLVM IR can crash on some generated programs.
 	// Prefer llc -> object for stability unless explicitly disabled.
-	if runtime.GOOS == "windows" && strings.HasSuffix(strings.ToLower(irFile), ".ll") && llcIsUsable(tc.LLC) && !disableWindowsLLCFallback() {
+	llcPath := strings.TrimSpace(tc.LLC)
+	if !llcIsUsable(llcPath) {
+		if p, err := exec.LookPath("llc"); err == nil {
+			llcPath = p
+		}
+	}
+	if runtime.GOOS == "windows" && strings.HasSuffix(strings.ToLower(irFile), ".ll") && llcIsUsable(llcPath) && !disableWindowsLLCFallback() {
 		objPath := filepath.Join(filepath.Dir(irFile), objFileName())
 		if log != nil {
 			log("  compile mode: llc -> object (windows stability fallback)\n")
 		}
-		if err := runLLC(tc.LLC, irFile, objPath, opts.llcOptFlag(), opts.Debug); err != nil {
+		if err := runLLC(llcPath, irFile, objPath, opts.llcOptFlag(), opts.Debug); err != nil {
 			return fmt.Errorf("llc failed in windows fallback: %w", err)
 		}
 		inputFile = objPath
@@ -132,14 +140,80 @@ func runCompileAndLink(tc *fujihome.Toolchain, irFile, outAbs, rootDir string, o
 	}
 	linkArgs = append(linkArgs, "-o", outAbs)
 
-	cmd := exec.Command(cc, linkArgs...)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if runtime.GOOS == "windows" && strings.TrimSpace(tc.LLD) != "" {
-		dir := filepath.Dir(tc.LLD)
-		cmd.Env = append(os.Environ(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	buildArgs := func(o BuildOptions) []string {
+		args := make([]string, 0, 64)
+		args = append(args, o.llcOptFlag())
+		if o.Debug {
+			args = append(args, "-g")
+		}
+		if tc.LLD != "" {
+			if runtime.GOOS == "windows" {
+				args = append(args, "-fuse-ld=lld")
+			} else {
+				args = append(args, "-fuse-ld="+tc.LLD)
+			}
+		} else if UseLLD() {
+			args = append(args, "-fuse-ld=lld")
+		}
+		if res, err := fujihome.BundledClangResourceFlags(); err == nil {
+			args = append(args, res...)
+		}
+		args = append(args, inputFile, "-I", runtimeInclude)
+		if nativeSources := strings.Fields(os.Getenv("FUJI_NATIVE_SOURCES")); len(nativeSources) > 0 {
+			args = append(args, nativeSources...)
+		}
+		args = append(args, tc.RuntimeLib)
+		if inc, arch, ok := vendoredRaylibStatic(rootDir); ok {
+			args = append(args, "-I", inc, arch)
+		}
+		if extra := strings.Fields(os.Getenv("FUJI_LINKFLAGS")); len(extra) > 0 {
+			args = append(args, extra...)
+		}
+		args = append(args, defaultSystemLinkFlags()...)
+		if runtime.GOOS == "windows" {
+			args = append(args, "-lmsvcrt")
+		}
+		args = append(args, "-o", outAbs)
+		return args
 	}
-	return cmd.Run()
+
+	var runOnce func(o BuildOptions) error
+	runOnce = func(o BuildOptions) error {
+		cmd := exec.Command(cc, buildArgs(o)...)
+		var buf bytes.Buffer
+		cmd.Stdout = io.MultiWriter(os.Stdout, &buf)
+		cmd.Stderr = io.MultiWriter(os.Stderr, &buf)
+		if runtime.GOOS == "windows" && strings.TrimSpace(tc.LLD) != "" {
+			dir := filepath.Dir(tc.LLD)
+			cmd.Env = append(os.Environ(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		}
+		if err := cmd.Run(); err != nil {
+			if runtime.GOOS == "windows" && !o.NoOpt && looksLikeWindowsClangOptimizerCrash(buf.String()) {
+				if log != nil {
+					log("  warning: clang -O2 crashed; retrying with --no-opt\n")
+				}
+				o2 := o
+				o2.NoOpt = true
+				return runOnce(o2)
+			}
+			return err
+		}
+		return nil
+	}
+
+	return runOnce(opts)
+}
+
+func looksLikeWindowsClangOptimizerCrash(out string) bool {
+	// Typical signature from LLVM/Clang on Windows when -cc1 dies during Optimizer with an access violation.
+	// We keep this conservative to avoid retrying on ordinary compile/link errors.
+	if !strings.Contains(out, "PLEASE submit a bug report") {
+		return false
+	}
+	if !strings.Contains(out, "Optimizer") {
+		return false
+	}
+	return strings.Contains(out, "Exception Code: 0xC0000005") || strings.Contains(out, "0xC0000005")
 }
 
 func disableWindowsLLCFallback() bool {

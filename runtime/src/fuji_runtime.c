@@ -260,12 +260,59 @@ Value fuji_err_str(const char* msg) {
 }
 
 void fuji_panic_str(const char* msg) {
-    if (msg == NULL) {
-        msg = "(null message)";
-    }
-    Value v = fuji_copy_string(msg, (int)strlen(msg));
-    Value args[1] = { v };
-    fuji_panic(1, args);
+	if (msg == NULL) {
+		msg = "(null message)";
+	}
+	Value v = fuji_copy_string(msg, (int)strlen(msg));
+	Value args[1] = { v };
+	fuji_panic(1, args);
+}
+
+const char* fuji_value_type_name(Value v) {
+	if (IS_NIL(v)) {
+		return "null";
+	}
+	if (IS_BOOL(v)) {
+		return "boolean";
+	}
+	if (IS_NUMBER(v)) {
+		return "number";
+	}
+	if (IS_OBJ(v)) {
+		Obj* o = AS_OBJ(v);
+		switch (o->type) {
+		case OBJ_STRING:
+			return "string";
+		case OBJ_ARRAY:
+			return "array";
+		case OBJ_TABLE:
+			return "object";
+		case OBJ_CLOSURE:
+		case OBJ_FUNCTION:
+		case OBJ_NATIVE:
+			return "function";
+		case OBJ_CELL:
+			return "cell";
+		default:
+			return "object";
+		}
+	}
+	return "value";
+}
+
+void fuji_type_error(const char* op, const char* expected, Value got) {
+	char buf[512];
+	snprintf(buf, sizeof(buf), "type error in '%s': expected %s, got %s",
+		op != NULL ? op : "?",
+		expected != NULL ? expected : "?",
+		fuji_value_type_name(got));
+	fuji_panic_str(buf);
+}
+
+void fuji_null_error(const char* op) {
+	char buf[256];
+	snprintf(buf, sizeof(buf), "null reference in '%s'", op != NULL ? op : "?");
+	fuji_panic_str(buf);
 }
 
 void fuji_panic(int argc, Value* argv) {
@@ -391,6 +438,13 @@ void fuji_register_global_slot(Value* slot) {
     }
     if (fuji_global_slots == NULL || fuji_global_slots_capacity <= 0) {
         fuji_globals_init();
+    }
+    // Top-level declarations inside control-flow can execute repeatedly.
+    // Keep slot registration idempotent to avoid unbounded duplicate roots.
+    for (int i = 0; i < fuji_global_slots_count; i++) {
+        if (fuji_global_slots[i] == slot) {
+            return;
+        }
     }
     if (fuji_global_slots_count >= fuji_global_slots_capacity) {
         int new_cap = fuji_global_slots_capacity * 2;
@@ -749,7 +803,9 @@ static bool table_remove_pair(ObjTable* table, Value key) {
                 continue;
             }
             if (values_equal(k, key)) {
+                gc_write_barrier(&table->obj, TRUE_VAL);
                 table->keys[i] = TRUE_VAL;
+                gc_write_barrier(&table->obj, NIL_VAL);
                 table->values[i] = NIL_VAL;
                 table->hashes[i] = 0u;
                 table->count--;
@@ -761,7 +817,9 @@ static bool table_remove_pair(ObjTable* table, Value key) {
     for (int i = 0; i < table->count; i++) {
         if (values_equal(table->keys[i], key)) {
             for (int j = i; j < table->count - 1; j++) {
+                gc_write_barrier(&table->obj, table->keys[j + 1]);
                 table->keys[j] = table->keys[j + 1];
+                gc_write_barrier(&table->obj, table->values[j + 1]);
                 table->values[j] = table->values[j + 1];
             }
             table->count--;
@@ -948,26 +1006,29 @@ Value fuji_allocate_array(int length) {
 }
 
 Value fuji_array_get(Value arr, int index) {
-    if (!IS_OBJ(arr)) return NIL_VAL;
-    Obj* obj = AS_OBJ(arr);
-    if (obj->type != OBJ_ARRAY) return NIL_VAL;
-    
-    ObjArray* array = (ObjArray*)obj;
-    if (index < 0 || index >= array->count) {
-        char msg[256];
-        snprintf(msg, sizeof(msg), "index %d out of bounds (array length %d)", index, array->count);
-        fuji_panic_str(msg);
-    }
-    
-    return array->elements[index];
+	if (!IS_OBJ(arr)) {
+		fuji_type_error("[]", "array", arr);
+	}
+	Obj* obj = AS_OBJ(arr);
+	if (obj->type != OBJ_ARRAY) {
+		fuji_type_error("[]", "array", arr);
+	}
+
+	ObjArray* array = (ObjArray*)obj;
+	if (index < 0 || index >= array->count) {
+		char msg[256];
+		snprintf(msg, sizeof(msg), "index %d out of bounds (array length %d)", index, array->count);
+		fuji_panic_str(msg);
+	}
+
+	return array->elements[index];
 }
 
 double fuji_unbox_number(Value v) {
-    if (!IS_NUMBER(v)) {
-        fprintf(stderr, "fuji_unbox_number: value is not a number\n");
-        return 0.0;
-    }
-    return AS_NUMBER(v);
+	if (!IS_NUMBER(v)) {
+		fuji_type_error("unbox", "number", v);
+	}
+	return AS_NUMBER(v);
 }
 
 Value fuji_box_number(double d) {
@@ -975,34 +1036,34 @@ Value fuji_box_number(double d) {
 }
 
 Value fuji_get(Value obj, Value key) {
-    if (!IS_OBJ(obj)) {
-        fprintf(stderr, "Cannot index a non-object value\n");
-        return NIL_VAL;
-    }
-    Obj* o = AS_OBJ(obj);
-    if (o->type == OBJ_ARRAY) {
-        if (!IS_NUMBER(key)) {
-            fprintf(stderr, "Array index must be a number\n");
-            return NIL_VAL;
-        }
-        int idx = (int)AS_NUMBER(key);
-        return fuji_array_get(obj, idx);
-    }
-    if (o->type == OBJ_STRING) {
-        if (!IS_NUMBER(key)) {
-            fprintf(stderr, "String index must be a number\n");
-            return NIL_VAL;
-        }
-        int idx = (int)AS_NUMBER(key);
-        ObjString* s = (ObjString*)o;
-        if (idx < 0 || idx >= s->length) return NIL_VAL;
-        return fuji_copy_string(&s->chars[idx], 1);
-    }
-    if (o->type == OBJ_TABLE) {
-        return fuji_object_get(obj, key);
-    }
-    fprintf(stderr, "Cannot index this object type\n");
-    return NIL_VAL;
+	if (!IS_OBJ(obj)) {
+		fuji_type_error("[]", "object", obj);
+	}
+	Obj* o = AS_OBJ(obj);
+	if (o->type == OBJ_ARRAY) {
+		if (!IS_NUMBER(key)) {
+			fuji_type_error("array index", "number", key);
+		}
+		int idx = (int)AS_NUMBER(key);
+		return fuji_array_get(obj, idx);
+	}
+	if (o->type == OBJ_STRING) {
+		if (!IS_NUMBER(key)) {
+			fuji_type_error("string index", "number", key);
+		}
+		int idx = (int)AS_NUMBER(key);
+		ObjString* s = (ObjString*)o;
+		if (idx < 0 || idx >= s->length) {
+			char msg[256];
+			snprintf(msg, sizeof(msg), "index %d out of bounds (string length %d)", idx, s->length);
+			fuji_panic_str(msg);
+		}
+		return fuji_copy_string(&s->chars[idx], 1);
+	}
+	if (o->type == OBJ_TABLE) {
+		return fuji_object_get(obj, key);
+	}
+	fuji_type_error("[]", "indexable object", obj);
 }
 
 Value fuji_get_index(Value obj, Value key) {
@@ -1010,40 +1071,47 @@ Value fuji_get_index(Value obj, Value key) {
 }
 
 void fuji_array_set(Value arr, int64_t index, Value value) {
-    if (!IS_OBJ(arr)) return;
-    Obj* obj = AS_OBJ(arr);
-    if (obj->type != OBJ_ARRAY) return;
-    
-    ObjArray* array = (ObjArray*)obj;
-    if (index < 0 || index >= array->capacity) return;
+	if (!IS_OBJ(arr)) {
+		fuji_type_error("[]= (array)", "array", arr);
+	}
+	Obj* obj = AS_OBJ(arr);
+	if (obj->type != OBJ_ARRAY) {
+		fuji_type_error("[]= (array)", "array", arr);
+	}
 
-    gc_write_barrier(obj, value);
-    array->elements[(int)index] = value;
-    if (index + 1 > array->count) {
-        array->count = (int)index + 1;
-    }
+	ObjArray* array = (ObjArray*)obj;
+	if (index < 0 || index >= (int64_t)array->capacity) {
+		char msg[320];
+		snprintf(msg, sizeof(msg),
+			"index %lld out of bounds for assignment (logical length %d, capacity %d)",
+			(long long)index, array->count, array->capacity);
+		fuji_panic_str(msg);
+	}
+
+	gc_write_barrier(obj, value);
+	array->elements[(int)index] = value;
+	if ((int64_t)index + 1 > (int64_t)array->count) {
+		array->count = (int)index + 1;
+	}
 }
 
 Value fuji_set(Value obj, Value key, Value val) {
-    if (!IS_OBJ(obj)) {
-        fprintf(stderr, "Cannot index-assign a non-object value\n");
-        return NIL_VAL;
-    }
-    Obj* o = AS_OBJ(obj);
-    if (o->type == OBJ_ARRAY) {
-        if (!IS_NUMBER(key)) {
-            fprintf(stderr, "Array index must be a number\n");
-            return NIL_VAL;
-        }
-        int64_t i = (int64_t)AS_NUMBER(key);
-        fuji_array_set(obj, i, val);
-        return val;
-    }
-    if (o->type == OBJ_TABLE) {
-        return fuji_object_set(obj, key, val);
-    }
-    fprintf(stderr, "Cannot assign into this object type\n");
-    return NIL_VAL;
+	if (!IS_OBJ(obj)) {
+		fuji_type_error("[]=", "object", obj);
+	}
+	Obj* o = AS_OBJ(obj);
+	if (o->type == OBJ_ARRAY) {
+		if (!IS_NUMBER(key)) {
+			fuji_type_error("array index (assign)", "number", key);
+		}
+		int64_t i = (int64_t)AS_NUMBER(key);
+		fuji_array_set(obj, i, val);
+		return val;
+	}
+	if (o->type == OBJ_TABLE) {
+		return fuji_object_set(obj, key, val);
+	}
+	fuji_type_error("[]=", "array or object", obj);
 }
 
 void fuji_array_push(Value arr, Value value) {
@@ -1052,11 +1120,26 @@ void fuji_array_push(Value arr, Value value) {
     if (obj->type != OBJ_ARRAY) return;
     
     ObjArray* array = (ObjArray*)obj;
-    if (array->count < array->capacity) {
-        gc_write_barrier(obj, value);
-        array->elements[array->count] = value;
-        array->count++;
+    if (array->count >= array->capacity) {
+        int old_cap = array->capacity;
+        int new_cap = old_cap < 1 ? 1 : old_cap * 2;
+        if (new_cap < old_cap) {
+            fuji_panic_str("array push capacity overflow");
+        }
+        if ((size_t)new_cap > SIZE_MAX / sizeof(Value)) {
+            fuji_panic_str("array push capacity overflow");
+        }
+        Value* next = (Value*)gc_alloc(sizeof(Value) * (size_t)new_cap);
+        if (array->elements != NULL && old_cap > 0) {
+            memcpy(next, array->elements, sizeof(Value) * (size_t)old_cap);
+            gc_free(array->elements, sizeof(Value) * (size_t)old_cap);
+        }
+        array->elements = next;
+        array->capacity = new_cap;
     }
+    gc_write_barrier(obj, value);
+    array->elements[array->count] = value;
+    array->count++;
 }
 
 Value fuji_array_pop(Value arr) {
@@ -1850,7 +1933,9 @@ Value fuji_array_sort(int arg_count, Value* args) {
         for (int j = 0; j < n - 1 - i; j++) {
             if (cmp_sort_values(arr->elements[j], arr->elements[j + 1]) > 0) {
                 Value tmp = arr->elements[j];
+                gc_write_barrier((Obj*)arr, arr->elements[j + 1]);
                 arr->elements[j] = arr->elements[j + 1];
+                gc_write_barrier((Obj*)arr, tmp);
                 arr->elements[j + 1] = tmp;
             }
         }

@@ -1,0 +1,12 @@
+func main() {
+    let a = { x: 0, y: 0, z: 0 };
+    let b = { x: 10, y: 0, z: 0 };
+
+    let x = math.lerp(a.x, b.x, 0.5);
+    assert(x == 5.0, "x");
+
+    let y = math.lerp(a.y, b.y, 0.5);
+    assert(y == 0.0, "y");
+
+    print("PASS math_lerp_member");
+}

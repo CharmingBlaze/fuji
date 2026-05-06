@@ -1,0 +1,12 @@
+func main() {
+    gcdisable();
+    let a = [];
+    let i = 0;
+    while (i < 50) {
+        a.push(i);
+        i = i + 1;
+    }
+    gcenable();
+    gccollect();
+    print("PASS gc_control");
+}

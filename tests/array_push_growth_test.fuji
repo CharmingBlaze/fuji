@@ -1,0 +1,15 @@
+func main() {
+    let a = [];
+    let i = 0;
+    while (i < 100) {
+        a.push(i);
+        i = i + 1;
+    }
+
+    assert(len(a) == 100, "len");
+    assert(a[0] == 0, "first");
+    assert(a[99] == 99, "last");
+    assert(a.length() == 100, "length-method");
+
+    print("PASS array_push_growth");
+}

@@ -5,11 +5,28 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"fuji/internal/diagnostic"
 	"fuji/internal/fujihome"
 	"fuji/internal/lexer"
 )
+
+// Parsed AST cache: absolute path → last seen mtime (nanos) + parsed program.
+// Entries are invalidated when Stat mtime differs. Overlay sources are never cached.
+type parseCacheEntry struct {
+	modTimeNanos int64
+	prog         *Program
+}
+
+var parseCacheMu sync.Mutex
+var parseCache = make(map[string]parseCacheEntry)
+
+func resetParseCache() {
+	parseCacheMu.Lock()
+	defer parseCacheMu.Unlock()
+	parseCache = make(map[string]parseCacheEntry)
+}
 
 // LoadProgram parses the entry file and all its transitive imports.
 func LoadProgram(entryPath string) (*ProgramBundle, error) {
@@ -36,10 +53,37 @@ func LoadProgramWithOverlays(entryPath string, overlays map[string]string) (*Pro
 	return bundle, nil
 }
 
+func parseProgramSource(absPath string, src string) (*Program, error) {
+	l := lexer.NewLexer(src, absPath)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		return nil, diagnostic.WrapLexer(absPath, src, err)
+	}
+	pr := NewParser(tokens)
+	prog, err := pr.Parse()
+	if err != nil {
+		return nil, diagnostic.WrapParse(absPath, src, err)
+	}
+	return prog, nil
+}
+
+func loadModuleImports(modulePath string, prog *Program, bundle *ProgramBundle, visited map[string]bool, overlays map[string]string) error {
+	var imports []string
+	findImports(prog, &imports)
+	for _, rel := range imports {
+		abs, err := ResolveImportPath(modulePath, rel)
+		if err != nil {
+			return err
+		}
+		if err := loadModule(abs, bundle, visited, overlays); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func loadModule(path string, bundle *ProgramBundle, visited map[string]bool, overlays map[string]string) error {
 	if visited[path] {
-		// Cycle detection could be more sophisticated, but for now we just return if already visiting.
-		// Wait, if it's already in bundle.Modules, we're done.
 		if _, ok := bundle.Modules[path]; ok {
 			return nil
 		}
@@ -50,13 +94,27 @@ func loadModule(path string, bundle *ProgramBundle, visited map[string]bool, ove
 	defer delete(visited, path)
 
 	var src string
+	hasOverlayEntry := false
 	if overlays != nil {
 		if s, ok := overlays[path]; ok {
+			hasOverlayEntry = true
 			src = s
 		}
 	}
 
 	if src == "" {
+		if !hasOverlayEntry {
+			parseCacheMu.Lock()
+			e, cached := parseCache[path]
+			parseCacheMu.Unlock()
+
+			fi, statErr := os.Stat(path)
+			if statErr == nil && cached && e.modTimeNanos == fi.ModTime().UnixNano() {
+				bundle.Modules[path] = e.prog
+				return loadModuleImports(path, e.prog, bundle, visited, overlays)
+			}
+		}
+
 		b, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("could not read %s: %w", path, err)
@@ -64,34 +122,21 @@ func loadModule(path string, bundle *ProgramBundle, visited map[string]bool, ove
 		src = string(b)
 	}
 
-	l := lexer.NewLexer(src, path)
-	tokens, err := l.Tokenize()
+	prog, err := parseProgramSource(path, src)
 	if err != nil {
-		return diagnostic.WrapLexer(path, src, err)
+		return err
 	}
-
-	p := NewParser(tokens)
-	prog, err := p.Parse()
-	if err != nil {
-		return diagnostic.WrapParse(path, src, err)
-	}
-
 	bundle.Modules[path] = prog
 
-	var imports []string
-	findImports(prog, &imports)
-
-	for _, rel := range imports {
-		abs, err := ResolveImportPath(path, rel)
-		if err != nil {
-			return err
-		}
-		if err := loadModule(abs, bundle, visited, overlays); err != nil {
-			return err
+	if !hasOverlayEntry {
+		if fi, err := os.Stat(path); err == nil {
+			parseCacheMu.Lock()
+			parseCache[path] = parseCacheEntry{modTimeNanos: fi.ModTime().UnixNano(), prog: prog}
+			parseCacheMu.Unlock()
 		}
 	}
 
-	return nil
+	return loadModuleImports(path, prog, bundle, visited, overlays)
 }
 
 func findImports(node Node, imports *[]string) {

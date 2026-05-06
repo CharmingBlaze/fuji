@@ -195,6 +195,8 @@ type Generator struct {
 	runtimeCellRead     *ir.Func
 	runtimeCellWrite    *ir.Func
 	runtimeGcCollect    *ir.Func
+	runtimeGcDisable    *ir.Func
+	runtimeGcEnable     *ir.Func
 	runtimeGcFrameStep  *ir.Func
 	runtimeGcStats      *ir.Func
 	runtimePushFrame    *ir.Func
@@ -374,6 +376,8 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimeCellRead:         runtimeFuncs["FUJI_cell_read"],
 		runtimeCellWrite:        runtimeFuncs["FUJI_cell_write"],
 		runtimeGcCollect:        runtimeFuncs["FUJI_gc_collect"],
+		runtimeGcDisable:        runtimeFuncs["FUJI_gc_disable"],
+		runtimeGcEnable:         runtimeFuncs["FUJI_gc_enable"],
 		runtimeGcFrameStep:      runtimeFuncs["FUJI_gc_frame_step"],
 		runtimeGcStats:          runtimeFuncs["FUJI_gc_stats"],
 		runtimePushFrame:        runtimeFuncs["FUJI_push_frame"],

@@ -1,0 +1,16 @@
+func main() {
+    let i = 0;
+    while (i < 7) {
+        i = i + 1;
+    }
+
+    let j = 0;
+    while (j < 5) {
+        j = j + 1;
+    }
+
+    assert(i == 7, "i");
+    assert(j == 5, "j");
+
+    print("PASS multi_while_flow");
+}

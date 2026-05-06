@@ -9,7 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`stdlib/vec3.fuji`** — 3D **`{x, y, z}`** helpers (**`create`**, **`add`**, **`sub`**, **`scale`**, **`dot`**, **`cross`**, **`length`**, **`normalize`**, …); **`lerp`** now uses **`math.lerp`** per component after namespace-call lowering was fixed.
+- **`tests/vec3_test.fuji`**, **`tests/incremental_gc_test.fuji`** — stdlib **`vec3`** coverage; incremental GC (**`gcCollectIncremental`** + **`gcFrameStep`**) loop stability (Linux CI runs incremental test with **`fuji run --no-opt`** for time-bounded safety).
+- **Parser — per-file parse cache** — **`internal/parser/loader.go`** caches parsed programs by **absolute path** + **`mtime`** nanoseconds; overlays skip the cache; **`internal/parser/loader_parse_cache_test.go`** (**`TestParseCacheUsesMtime`**).
 - **`docs/MASTER_PLAN.md`** — maintainer-facing roadmap to “100%” (language, GC, runtime, DX, compiler, stdlib, tooling) with a **progress matrix** aligned to the current tree.
+- **GC builtins** — **`gcDisable()`**, **`gcEnable()`**, **`gcCollect()`** (alias of **`gc()`**) wired to **`fuji_gc_disable` / `fuji_gc_enable` / `fuji_gc_collect`**; **`tests/gc_control_test.fuji`**.
+- **`tests/struct_typo_test.fuji`** — **`fuji check`** regression for invalid struct field access (CI expects failure).
+- **`internal/codegen/TestWriteBarrierCoverage`** — static scan of **`fuji_runtime.c`** so mutators that assign through **`values` / `elements` / `keys` / `upvalues`** keep **`gc_write_barrier`** in the same function (with a narrow exempt list for **`table_rehash_open`**).
+- **Runtime hardening (C)** — **`fuji_value_type_name`**, **`fuji_type_error`**, **`fuji_null_error`**; **`fuji_get` / `fuji_set`** use typed panics instead of silent/fprintf failures where applicable; **`fuji_unbox_number`** panics on non-number; array **`[]=`** out-of-bounds panics (**`logical length` + `capacity`**); string character index out-of-range panics. **`object.c`** — shared **`validate_value_slot_count`** for array/table/struct allocations and closure upvalue buffers.
+- **Tests / CI** — **`tests/array_oob_get.fuji`**, **`tests/array_oob_set.fuji`** (API integration in **`api/runtime_hardening_test.go`**; tests **`Chdir`** to repo root so **`nativebuild`** finds **`runtime/libfuji_runtime.a`**); **`tests/stress/stress_mixed_alloc.fuji`** with bounded Linux CI step; **`tests/vec3_test.fuji`**, **`tests/vec3_math_lerp_direct_test.fuji`**, and **`tests/math_lerp_member_test.fuji`** in native smoke; **`tests/incremental_gc_test.fuji`** in GC soak (**`timeout 120s`**, **`--no-opt`**); **`internal/parser`** **`FuzzParse`** (Lexer + Parser must not panic) with **`-fuzztime=5s`** on CI.
+
+### Fixed
+
+- **Lexer** — Template literal (**`` ` ``**) handling no longer calls **`advance()`** twice after the opening backtick, which could skip content and **panic** at EOF on input **[`` ` ``]** alone (**`fuzz` / `testdata`** regression).
+- **Lexer** — **`string()`** treats a **`\`** immediately before EOF as an unterminated escape (no second **`advance()`** past the buffer).
+- **Codegen (loops)** — while/for/do-while blocks now use unique LLVM block labels per statement; this prevents control-flow aliasing when multiple top-level loops appear in one function.
+- **Method lowering** — `.length()` now lowers directly to **`fuji_len`** with arity checking (`0` args), avoiding fallback paths that could treat property values as callables.
+- **Method lowering (`math.*`)** — namespace math calls now dispatch to dedicated runtime argv natives even when user code defines overlapping global names (e.g. **`lerp`**), fixing member-call crashes from ABI mismatches.
+- **Runtime arrays** — **`fuji_array_push`** now grows array capacity dynamically (with overflow checks) instead of silently dropping writes once `count == capacity`; this restores expected `push` semantics and fixes growth-sensitive stress tests.
+- **Regression tests** — **`tests/array_push_growth_test.fuji`** validates long `push` growth + **`length()`**; **`tests/multi_while_flow_test.fuji`** guards multi-loop control flow. Linux CI now runs both in native smoke and runs **`tests/nursery_test.fuji`** in GC soak (`--no-opt`, time-bounded).
+- **Game-scale stress** — **`tests/stress/large_game_sim.fuji`** simulates a larger entity/projectile workload over hundreds of frames with incremental GC stepping; Linux CI runs it in stress smoke (`--no-opt`, time-bounded).
 
 ## [0.2.0] - 2026-05-06
 

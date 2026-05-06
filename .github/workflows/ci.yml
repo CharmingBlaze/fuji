@@ -45,6 +45,7 @@ jobs:
           /tmp/fuji check tests/hello.fuji
           if /tmp/fuji check tests/undefined_var.fuji 2>/dev/null; then echo "expected check to fail"; exit 1; fi
           if /tmp/fuji check tests/sema_errors.fuji 2>/dev/null; then echo "expected sema_errors check to fail"; exit 1; fi
+          if /tmp/fuji check tests/struct_typo_test.fuji 2>/dev/null; then echo "expected struct field typo check to fail"; exit 1; fi
 
       - name: Native smoke (fuji build)
         run: |
@@ -66,6 +67,13 @@ jobs:
           /tmp/unary_plus_fold | head -n 5
           /tmp/fuji build tests/gc_shadow_multi_return_pop.fuji -o /tmp/gc_shadow_multi_return_pop
           /tmp/gc_shadow_multi_return_pop | head -n 5
+          /tmp/fuji build tests/gc_control_test.fuji -o /tmp/gc_control_test
+          /tmp/gc_control_test | head -n 5
+          /tmp/fuji run tests/vec3_test.fuji
+          /tmp/fuji run tests/vec3_math_lerp_direct_test.fuji
+          /tmp/fuji run tests/math_lerp_member_test.fuji
+          /tmp/fuji run tests/array_push_growth_test.fuji
+          /tmp/fuji run tests/multi_while_flow_test.fuji
           /tmp/fuji build --debug tests/hello.fuji -o /tmp/hello_debug
           test -x /tmp/hello_debug
 
@@ -74,6 +82,16 @@ jobs:
           timeout 90s /tmp/fuji run tests/gc_pressure_expr.fuji
           timeout 90s /tmp/fuji run tests/globals_perf.fuji
           timeout 90s /tmp/fuji run tests/gc_soak.fuji
+          timeout 120s /tmp/fuji run --no-opt tests/nursery_test.fuji
+          timeout 120s /tmp/fuji run --no-opt tests/incremental_gc_test.fuji
+
+      - name: Stress smoke (time-bounded)
+        run: |
+          timeout 90s /tmp/fuji run tests/stress/stress_mixed_alloc.fuji
+          timeout 120s /tmp/fuji run --no-opt tests/stress/large_game_sim.fuji
+
+      - name: Parser fuzz (smoke, 5s)
+        run: go test ./internal/parser -fuzz=FuzzParse -fuzztime=5s -count=1
 
       - name: Wrapgen Raylib + link smoke
         env:

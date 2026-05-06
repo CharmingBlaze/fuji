@@ -162,9 +162,11 @@ func (g *Generator) emitIfStmt(s *parser.IfStmt) error {
 
 // emitWhileStmt emits LLVM IR for while loops.
 func (g *Generator) emitWhileStmt(s *parser.WhileStmt) error {
-	condBlock := g.block.Parent.NewBlock("while.cond")
-	bodyBlock := g.block.Parent.NewBlock("while.body")
-	afterBlock := g.block.Parent.NewBlock("while.after")
+	g.tempN++
+	suf := fmt.Sprintf(".%d", g.tempN)
+	condBlock := g.block.Parent.NewBlock("while.cond" + suf)
+	bodyBlock := g.block.Parent.NewBlock("while.body" + suf)
+	afterBlock := g.block.Parent.NewBlock("while.after" + suf)
 
 	// Push loop context onto stack
 	ctx := loopContext{condBlock: condBlock, incBlock: condBlock, afterBlock: afterBlock}
@@ -198,9 +200,11 @@ func (g *Generator) emitWhileStmt(s *parser.WhileStmt) error {
 
 // emitDoWhileStmt emits LLVM IR for do-while loops.
 func (g *Generator) emitDoWhileStmt(s *parser.DoWhileStmt) error {
-	bodyBlock := g.block.Parent.NewBlock("dowhile.body")
-	condBlock := g.block.Parent.NewBlock("dowhile.cond")
-	afterBlock := g.block.Parent.NewBlock("dowhile.after")
+	g.tempN++
+	suf := fmt.Sprintf(".%d", g.tempN)
+	bodyBlock := g.block.Parent.NewBlock("dowhile.body" + suf)
+	condBlock := g.block.Parent.NewBlock("dowhile.cond" + suf)
+	afterBlock := g.block.Parent.NewBlock("dowhile.after" + suf)
 
 	// Push loop context onto stack
 	ctx := loopContext{condBlock: condBlock, incBlock: condBlock, afterBlock: afterBlock}
@@ -449,10 +453,12 @@ func (g *Generator) emitForOfDynamicRange(s *parser.ForOfStmt, r *parser.RangeEx
 // emitForStmt emits LLVM IR for C-style for loops.
 func (g *Generator) emitForStmt(s *parser.ForStmt) error {
 	// Create blocks
-	condBlock := g.block.Parent.NewBlock("for.cond")
-	bodyBlock := g.block.Parent.NewBlock("for.body")
-	incBlock := g.block.Parent.NewBlock("for.inc")
-	afterBlock := g.block.Parent.NewBlock("for.after")
+	g.tempN++
+	suf := fmt.Sprintf(".%d", g.tempN)
+	condBlock := g.block.Parent.NewBlock("for.cond" + suf)
+	bodyBlock := g.block.Parent.NewBlock("for.body" + suf)
+	incBlock := g.block.Parent.NewBlock("for.inc" + suf)
+	afterBlock := g.block.Parent.NewBlock("for.after" + suf)
 
 	// Push loop context onto stack
 	ctx := loopContext{condBlock: condBlock, incBlock: incBlock, afterBlock: afterBlock}
