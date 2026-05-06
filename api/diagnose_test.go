@@ -20,6 +20,25 @@ func TestDiagnoseValidProgram(t *testing.T) {
 	}
 }
 
+func TestDiagnoseTypoSuggestionHint(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "typo.fuji")
+	src := "let drawRectangle = 1;\ndrawRectange;\n"
+	if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := Diagnose(p, "")
+	if len(d) == 0 {
+		t.Fatal("want diagnostics")
+	}
+	if !strings.Contains(strings.ToLower(d[0].Message), "undefined") {
+		t.Fatalf("message: %q", d[0].Message)
+	}
+	if !strings.Contains(strings.ToLower(d[0].Hint), "did you mean") {
+		t.Fatalf("want hint with 'did you mean', got hint=%q msg=%q", d[0].Hint, d[0].Message)
+	}
+}
+
 func TestDiagnoseSemaUndefined(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "bad.fuji")
@@ -90,14 +109,15 @@ func TestDiagnoseMultipleSemaErrorsAggregated(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := Diagnose(p, "")
-	if len(d) == 0 {
-		t.Fatal("want diagnostics")
+	if len(d) < 2 {
+		t.Fatalf("want two diagnostics, got %d: %#v", len(d), d)
 	}
-	msg := strings.ToLower(d[0].Message)
-	if !strings.Contains(msg, "aaa") {
-		t.Fatalf("want first undefined in message: %q", d[0].Message)
+	m0 := strings.ToLower(d[0].Message)
+	m1 := strings.ToLower(d[1].Message)
+	if !strings.Contains(m0, "aaa") && !strings.Contains(m1, "aaa") {
+		t.Fatalf("want aaa in diagnostics: %#v", d)
 	}
-	if !strings.Contains(msg, "bbb") {
-		t.Fatalf("want second undefined in message: %q", d[0].Message)
+	if !strings.Contains(m0, "bbb") && !strings.Contains(m1, "bbb") {
+		t.Fatalf("want bbb in diagnostics: %#v", d)
 	}
 }

@@ -64,6 +64,10 @@ jobs:
           /tmp/assert_string_eq | head -n 5
           /tmp/fuji build tests/unary_plus_fold.fuji -o /tmp/unary_plus_fold
           /tmp/unary_plus_fold | head -n 5
+          /tmp/fuji build tests/gc_shadow_multi_return_pop.fuji -o /tmp/gc_shadow_multi_return_pop
+          /tmp/gc_shadow_multi_return_pop | head -n 5
+          /tmp/fuji build --debug tests/hello.fuji -o /tmp/hello_debug
+          test -x /tmp/hello_debug
 
       - name: GC soak (serialized, time-bounded)
         run: |

@@ -79,6 +79,30 @@ func topLevelNeedsBlankLine(prev, cur parser.Decl) bool {
 
 func (e *emitter) emitDeclCore(d parser.Decl) error {
 	switch n := d.(type) {
+	case *parser.StructDecl:
+		e.write("struct ")
+		e.write(n.Name.Lexeme)
+		e.write(" { ")
+		for i, f := range n.Fields {
+			if i > 0 {
+				e.write(", ")
+			}
+			e.write(f.Lexeme)
+		}
+		e.write(" }\n")
+		return nil
+	case *parser.EnumDecl:
+		e.write("enum ")
+		e.write(n.Name.Lexeme)
+		e.write(" { ")
+		for i, m := range n.Members {
+			if i > 0 {
+				e.write(", ")
+			}
+			e.write(m.Lexeme)
+		}
+		e.write(" }\n")
+		return nil
 	case *parser.IncludeDecl:
 		e.write("#include ")
 		e.write(n.Path.Lexeme)
@@ -513,6 +537,10 @@ func (e *emitter) emitExpr(ex parser.Expr, minPrec int) error {
 		e.write("]")
 		return nil
 	case *parser.ObjectExpr:
+		if v.StructTag != nil {
+			e.write(v.StructTag.Lexeme)
+			e.write(" ")
+		}
 		e.write("{")
 		if len(v.Keys) > 0 {
 			e.write(" ")

@@ -8,6 +8,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <time.h>
+#endif
+
 /* Stack base for conservative root scan; set in fuji_runtime_init before any allocation. */
 extern void* gc_stack_base;
 
@@ -56,16 +62,284 @@ static GCState gc_state = {
     .remembered_overflow_count = 0,
 };
 
-static size_t gc_obj_total_bytes(Obj* obj);
+typedef enum {
+    GC_INC_IDLE = 0,
+    GC_INC_MARKING,
+    GC_INC_SWEEPING,
+} GCIncPhase;
+
+static GCIncPhase gc_inc_phase = GC_INC_IDLE;
+static Obj** gc_grey = NULL;
+static size_t gc_grey_len;
+static size_t gc_grey_cap;
+static Obj** gc_inc_sweep_prev = NULL;
+
+#ifdef _WIN32
+static LARGE_INTEGER gc_win_qpc_freq;
+static bool gc_win_qpc_inited;
+#endif
+
+static uint64_t gc_now_us(void) {
+#ifdef _WIN32
+    if (!gc_win_qpc_inited) {
+        QueryPerformanceFrequency(&gc_win_qpc_freq);
+        gc_win_qpc_inited = true;
+    }
+    LARGE_INTEGER c;
+    QueryPerformanceCounter(&c);
+    if (gc_win_qpc_freq.QuadPart == 0) {
+        return 0;
+    }
+    return (uint64_t)((double)c.QuadPart * 1000000.0 / (double)gc_win_qpc_freq.QuadPart);
+#else
+    struct timespec ts;
+#if defined(CLOCK_MONOTONIC)
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return 0;
+    }
+#else
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+        return 0;
+    }
+#endif
+    return (uint64_t)ts.tv_sec * 1000000ull + (uint64_t)ts.tv_nsec / 1000ull;
+#endif
+}
+
+void gc_record_pause_since(uint64_t start_us) {
+    uint64_t now = gc_now_us();
+    if (now <= start_us) {
+        return;
+    }
+    uint64_t dt = now - start_us;
+    gc_state.stats.total_pause_time_us += dt;
+    if (dt > gc_state.stats.max_pause_time_us) {
+        gc_state.stats.max_pause_time_us = dt;
+    }
+}
+
+bool gc_incremental_is_idle(void) {
+    return gc_inc_phase == GC_INC_IDLE;
+}
+
 static bool gc_is_heap_object_exact(Obj* candidate);
 static Obj* gc_find_containing_obj(void* p);
+static void gc_unmark_all(void);
+
+static void gc_incremental_abort(void) {
+    gc_grey_len = 0;
+    gc_inc_phase = GC_INC_IDLE;
+    gc_inc_sweep_prev = NULL;
+    gc_unmark_all();
+}
+
+static void grey_ensure_cap(size_t need) {
+    if (need <= gc_grey_cap) {
+        return;
+    }
+    size_t ncap = gc_grey_cap ? gc_grey_cap * 2u : 256u;
+    while (ncap < need) {
+        ncap *= 2u;
+    }
+    Obj** ng = (Obj**)realloc(gc_grey, ncap * sizeof(Obj*));
+    if (ng == NULL) {
+        fprintf(stderr, "fuji: out of memory\n");
+        exit(1);
+    }
+    gc_grey = ng;
+    gc_grey_cap = ncap;
+}
+
+static void grey_push_obj(Obj* obj) {
+    if (obj == NULL || obj->generation == GEN_DEAD) {
+        return;
+    }
+    if (obj->is_marked) {
+        return;
+    }
+    obj->is_marked = true;
+    grey_ensure_cap(gc_grey_len + 1u);
+    gc_grey[gc_grey_len++] = obj;
+}
+
+static void grey_push_from_value(Value v) {
+    if (!IS_OBJ(v)) {
+        return;
+    }
+    Obj* ch = AS_OBJ(v);
+    if (ch == NULL) {
+        return;
+    }
+    grey_push_obj(ch);
+}
+
+static void gc_visit_obj_edges(Obj* obj) {
+    switch (obj->type) {
+        case OBJ_ARRAY: {
+            ObjArray* array = (ObjArray*)obj;
+            if (array->elements == NULL) {
+                break;
+            }
+            for (int i = 0; i < array->count; i++) {
+                grey_push_from_value(array->elements[i]);
+            }
+            break;
+        }
+        case OBJ_TABLE: {
+            ObjTable* table = (ObjTable*)obj;
+            if (table->keys == NULL || table->values == NULL) {
+                break;
+            }
+            if (table->hashes != NULL && !table->is_struct_layout) {
+                for (int i = 0; i < table->capacity; i++) {
+                    grey_push_from_value(table->keys[i]);
+                    grey_push_from_value(table->values[i]);
+                }
+            } else {
+                for (int i = 0; i < table->count; i++) {
+                    grey_push_from_value(table->keys[i]);
+                    grey_push_from_value(table->values[i]);
+                }
+            }
+            break;
+        }
+        case OBJ_CLOSURE: {
+            ObjClosure* closure = (ObjClosure*)obj;
+            grey_push_obj((Obj*)closure->function);
+            for (int i = 0; i < closure->upvalue_count; i++) {
+                grey_push_from_value(closure->upvalues[i]);
+            }
+            break;
+        }
+        case OBJ_CELL: {
+            ObjCell* cell = (ObjCell*)obj;
+            grey_push_from_value(cell->value);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void maybe_enqueue_stack_word(uint64_t word) {
+    Value v = word;
+    if (!IS_OBJ(v)) {
+        return;
+    }
+    Obj* o = AS_OBJ(v);
+    if (gc_is_heap_object_exact(o)) {
+        grey_push_obj(o);
+    } else {
+        Obj* c = gc_find_containing_obj(o);
+        if (c != NULL) {
+            grey_push_obj(c);
+        }
+    }
+}
+
+static void maybe_enqueue_stack_addr(uintptr_t addr) {
+    if (addr == 0) {
+        return;
+    }
+    Obj* o = gc_find_containing_obj((void*)addr);
+    if (o != NULL) {
+        grey_push_obj(o);
+    }
+}
+
+static void gc_mark_stack_conservative_grey(void) {
+    if (gc_stack_base == NULL) {
+        return;
+    }
+    void* stack_top;
+    GC_GET_SP(stack_top);
+    uintptr_t a = (uintptr_t)stack_top;
+    uintptr_t b = (uintptr_t)gc_stack_base;
+    uintptr_t lo = a < b ? a : b;
+    uintptr_t hi = a < b ? b : a;
+    lo = (lo + 7u) & ~(uintptr_t)7u;
+    for (uintptr_t p = lo; p + sizeof(uint64_t) <= hi; p += sizeof(uint64_t)) {
+        uint64_t word = *(uint64_t*)p;
+        maybe_enqueue_stack_word(word);
+        maybe_enqueue_stack_addr((uintptr_t)word);
+    }
+}
+
+static void gc_mark_shadow_stack_grey(void) {
+    for (int i = 0; i < fuji_shadow_depth; i++) {
+        Value** ptrs = fuji_shadow_stack[i].slot_ptrs;
+        int n = fuji_shadow_stack[i].count;
+        if (ptrs == NULL || n <= 0) {
+            continue;
+        }
+        for (int j = 0; j < n; j++) {
+            Value* p = ptrs[j];
+            if (p != NULL) {
+                grey_push_from_value(*p);
+            }
+        }
+    }
+}
+
+static void gc_seed_roots_grey(void) {
+    if (gc_state.use_shadow_stack) {
+        gc_mark_shadow_stack_grey();
+    } else {
+        gc_mark_stack_conservative_grey();
+    }
+    if (fuji_globals_count > 0) {
+        for (int i = 0; i < fuji_globals_count; i++) {
+            grey_push_from_value(fuji_globals[i]);
+        }
+    }
+    if (fuji_global_slots_count > 0) {
+        for (int i = 0; i < fuji_global_slots_count; i++) {
+            if (fuji_global_slots[i] != NULL) {
+                grey_push_from_value(*fuji_global_slots[i]);
+            }
+        }
+    }
+    fuji_mark_module_cache();
+    fuji_mark_open_upvalues();
+}
+
+static bool gc_incremental_mark_step(void) {
+    if (gc_grey_len == 0) {
+        return false;
+    }
+    Obj* o = gc_grey[--gc_grey_len];
+    gc_visit_obj_edges(o);
+    return true;
+}
+
+static bool gc_incremental_sweep_step(void) {
+    if (gc_inc_sweep_prev == NULL) {
+        return false;
+    }
+    Obj* obj = *gc_inc_sweep_prev;
+    if (obj == NULL) {
+        gc_inc_sweep_prev = NULL;
+        return false;
+    }
+    if (!obj->is_marked) {
+        *gc_inc_sweep_prev = obj->next;
+        free_object(obj);
+        return true;
+    }
+    obj->generation = GEN_OLD;
+    obj->is_marked = false;
+    gc_inc_sweep_prev = &obj->next;
+    return true;
+}
+
+static size_t gc_obj_total_bytes(Obj* obj);
 static void maybe_mark_stack_word(uint64_t word);
 static void maybe_mark_stack_addr(uintptr_t addr);
-static void gc_unmark_all(void);
 static bool gc_debug_enabled(void);
 static void gc_debug_validate_objects(void);
 
 void gc_collect_minor(void);
+static void gc_incremental_finish_sync(void);
 
 static bool obj_header_in_nursery_range(const Obj* obj) {
     const uint8_t* p = (const uint8_t*)obj;
@@ -199,6 +473,8 @@ void gc_collect_minor(void) {
     if (gc_state.collecting) {
         return;
     }
+    gc_incremental_finish_sync();
+    uint64_t pause_start = gc_now_us();
     gc_state.collecting = true;
 
     gc_unmark_all();
@@ -256,6 +532,7 @@ void gc_collect_minor(void) {
     }
     gc_state.stats.collections++;
     gc_state.collecting = false;
+    gc_record_pause_since(pause_start);
 }
 
 size_t gc_nursery_used_bytes(void) {
@@ -279,12 +556,14 @@ static size_t gc_obj_total_bytes(Obj* obj) {
         }
         case OBJ_TABLE: {
             ObjTable* t = (ObjTable*)obj;
-            return sizeof(ObjTable) + (size_t)t->capacity * 2u * sizeof(Value);
+            size_t extra = 0;
+            if (t->hashes != NULL) {
+                extra = (size_t)t->capacity * sizeof(uint32_t);
+            }
+            return sizeof(ObjTable) + (size_t)t->capacity * 2u * sizeof(Value) + extra;
         }
-        case OBJ_FUNCTION: {
-            ObjFunction* f = (ObjFunction*)obj;
+        case OBJ_FUNCTION:
             return sizeof(ObjFunction);
-        }
         case OBJ_CLOSURE: {
             ObjClosure* c = (ObjClosure*)obj;
             return sizeof(ObjClosure) + (size_t)c->upvalue_count * sizeof(Value);
@@ -324,9 +603,16 @@ void gc_mark_object(Obj* obj) {
             if (table->keys == NULL || table->values == NULL) {
                 break; /* same partial-allocation window as ObjArray.elements */
             }
-            for (int i = 0; i < table->count; i++) {
-                gc_mark_value(table->keys[i]);
-                gc_mark_value(table->values[i]);
+            if (table->hashes != NULL && !table->is_struct_layout) {
+                for (int i = 0; i < table->capacity; i++) {
+                    gc_mark_value(table->keys[i]);
+                    gc_mark_value(table->values[i]);
+                }
+            } else {
+                for (int i = 0; i < table->count; i++) {
+                    gc_mark_value(table->keys[i]);
+                    gc_mark_value(table->values[i]);
+                }
             }
             break;
         }
@@ -510,10 +796,91 @@ void gc_sweep(void) {
     }
 }
 
+static size_t gc_inc_bytes_before_sweep = 0;
+
+void gc_collect_incremental(uint64_t budget_us) {
+    if (gc_state.gc_disabled) {
+        return;
+    }
+    uint64_t deadline;
+    if (budget_us == UINT64_MAX) {
+        deadline = UINT64_MAX;
+    } else {
+        uint64_t now = gc_now_us();
+        deadline = now + budget_us;
+    }
+    while (gc_now_us() < deadline) {
+        if (gc_inc_phase == GC_INC_IDLE) {
+            size_t soft = (gc_state.next_gc / 4u) * 3u;
+            if (soft == 0u) {
+                soft = gc_state.next_gc;
+            }
+            if (gc_state.bytes_allocated < soft) {
+                return;
+            }
+            gc_unmark_all();
+            gc_inc_bytes_before_sweep = gc_state.bytes_allocated;
+            gc_seed_roots_grey();
+            for (int i = 0; i < gc_state.remembered_count; i++) {
+                if (gc_state.remembered[i] != NULL) {
+                    grey_push_obj(gc_state.remembered[i]);
+                }
+            }
+            gc_inc_phase = GC_INC_MARKING;
+            continue;
+        }
+        if (gc_inc_phase == GC_INC_MARKING) {
+            if (gc_incremental_mark_step()) {
+                continue;
+            }
+            fuji_sweep_intern_table();
+            gc_inc_phase = GC_INC_SWEEPING;
+            gc_inc_sweep_prev = &gc_state.objects;
+            continue;
+        }
+        if (gc_inc_phase == GC_INC_SWEEPING) {
+            if (gc_incremental_sweep_step()) {
+                continue;
+            }
+            gc_state.remembered_count = 0;
+            gc_state.next_gc = gc_state.bytes_allocated * 2;
+            if (gc_state.next_gc < 1024u * 1024u) {
+                gc_state.next_gc = 1024u * 1024u;
+            }
+            size_t freed = 0;
+            if (gc_inc_bytes_before_sweep > gc_state.bytes_allocated) {
+                freed = gc_inc_bytes_before_sweep - gc_state.bytes_allocated;
+            }
+            gc_state.stats.bytes_freed += freed;
+            if (!nursery_has_live_object()) {
+                gc_reset_nursery();
+            }
+            gc_inc_phase = GC_INC_IDLE;
+            gc_state.stats.collections++;
+            gc_state.stats.bytes_allocated = gc_state.bytes_allocated;
+            return;
+        }
+    }
+}
+
+static void gc_incremental_finish_sync(void) {
+    while (gc_inc_phase != GC_INC_IDLE) {
+        gc_collect_incremental(UINT64_MAX);
+    }
+}
+
+void gc_frame_step_incremental(uint64_t budget_us) {
+    uint64_t t0 = gc_now_us();
+    gc_collect_incremental(budget_us);
+    gc_record_pause_since(t0);
+}
+
 void gc_collect(void) {
     if (gc_state.collecting) {
         return;
     }
+    gc_incremental_abort();
+    uint64_t pause_start = gc_now_us();
     gc_state.collecting = true;
     size_t before = gc_state.bytes_allocated;
 
@@ -548,6 +915,7 @@ void gc_collect(void) {
     }
 
     gc_state.collecting = false;
+    gc_record_pause_since(pause_start);
 }
 
 void gc_init(void) {
@@ -563,6 +931,7 @@ void gc_init(void) {
     gc_state.remembered_count = 0;
     gc_state.remembered_overflow_count = 0;
     memset(&gc_state.stats, 0, sizeof(gc_state.stats));
+    gc_incremental_abort();
 }
 
 GCStats gc_get_stats(void) {

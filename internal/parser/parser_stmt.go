@@ -62,6 +62,22 @@ func (p *Parser) parseDeclaration() ([]Decl, error) {
 		p.lastDirective = nil
 		return []Decl{decl}, nil
 	}
+	if p.match(lexer.TokenStruct) {
+		decl, err := p.parseStructDeclaration()
+		if err != nil {
+			return nil, err
+		}
+		p.lastDirective = nil
+		return []Decl{decl}, nil
+	}
+	if p.match(lexer.TokenEnum) {
+		decl, err := p.parseEnumDeclaration()
+		if err != nil {
+			return nil, err
+		}
+		p.lastDirective = nil
+		return []Decl{decl}, nil
+	}
 	p.lastDirective = nil
 	s, err := p.parseStatement()
 	if err != nil {
@@ -642,4 +658,66 @@ func (p *Parser) parseExpressionStatement() (Stmt, error) {
 	}
 
 	return &ExpressionStmt{Token: token, Expr: expr}, nil
+}
+
+func (p *Parser) parseStructDeclaration() (Decl, error) {
+	kwTok := p.previous()
+	name, err := p.consume(lexer.TokenIdentifier, "expected struct name")
+	if err != nil {
+		return nil, err
+	}
+	name = normalizeIdentLexeme(name)
+	if _, err := p.consume(lexer.TokenLBrace, "expected '{' before struct fields"); err != nil {
+		return nil, err
+	}
+	var fields []lexer.Token
+	if !p.check(lexer.TokenRBrace) {
+		for {
+			f, err := p.consume(lexer.TokenIdentifier, "expected field name")
+			if err != nil {
+				return nil, err
+			}
+			f = normalizeIdentLexeme(f)
+			fields = append(fields, f)
+			if !p.match(lexer.TokenComma) {
+				break
+			}
+		}
+	}
+	if _, err := p.consume(lexer.TokenRBrace, "expected '}' after struct fields"); err != nil {
+		return nil, err
+	}
+	_ = p.match(lexer.TokenSemicolon)
+	return &StructDecl{Token: kwTok, Name: name, Fields: fields}, nil
+}
+
+func (p *Parser) parseEnumDeclaration() (Decl, error) {
+	kwTok := p.previous()
+	name, err := p.consume(lexer.TokenIdentifier, "expected enum name")
+	if err != nil {
+		return nil, err
+	}
+	name = normalizeIdentLexeme(name)
+	if _, err := p.consume(lexer.TokenLBrace, "expected '{' before enum members"); err != nil {
+		return nil, err
+	}
+	var members []lexer.Token
+	if !p.check(lexer.TokenRBrace) {
+		for {
+			m, err := p.consume(lexer.TokenIdentifier, "expected enum member name")
+			if err != nil {
+				return nil, err
+			}
+			m = normalizeIdentLexeme(m)
+			members = append(members, m)
+			if !p.match(lexer.TokenComma) {
+				break
+			}
+		}
+	}
+	if _, err := p.consume(lexer.TokenRBrace, "expected '}' after enum members"); err != nil {
+		return nil, err
+	}
+	_ = p.match(lexer.TokenSemicolon)
+	return &EnumDecl{Token: kwTok, Name: name, Members: members}, nil
 }

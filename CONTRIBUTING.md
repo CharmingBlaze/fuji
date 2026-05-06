@@ -20,6 +20,14 @@ go vet ./...
 go test ./... -count=1
 ```
 
+## Releases
+
+See **[docs/releasing.md](docs/releasing.md)** for version bumps, changelog, and tagging **`v*`** so **`.github/workflows/release.yml`** runs.
+
+## Git: commit and push to `main`
+
+Step-by-step (including for automation): **[docs/git-workflow-for-agents.md](docs/git-workflow-for-agents.md)**.
+
 ## Formatting
 
 Canonical `.fuji` style:

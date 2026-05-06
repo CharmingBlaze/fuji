@@ -1,0 +1,21 @@
+enum Dir {
+    Up,
+    Down,
+    Left,
+    Right
+}
+
+let u = Dir.Up;
+let r = Dir.Right;
+
+assert(u == 0, "enum Up");
+assert(r == 3, "enum Right");
+
+switch (u) {
+    case Dir.Up:
+        print("case up");
+    default:
+        print("default arm");
+}
+
+print("PASS: enum");

@@ -64,6 +64,7 @@ var precedences = map[lexer.TokenType]int{
 	lexer.TokenCaret:               PrecedenceBitXor,
 	lexer.TokenLParen:              PrecedenceCall,
 	lexer.TokenLBracket:            PrecedenceIndex,
+	lexer.TokenLBrace:              PrecedenceCall, // `TypeName { ... }` struct literal
 	lexer.TokenDot:                 PrecedenceIndex,
 	lexer.TokenOptionalDot:         PrecedenceIndex,
 }
@@ -185,6 +186,8 @@ func (p *Parser) getInfixFn(typ lexer.TokenType) infixParseFn {
 		return p.parseOptionalDotExpression
 	case lexer.TokenLBracket:
 		return p.parseIndexExpression
+	case lexer.TokenLBrace:
+		return p.parseStructLiteralInfix
 	case lexer.TokenQuestionQuestion:
 		return p.parseNullishCoalesceExpression
 	case lexer.TokenDotDot:
@@ -502,6 +505,50 @@ func (p *Parser) parseObjectLiteral() (Expr, error) {
 	}
 
 	return &ObjectExpr{Token: token, Keys: keys, Values: values}, nil
+}
+
+// parseStructLiteralInfix parses `StructName { field: expr, ... }` after the opening `{` token has been consumed as the infix operator.
+func (p *Parser) parseStructLiteralInfix(left Expr) (Expr, error) {
+	idExpr, ok := left.(*IdentifierExpr)
+	if !ok {
+		tok := p.previous()
+		return nil, fmt.Errorf("%d:%d: struct literal must follow a type name", tok.Line, tok.Col)
+	}
+	token := p.previous() // '{'
+	keys := []lexer.Token{}
+	values := []Expr{}
+
+	if !p.check(lexer.TokenRBrace) {
+		for {
+			key, err := p.consume(lexer.TokenIdentifier, "expected field name")
+			if err != nil {
+				return nil, err
+			}
+			key = normalizeIdentLexeme(key)
+			keys = append(keys, key)
+
+			if _, err := p.consume(lexer.TokenColon, "expected ':' after field name"); err != nil {
+				return nil, err
+			}
+
+			val, err := p.parseExpression(PrecedenceLowest)
+			if err != nil {
+				return nil, err
+			}
+			values = append(values, val)
+
+			if !p.match(lexer.TokenComma) {
+				break
+			}
+		}
+	}
+
+	if _, err := p.consume(lexer.TokenRBrace, "expected '}' after struct literal"); err != nil {
+		return nil, err
+	}
+
+	tagTok := idExpr.Name
+	return &ObjectExpr{Token: token, StructTag: &tagTok, Keys: keys, Values: values}, nil
 }
 
 func (p *Parser) parseFuncExpression() (Expr, error) {

@@ -17,10 +17,10 @@ func (g *Generator) emitShadowPop() {
 		return
 	}
 	g.block.NewCall(g.runtimePopFrame)
-	g.shadowPushed = false
-	g.shadowFramePtr = nil
-	g.shadowFrameArrTy = nil
-	g.shadowTempNext = 0
+	// Do not clear shadowPushed / shadowFramePtr / shadowFrameArrTy here. A function may have
+	// multiple return blocks; flipping shadowPushed off after the first emitShadowPop skipped
+	// fuji_pop_frame on subsequent returns (broken shadow stack → GC teardown crashes on Win32).
+	// Per-function codegen state is restored when leaving emitFuncDecl / emitFuncExpr / user_main emit.
 }
 
 func (g *Generator) beginShadowFrame(layout *sema.ShadowLayout, thisSlot value.Value, orderedParamNames []string) {
@@ -110,4 +110,16 @@ func (g *Generator) shadowStoreTemp(slotPtr value.Value) {
 	idx := g.shadowTempNext
 	g.shadowTempNext++
 	g.shadowStoreIndex(idx, slotPtr)
+}
+
+// shadowRewindTemps rewinds TempBase index allocation after a logically complete expression
+// or before a disjoint CFG region (another branch iteration, loop header, merge).
+// Branch bodies are emitted sequentially in codegen; without rewinding, shadowTempNext can
+// exceed ShadowLayout.Total and shadowStoreTemp silently drops pointers that must remain
+// GC roots across allocations (undefined behaviour during later collections).
+func (g *Generator) shadowRewindTemps() {
+	if g.shadowLayout == nil {
+		return
+	}
+	g.shadowTempNext = g.shadowLayout.TempBase
 }

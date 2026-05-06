@@ -1,0 +1,12 @@
+func readDone(t) {
+    if (t.done) {
+        return 0;
+    }
+    return 1;
+}
+
+let o = { done: false };
+print(readDone(o));
+o.done = true;
+print(readDone(o));
+print("PASS gc_shadow_branch");

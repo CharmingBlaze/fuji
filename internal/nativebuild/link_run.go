@@ -18,8 +18,13 @@ func objFileName() string {
 	return "main.o"
 }
 
-func runLLC(llcPath, irPath, objPath string, optFlag string) error {
-	cmd := exec.Command(llcPath, optFlag, "-filetype=obj", "-o", objPath, irPath)
+func runLLC(llcPath, irPath, objPath string, optFlag string, debug bool) error {
+	args := []string{optFlag}
+	if debug {
+		args = append(args, "-g")
+	}
+	args = append(args, "-filetype=obj", "-o", objPath, irPath)
+	cmd := exec.Command(llcPath, args...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	return cmd.Run()
@@ -70,13 +75,16 @@ func runCompileAndLink(tc *fujihome.Toolchain, irFile, outAbs, rootDir string, o
 		if log != nil {
 			log("  compile mode: llc -> object (windows stability fallback)\n")
 		}
-		if err := runLLC(tc.LLC, irFile, objPath, opts.llcOptFlag()); err != nil {
+		if err := runLLC(tc.LLC, irFile, objPath, opts.llcOptFlag(), opts.Debug); err != nil {
 			return fmt.Errorf("llc failed in windows fallback: %w", err)
 		}
 		inputFile = objPath
 	}
 
 	linkArgs := []string{opts.llcOptFlag()}
+	if opts.Debug {
+		linkArgs = append(linkArgs, "-g")
+	}
 	if tc.LLD != "" {
 		if runtime.GOOS == "windows" {
 			// Clang treats "-fuse-ld=C:\..." as multiple tokens (drive colon); rely on LLVM lld on PATH.

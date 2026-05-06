@@ -42,6 +42,10 @@ void gc_mark_shadow_stack(void);
 void gc_sweep(void);
 void gc_collect(void);
 void gc_collect_minor(void);
+void gc_collect_incremental(uint64_t budget_us);
+void gc_frame_step_incremental(uint64_t budget_us);
+bool gc_incremental_is_idle(void);
+void gc_record_pause_since(uint64_t start_us);
 void gc_set_use_shadow_stack(bool enabled);
 
 size_t gc_nursery_used_bytes(void);

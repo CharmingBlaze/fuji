@@ -17,40 +17,64 @@ import (
 	"fuji/internal/sema"
 )
 
-func parseBuildCommandArgs(args []string) (src string, out string, noOpt bool, err error) {
+func parseBuildCommandArgs(args []string) (src string, out string, noOpt bool, debug bool, err error) {
 	var output string
 	var file string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--no-opt":
 			noOpt = true
+		case "--debug":
+			debug = true
 		case "-o":
 			if i+1 >= len(args) {
-				return "", "", false, fmt.Errorf("-o requires a path")
+				return "", "", false, false, fmt.Errorf("-o requires a path")
 			}
 			i++
 			output = args[i]
 		default:
 			if strings.HasPrefix(args[i], "-") {
-				return "", "", false, fmt.Errorf("unknown flag: %s", args[i])
+				return "", "", false, false, fmt.Errorf("unknown flag: %s", args[i])
 			}
 			if file != "" {
-				return "", "", false, fmt.Errorf("multiple source files")
+				return "", "", false, false, fmt.Errorf("multiple source files")
 			}
 			file = args[i]
 		}
 	}
 	if file == "" {
-		return "", "", false, fmt.Errorf("usage: fuji build [--no-opt] <file.fuji> [-o <exe>]")
+		return "", "", false, false, fmt.Errorf("usage: fuji build [--no-opt] [--debug] <file.fuji> [-o <exe>]")
 	}
 	if output == "" {
 		output = defaultExeName(file)
 	}
-	return file, output, noOpt, nil
+	return file, output, noOpt, debug, nil
+}
+
+func parseRunCommandArgs(args []string) (src string, noOpt bool, err error) {
+	var file string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--no-opt":
+			noOpt = true
+		default:
+			if strings.HasPrefix(args[i], "-") {
+				return "", false, fmt.Errorf("unknown flag: %s (fuji run accepts --no-opt)", args[i])
+			}
+			if file != "" {
+				return "", false, fmt.Errorf("multiple source files")
+			}
+			file = args[i]
+		}
+	}
+	if file == "" {
+		return "", false, fmt.Errorf("usage: fuji run [--no-opt] <file.fuji>")
+	}
+	return file, noOpt, nil
 }
 
 // version is set by release builds, e.g. -ldflags "-X main.version=1.0.0"
-var version = "0.2.0-dev"
+var version = "0.3.0-dev"
 
 func main() {
 	args := os.Args[1:]
@@ -62,8 +86,26 @@ func main() {
 	switch args[0] {
 	case "run", "native":
 		cmd := args[0]
-		requireArg(args, cmd, "<file.fuji>")
-		if err := api.Run(args[1], ""); err != nil {
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "usage: fuji %s [--no-opt] <file.fuji>\n", cmd)
+			os.Exit(1)
+		}
+		path, noOpt, err := parseRunCommandArgs(args[1:])
+		if err != nil {
+			fatal(err.Error())
+		}
+		opts := nativebuild.BuildOptions{NoOpt: noOpt}
+		if err := api.RunWithBuildOptions(path, "", opts); err != nil {
+			fatalErr(err)
+		}
+
+	case "watch":
+		path, noOpt, err := parseWatchCommandArgs(args[1:])
+		if err != nil {
+			fatal(err.Error())
+		}
+		opts := nativebuild.BuildOptions{NoOpt: noOpt}
+		if err := runWatch(path, opts); err != nil {
 			fatalErr(err)
 		}
 
@@ -86,11 +128,12 @@ func main() {
 		}
 
 	case "build":
-		src, output, noOpt, err := parseBuildCommandArgs(args[1:])
+		src, output, noOpt, debug, err := parseBuildCommandArgs(args[1:])
 		if err != nil {
 			fatal(err.Error())
 		}
-		opts := nativebuild.BuildOptions{NoOpt: noOpt}
+		// --debug prioritizes debuggability (symbols + less optimizer reordering).
+		opts := nativebuild.BuildOptions{NoOpt: noOpt || debug, Debug: debug}
 		if err := buildFileOpts(src, output, opts); err != nil {
 			fatalErr(err)
 		}
@@ -147,12 +190,13 @@ USAGE
   fuji <command> [arguments]
 
 COMMANDS
-  run     <file.fuji>              Compile with LLVM and run the native binary (same pipeline as build)
-  native  <file.fuji>              Same as run (backward-compatible alias)
+  run     [--no-opt] <file.fuji>   Compile with LLVM and run (same pipeline as build; --no-opt eases flaky Clang IR opt)
+  native  [--no-opt] <file.fuji>   Same as run (backward-compatible alias)
+  watch   [--no-opt] <file.fuji>   Rebuild + rerun on .fuji file changes under the entry directory
   check   <file.fuji>              Parse, resolve imports, run sema (no LLVM); prints OK if valid
   fmt     [--check] <files...>     Canonical spacing (4 spaces); ./... walks .fuji files (--check exits 1 if diffs)
   disasm  <file.fuji>              Print LLVM IR for the program (after sema + codegen)
-  build   [--no-opt] <file.fuji> [-o <exe>]   Native executable (needs llc + Clang; see CONTRIBUTING.md)
+  build   [--no-opt] [--debug] <file.fuji> [-o <exe>]   Native executable (needs llc + Clang; --debug emits symbols and implies --no-opt)
   bundle  <file.fuji> [-o <dir>]   Build + tidy folder to share or sell
   wrap    ...args...                   Forward to fujiwrap (C header → .fuji + wrapper.c); see below
   paths                            Machine-readable toolchain paths (CI / scripts)
@@ -217,6 +261,7 @@ ZERO-SETUP DISTRIBUTION (same folder as fuji.exe / fuji)
 
 EXAMPLES
   fuji run tests\hello.fuji
+  fuji run --no-opt tests\loops.fuji
   fuji build game.fuji -o game.exe
   fuji bundle game.fuji -o dist\mygame
 `, versionLine(), exeExt())

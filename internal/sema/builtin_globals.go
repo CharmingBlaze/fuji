@@ -24,7 +24,7 @@ var nativeBuiltinNames = []string{
 	"readfile", "writefile", "appendfile", "fileexists", "deletefile",
 	"trace", "parsejson", "tojson",
 	"abs", "sqrt", "number", "string",
-	"gc", "gcframestep",
+	"gc", "gcframestep", "gcstats",
 }
 
 func seedGlobalBuiltins(s *Scope) {

@@ -33,6 +33,7 @@ void fuji_gc_enable(void);
 void fuji_gc_collect(void);
 void fuji_gc_use_shadow_stack(bool enable);
 void fuji_gc_frame_step(double budget_ms);
+Value fuji_gc_stats(int argc, Value* argv);
 
 #include "shadow_stack.h"
 
@@ -68,6 +69,9 @@ Value fuji_allocate_string(int length, char* chars);
 /** Copy UTF-8 bytes into a string object (wrapgen / FFI helpers). */
 Value fuji_copy_string(const char* chars, int length);
 Value fuji_allocate_object(int property_count);
+Value fuji_allocate_struct(int field_count);
+Value fuji_struct_get(Value obj, int64_t index);
+Value fuji_struct_set(Value obj, int64_t index, Value val);
 Value fuji_object_get(Value obj, Value key);
 Value fuji_object_set(Value obj, Value key, Value value);
 Value fuji_object_remove(Value obj, Value key);

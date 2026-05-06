@@ -40,6 +40,16 @@ func (g *Generator) storeNaNBoxedToAssignTarget(left parser.Expr, boxed value.Va
 		}
 		return g.undefinedVarError(name, l.Name.File, l.Name.Line, l.Name.Col)
 	case *parser.IndexExpr:
+		if g.ctx != nil {
+			if slot, ok := g.ctx.IndexExprStructSlot[l]; ok {
+				obj, err := g.emitExpr(l.Object)
+				if err != nil {
+					return err
+				}
+				g.block.NewCall(g.runtimeStructSet, g.emitAsFujiI64(obj), constant.NewInt(types.I64, int64(slot)), boxed)
+				return nil
+			}
+		}
 		obj, err := g.emitExpr(l.Object)
 		if err != nil {
 			return err
@@ -96,8 +106,46 @@ func (g *Generator) emitNullishAssign(e *parser.AssignExpr) (value.Value, error)
 	return out, nil
 }
 
+func (g *Generator) emitStructObject(e *parser.ObjectExpr) (value.Value, error) {
+	stName := e.StructTag.Lexeme
+	layout := g.ctx.StructFields[stName]
+	n := len(layout)
+	if n < 1 {
+		n = 1
+	}
+	count := constant.NewInt(types.I32, int64(n))
+	obj := g.block.NewCall(g.runtimeAllocStruct, count)
+	objSlot := g.entryAlloca(types.I64)
+	g.shadowStoreTemp(objSlot)
+	g.block.NewStore(obj, objSlot)
+	for i, fname := range layout {
+		var val parser.Expr
+		for j, k := range e.Keys {
+			if k.Lexeme == fname {
+				val = e.Values[j]
+				break
+			}
+		}
+		if val == nil {
+			val = &parser.LiteralExpr{Token: e.Token, Value: nil}
+		}
+		vv, err := g.emitExpr(val)
+		if err != nil {
+			return nil, err
+		}
+		objLive := g.block.NewLoad(types.I64, objSlot)
+		idx := constant.NewInt(types.I64, int64(i))
+		g.block.NewCall(g.runtimeStructSet, objLive, idx, g.emitAsFujiI64(vv))
+	}
+	return g.block.NewLoad(types.I64, objSlot), nil
+}
+
 // emitObject emits LLVM IR for object expressions.
 func (g *Generator) emitObject(e *parser.ObjectExpr) (value.Value, error) {
+	if e.StructTag != nil {
+		return g.emitStructObject(e)
+	}
+
 	nKeys := len(e.Keys) + len(e.ComputedKeys)
 	if nKeys < 1 {
 		nKeys = 1 // runtime table expects non-zero capacity for key/value slots
@@ -147,6 +195,45 @@ func (g *Generator) emitObject(e *parser.ObjectExpr) (value.Value, error) {
 
 // emitIndex emits LLVM IR for index expressions (property or array access).
 func (g *Generator) emitIndex(e *parser.IndexExpr) (value.Value, error) {
+	if g.ctx != nil {
+		if ord, ok := g.ctx.IndexExprEnumConst[e]; ok {
+			return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, float64(ord))), nil
+		}
+		if slot, ok := g.ctx.IndexExprStructSlot[e]; ok {
+			obj, err := g.emitExpr(e.Object)
+			if err != nil {
+				return nil, err
+			}
+			objSlot := g.entryAlloca(types.I64)
+			g.shadowStoreTemp(objSlot)
+			g.block.NewStore(g.emitAsFujiI64(obj), objSlot)
+			idx := constant.NewInt(types.I64, int64(slot))
+			if !e.Optional {
+				objLive := g.block.NewLoad(types.I64, objSlot)
+				return g.block.NewCall(g.runtimeStructGet, objLive, idx), nil
+			}
+			nilTag := constant.NewInt(types.I64, llvmNilTagged)
+			objI := g.block.NewLoad(types.I64, objSlot)
+			isNil := g.block.NewICmp(enum.IPredEQ, objI, nilTag)
+			g.tempN++
+			suf := fmt.Sprintf(".stopt%d", g.tempN)
+			skip := g.currentFn.NewBlock("stnil" + suf)
+			cont := g.currentFn.NewBlock("stget" + suf)
+			merge := g.currentFn.NewBlock("stmg" + suf)
+			g.block.NewCondBr(isNil, skip, cont)
+			g.block = skip
+			skip.NewBr(merge)
+			g.block = cont
+			got := g.block.NewCall(g.runtimeStructGet, objI, idx)
+			cont.NewBr(merge)
+			g.block = merge
+			return merge.NewPhi(
+				ir.NewIncoming(nilTag, skip),
+				ir.NewIncoming(got, cont),
+			), nil
+		}
+	}
+
 	obj, err := g.emitExpr(e.Object)
 	if err != nil {
 		return nil, err
@@ -234,6 +321,17 @@ func (g *Generator) emitAssign(e *parser.AssignExpr) (value.Value, error) {
 		}
 		return nil, g.undefinedVarError(name, left.Name.File, left.Name.Line, left.Name.Col)
 	case *parser.IndexExpr:
+		if g.ctx != nil {
+			if slot, ok := g.ctx.IndexExprStructSlot[left]; ok {
+				obj, err := g.emitExpr(left.Object)
+				if err != nil {
+					return nil, err
+				}
+				idx := constant.NewInt(types.I64, int64(slot))
+				boxed := g.emitAsFujiI64(val)
+				return g.block.NewCall(g.runtimeStructSet, g.emitAsFujiI64(obj), idx, boxed), nil
+			}
+		}
 		// Property or array assignment
 		obj, err := g.emitExpr(left.Object)
 		if err != nil {
@@ -316,6 +414,16 @@ func (g *Generator) emitCompoundAssign(e *parser.AssignExpr, op string) (value.V
 		}
 		return nil, g.undefinedVarError(name, left.Name.File, left.Name.Line, left.Name.Col)
 	case *parser.IndexExpr:
+		if g.ctx != nil {
+			if slot, ok := g.ctx.IndexExprStructSlot[left]; ok {
+				obj, err := g.emitExpr(left.Object)
+				if err != nil {
+					return nil, err
+				}
+				idx := constant.NewInt(types.I64, int64(slot))
+				return g.block.NewCall(g.runtimeStructSet, g.emitAsFujiI64(obj), idx, g.emitAsFujiI64(result)), nil
+			}
+		}
 		obj, err := g.emitExpr(left.Object)
 		if err != nil {
 			return nil, err

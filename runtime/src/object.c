@@ -12,6 +12,7 @@ ObjString* allocate_string(int length) {
     string->obj.is_marked = false;
     string->obj.next = NULL;
     string->length = length;
+    string->hash = 0;
     string->chars[length] = '\0';
     gc_register_object(&string->obj);
     return string;
@@ -47,9 +48,44 @@ ObjTable* allocate_table(int capacity) {
     table->count = 0;
     table->keys = NULL;
     table->values = NULL;
+    table->is_struct_layout = false;
+    table->hashes = NULL;
     gc_register_object(&table->obj);
     table->keys = (Value*)gc_alloc(sizeof(Value) * (size_t)capacity);
     table->values = (Value*)gc_alloc(sizeof(Value) * (size_t)capacity);
+    for (int i = 0; i < capacity; i++) {
+        table->keys[i] = NIL_VAL;
+        table->values[i] = NIL_VAL;
+    }
+    if (capacity >= 8) {
+        table->hashes = (uint32_t*)calloc((size_t)capacity, sizeof(uint32_t));
+    }
+    return table;
+}
+
+ObjTable* allocate_struct_table(int field_count) {
+    if (field_count < 1) {
+        field_count = 1;
+    }
+    if (field_count < 0 || (size_t)field_count > (SIZE_MAX / sizeof(Value))) {
+        fprintf(stderr, "fuji: struct field count overflow\n");
+        exit(1);
+    }
+    ObjTable* table = (ObjTable*)gc_alloc(sizeof(ObjTable));
+    table->obj.type = OBJ_TABLE;
+    table->obj.is_marked = false;
+    table->obj.next = NULL;
+    table->capacity = field_count;
+    table->count = field_count;
+    table->is_struct_layout = true;
+    table->hashes = NULL;
+    gc_register_object(&table->obj);
+    table->keys = (Value*)gc_alloc(sizeof(Value) * (size_t)field_count);
+    table->values = (Value*)gc_alloc(sizeof(Value) * (size_t)field_count);
+    for (int i = 0; i < field_count; i++) {
+        table->keys[i] = NIL_VAL;
+        table->values[i] = NIL_VAL;
+    }
     return table;
 }
 
@@ -126,6 +162,9 @@ void free_object(Obj* obj) {
             }
             if (table->values != NULL) {
                 gc_free(table->values, (size_t)table->capacity * sizeof(Value));
+            }
+            if (table->hashes != NULL) {
+                gc_free(table->hashes, (size_t)table->capacity * sizeof(uint32_t));
             }
             gc_free(table, sizeof(ObjTable));
             break;

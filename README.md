@@ -11,9 +11,9 @@ A small language for **games and apps**: **plain `.fuji` files** you can read, d
 | **Players / Customers** | Only your **bundle** folder (`.exe` + assets). No Go, Python, or C++. |
 | **You (Author)** | **Go** to build **`fuji`** once. Either a **self-contained release binary** (no LLVM install) or **Clang** + **llc** on `PATH`, plus a C compiler to build **`runtime/libfuji_runtime.a`** when not using a prebuilt archive. Optional **`fujiwrap`** (same sources as **`wrapgen`**) for C header bindings. |
 
-See **[CHANGELOG.md](CHANGELOG.md)** for **v0.1.0** (Result errors, GC, embedded toolchain, first tagged release). Contributors: **[CONTRIBUTING.md](CONTRIBUTING.md)** (tests, **`fuji fmt --check`**, runtime build). Compiler/runtime package map and invariants: **[docs/handoff.md](docs/handoff.md)**.
+See **[CHANGELOG.md](CHANGELOG.md)** for **v0.2.0** and earlier (native pipeline, **`fuji fmt`**, GC/shadow-stack fixes, **`fuji watch`**, **`build --debug`**). Contributors: **[CONTRIBUTING.md](CONTRIBUTING.md)** (tests, **`fuji fmt --check`**, runtime build). Compiler/runtime package map and invariants: **[docs/handoff.md](docs/handoff.md)**. Cutting a GitHub Release: **[docs/releasing.md](docs/releasing.md)**.
 
-### Verify v0.1.0 locally (Windows)
+### Verify v0.2.0 locally (Windows)
 
 Use **Developer Command Prompt for VS 2022** (or any shell where **`clang`**, **`llc`**, and a C compiler are on **`PATH`**).
 
@@ -47,6 +47,11 @@ make build    # ./bin/fuji and ./bin/fujiwrap (see Makefile; `make wrapgen` also
 **Run an example:**
 ```bash
 ./bin/fuji run examples/hello.fuji
+```
+
+**Watch + rerun on edits:**
+```bash
+./bin/fuji watch examples/hello.fuji
 ```
 
 **Build a native app** (requires **`llc`**, **`clang`**, and **`runtime/libfuji_runtime.a`** unless using a **release-tagged** `fuji` binary):

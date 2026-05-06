@@ -2,6 +2,7 @@ package sema
 
 import (
 	"fmt"
+	"strings"
 
 	"fuji/internal/diagnostic"
 	"fuji/internal/parser"
@@ -12,6 +13,14 @@ type Analyzer struct {
 	currentScope *Scope
 	scopes       []*Scope
 	errors       []error
+
+	structLayouts map[string][]string // struct type name -> ordered field names
+	varStructType map[string]string   // variable name -> struct type name
+	varEnumType   map[string]string   // variable name -> enum type name
+	warnings      []string
+
+	indexExprStructSlot map[*parser.IndexExpr]int
+	indexExprEnumConst  map[*parser.IndexExpr]int64
 }
 
 // Scope represents a lexical scope with symbol bindings.
@@ -65,15 +74,26 @@ func NewAnalyzer() *Analyzer {
 	seedGlobalBuiltins(builtinRoot)
 	globalScope := NewScope(builtinRoot)
 	return &Analyzer{
-		currentScope: globalScope,
-		scopes:       []*Scope{builtinRoot, globalScope},
-		errors:       []error{},
+		currentScope:        globalScope,
+		scopes:              []*Scope{builtinRoot, globalScope},
+		errors:              []error{},
+		structLayouts:       make(map[string][]string),
+		varStructType:       make(map[string]string),
+		varEnumType:         make(map[string]string),
+		indexExprStructSlot: make(map[*parser.IndexExpr]int),
+		indexExprEnumConst:  make(map[*parser.IndexExpr]int64),
 	}
 }
 
 // Analyze performs semantic analysis on a program.
 func (a *Analyzer) Analyze(prog *parser.Program) error {
 	a.errors = nil
+	a.warnings = nil
+	a.structLayouts = make(map[string][]string)
+	a.varStructType = make(map[string]string)
+	a.varEnumType = make(map[string]string)
+	a.indexExprStructSlot = make(map[*parser.IndexExpr]int)
+	a.indexExprEnumConst = make(map[*parser.IndexExpr]int64)
 	for _, decl := range prog.Declarations {
 		a.analyzeDecl(decl)
 	}
@@ -90,6 +110,15 @@ func (a *Analyzer) Analyze(prog *parser.Program) error {
 // Errors returns all errors found during analysis.
 func (a *Analyzer) Errors() []error {
 	return a.errors
+}
+
+// Warnings returns non-fatal diagnostics (e.g. switch exhaustiveness on enums).
+func (a *Analyzer) Warnings() []string {
+	return a.warnings
+}
+
+func (a *Analyzer) warn(msg string) {
+	a.warnings = append(a.warnings, msg)
 }
 
 func (a *Analyzer) record(err error) {
@@ -119,6 +148,10 @@ func (a *Analyzer) analyzeDecl(decl parser.Decl) {
 		a.analyzeFuncDecl(d)
 	case *parser.FuncExpr:
 		a.analyzeFuncExpr(d)
+	case *parser.StructDecl:
+		a.analyzeStructDecl(d)
+	case *parser.EnumDecl:
+		a.analyzeEnumDecl(d)
 	case *parser.IncludeDecl:
 		return
 	case parser.Stmt:
@@ -140,6 +173,7 @@ func (a *Analyzer) analyzeLetDecl(d *parser.LetDecl) {
 	a.currentScope.Define(name, d)
 	if d.Init != nil {
 		a.analyzeExpr(d.Init)
+		a.recordVarTypesFromInit(name, d.Init)
 	}
 }
 
@@ -245,6 +279,7 @@ func (a *Analyzer) analyzeStmt(stmt parser.Stmt) {
 		for _, cd := range s.Default {
 			a.analyzeDecl(cd)
 		}
+		a.checkSwitchEnumExhaustive(s)
 	case *parser.DeleteStmt:
 		a.analyzeExpr(s.Target)
 	case *parser.DeferStmt:
@@ -265,15 +300,33 @@ func (a *Analyzer) analyzeBlockStmt(s *parser.BlockStmt) {
 	}
 }
 
+// suggestName returns a hint for a typo'd identifier using case-folded edit distance (< 3).
+func (a *Analyzer) suggestName(name string) string {
+	ln := strings.ToLower(name)
+	best, bestDist := "", 3
+	for sc := a.currentScope; sc != nil; sc = sc.parent {
+		for candidate := range sc.symbols {
+			if candidate == name {
+				continue
+			}
+			d := levenshtein(ln, strings.ToLower(candidate))
+			if d < bestDist {
+				best, bestDist = candidate, d
+			}
+		}
+	}
+	if best != "" {
+		return fmt.Sprintf("did you mean '%s'?", best)
+	}
+	return ""
+}
+
 func (a *Analyzer) analyzeExpr(expr parser.Expr) {
 	switch e := expr.(type) {
 	case *parser.IdentifierExpr:
 		name := e.Name.Lexeme
 		if _, ok := a.currentScope.Resolve(name); !ok {
-			hint := ""
-			if s, ok := diagnostic.BestSuggestion(name, a.currentScope.VisibleNames(), 2); ok {
-				hint = fmt.Sprintf("did you mean '%s'?", s)
-			}
+			hint := a.suggestName(name)
 			a.record(&diagnostic.DiagnosticError{
 				File:    e.Name.File,
 				Line:    e.Name.Line,
@@ -303,10 +356,7 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) {
 		if ident, ok := e.Left.(*parser.IdentifierExpr); ok {
 			name := ident.Name.Lexeme
 			if _, ok := a.currentScope.Resolve(name); !ok {
-				hint := ""
-				if s, ok := diagnostic.BestSuggestion(name, a.currentScope.VisibleNames(), 2); ok {
-					hint = fmt.Sprintf("did you mean '%s'?", s)
-				}
+				hint := a.suggestName(name)
 				a.record(&diagnostic.DiagnosticError{
 					File:    ident.Name.File,
 					Line:    ident.Name.Line,
@@ -320,6 +370,7 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) {
 		if ix, ok := e.Left.(*parser.IndexExpr); ok {
 			a.analyzeExpr(ix.Object)
 			a.analyzeExpr(ix.Index)
+			a.checkStructFieldAccess(ix)
 			return
 		}
 		a.record(&diagnostic.DiagnosticError{
@@ -336,6 +387,8 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) {
 	case *parser.IndexExpr:
 		a.analyzeExpr(e.Object)
 		a.analyzeExpr(e.Index)
+		a.checkEnumMemberAccess(e)
+		a.checkStructFieldAccess(e)
 	case *parser.SpreadExpr:
 		a.analyzeExpr(e.Expr)
 	case *parser.TemplateExpr:
@@ -349,6 +402,9 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) {
 			a.analyzeExpr(el)
 		}
 	case *parser.ObjectExpr:
+		if e.StructTag != nil {
+			a.validateStructLiteral(e)
+		}
 		for _, v := range e.Values {
 			a.analyzeExpr(v)
 		}

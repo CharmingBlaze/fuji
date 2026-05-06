@@ -164,6 +164,9 @@ type Generator struct {
 	runtimeParseJSON    *ir.Func
 	runtimeToJSON       *ir.Func
 	runtimeAllocObj     *ir.Func
+	runtimeAllocStruct  *ir.Func
+	runtimeStructGet    *ir.Func
+	runtimeStructSet    *ir.Func
 	runtimeObjGet       *ir.Func
 	runtimeObjSet       *ir.Func
 	runtimeObjRemove    *ir.Func
@@ -193,6 +196,7 @@ type Generator struct {
 	runtimeCellWrite    *ir.Func
 	runtimeGcCollect    *ir.Func
 	runtimeGcFrameStep  *ir.Func
+	runtimeGcStats      *ir.Func
 	runtimePushFrame    *ir.Func
 	runtimePopFrame     *ir.Func
 	runtimeOk           *ir.Func
@@ -339,6 +343,9 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimeParseJSON:        runtimeFuncs["FUJI_parseJSON"],
 		runtimeToJSON:           runtimeFuncs["FUJI_toJSON"],
 		runtimeAllocObj:         runtimeFuncs["FUJI_allocate_object"],
+		runtimeAllocStruct:      runtimeFuncs["FUJI_allocate_struct"],
+		runtimeStructGet:        runtimeFuncs["FUJI_struct_get"],
+		runtimeStructSet:        runtimeFuncs["FUJI_struct_set"],
 		runtimeObjGet:           runtimeFuncs["FUJI_object_get"],
 		runtimeObjSet:           runtimeFuncs["FUJI_object_set"],
 		runtimeObjRemove:        runtimeFuncs["FUJI_object_remove"],
@@ -368,6 +375,7 @@ func NewGenerator(ctx *sema.NativeEmitContext) *Generator {
 		runtimeCellWrite:        runtimeFuncs["FUJI_cell_write"],
 		runtimeGcCollect:        runtimeFuncs["FUJI_gc_collect"],
 		runtimeGcFrameStep:      runtimeFuncs["FUJI_gc_frame_step"],
+		runtimeGcStats:          runtimeFuncs["FUJI_gc_stats"],
 		runtimePushFrame:        runtimeFuncs["FUJI_push_frame"],
 		runtimePopFrame:         runtimeFuncs["FUJI_pop_frame"],
 		runtimeOk:               runtimeFuncs["FUJI_ok"],

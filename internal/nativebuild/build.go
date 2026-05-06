@@ -91,7 +91,7 @@ func BuildWithOptions(bundle *parser.ProgramBundle, output, sourceDisplay string
 	log(fmt.Sprintf("  driver     %s\n\n", driverLabel))
 
 	if tc.LinkMode == fujihome.LinkLLDGNU || tc.LinkMode == fujihome.LinkLLDDarwin {
-		if err := runLLC(tc.LLC, irPath, objPath, opts.llcOptFlag()); err != nil {
+		if err := runLLC(tc.LLC, irPath, objPath, opts.llcOptFlag(), opts.Debug); err != nil {
 			return fmt.Errorf("llc failed: %w", err)
 		}
 	}

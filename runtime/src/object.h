@@ -32,6 +32,7 @@ struct Obj {
 typedef struct {
     Obj obj;
     int length;
+    uint32_t hash; /* FNV-1a; 0 = not computed yet */
     char chars[];
 } ObjString;
 
@@ -50,6 +51,9 @@ typedef struct {
     int count;
     Value* keys;
     Value* values;
+    /* When true, values[i] is field slot i (struct instance); property hash is disabled. */
+    bool is_struct_layout;
+    uint32_t* hashes; /* parallel to keys/values when using open addressing; NULL for linear / struct */
 } ObjTable;
 
 // Function object
@@ -85,6 +89,7 @@ typedef struct {
 ObjString* allocate_string(int length);
 ObjArray* allocate_array(int capacity);
 ObjTable* allocate_table(int capacity);
+ObjTable* allocate_struct_table(int field_count);
 ObjFunction* allocate_function(int arity);
 ObjClosure* allocate_closure(ObjFunction* function, int upvalue_count);
 ObjNative* allocate_native(Value (*native)(int, Value*));

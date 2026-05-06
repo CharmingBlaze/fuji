@@ -83,6 +83,26 @@ type FuncDecl struct {
 	Native *NativeDirective
 }
 
+// StructDecl declares a named struct type with ordered fields (O(1) slot access at compile time).
+type StructDecl struct {
+	Token  lexer.Token
+	Name   lexer.Token
+	Fields []lexer.Token
+}
+
+func (s *StructDecl) declNode() {}
+func (s *StructDecl) String() string { return "struct " + s.Name.Lexeme }
+
+// EnumDecl declares an enum namespace; members are integer constants from 0 upward.
+type EnumDecl struct {
+	Token   lexer.Token
+	Name    lexer.Token
+	Members []lexer.Token
+}
+
+func (e *EnumDecl) declNode() {}
+func (e *EnumDecl) String() string { return "enum " + e.Name.Lexeme }
+
 type Param struct {
 	Name    string
 	Default Expr // optional
@@ -401,6 +421,7 @@ func (e *ArrayExpr) String() string { return "array" }
 
 type ObjectExpr struct {
 	Token        lexer.Token
+	StructTag    *lexer.Token // non-nil for `StructName { ... }` struct literals
 	Keys         []lexer.Token
 	Values       []Expr
 	ComputedKeys []Expr

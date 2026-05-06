@@ -1,0 +1,8 @@
+func main() {
+    gc();
+    let s = gcStats();
+    assert(s.collections >= 1, "gcStats after gc");
+    assert(s.bytesAllocated >= 0, "bytesAllocated");
+    gcFrameStep(1.0);
+    print("PASS gc_stats_frame");
+}

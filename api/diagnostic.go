@@ -6,5 +6,6 @@ type Diagnostic struct {
 	Line     int    `json:"line"`
 	Col      int    `json:"col"`
 	Message  string `json:"message"`
+	Hint     string `json:"hint,omitempty"`
 	Severity string `json:"severity"`
 }

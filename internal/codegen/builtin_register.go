@@ -89,6 +89,7 @@ func (g *Generator) registerBuiltinFuncs() {
 		{"string", g.runtimeString},
 		{"gc", g.runtimeGcCollect},
 		{"gcFrameStep", g.runtimeGcFrameStep},
+		{"gcStats", g.runtimeGcStats},
 	}
 	for _, p := range pairs {
 		if p.fn != nil {

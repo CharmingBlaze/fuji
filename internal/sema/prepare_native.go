@@ -163,6 +163,7 @@ func walkStmt(s parser.Stmt, ctx *NativeEmitContext, walkBlock func(*parser.Bloc
 
 func walkDecl(d parser.Decl, env *envFrame, ctx *NativeEmitContext, curFunc interface{}) {
 	switch x := d.(type) {
+	case *parser.StructDecl, *parser.EnumDecl:
 	case *parser.LetDecl:
 		if x.Init != nil {
 			walkExpr(x.Init, env, ctx, curFunc)

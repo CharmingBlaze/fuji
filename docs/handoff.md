@@ -16,6 +16,7 @@ There is **no bytecode VM** in the supported path: one pipeline end-to-end.
 | Command | What it does | Toolchain |
 |--------|----------------|-----------|
 | **`fuji run`** | Load bundle → sema → LLVM → temp native exe → run | **llc** + **clang** + runtime archive (or embedded release binary) |
+| **`fuji watch`** | Watch `.fuji` files under entry dir; rebuild + restart temp exe on change | Same as `run` |
 | **`fuji build`** | Same lowering → linked **`*.exe`** / binary | Same |
 | **`fuji check`** | Lexer + parser + **`sema.PrepareNativeBundle`** only (no LLVM) | Go only |
 | **`fuji fmt`** | AST-based canonical format | Go only |
@@ -47,7 +48,7 @@ Release builds (`**-tags release**`) embed **llc** / **clang** (and **lld** on W
 1. **Sema blocks codegen** — **`PrepareNativeBundle`** errors must prevent emitting broken IR.
 2. **Runtime / LLVM declare drift** — every **`fuji_*`** used from generated IR exists in C with the same ABI (**`internal/codegen/runtime.go`** ↔ **`fuji_runtime.c`**).
 3. **Builtin names** — **`internal/sema/builtin_globals.go`** (sema prelude) and **`internal/codegen/builtin_register.go`** (codegen prelude) must agree for globals **`fuji build`** can link.
-4. **Shadow stack** — every **`fuji_push_frame`** matched by **`fuji_pop_frame`** on all exits (**`defer`** runs before pop on **`return`**).
+4. **Shadow stack** — every **`fuji_push_frame`** matched by **`fuji_pop_frame`** on **every** exit edge: each LLVM **`ret`** path must emit a pop (functions with multiple **`return`** statements have multiple pop sites). **`defer`** runs before pop on **`return`**.
 5. **GC write barriers** — any new mutator that stores an **old → young** reference must use the same barrier pattern as **`fuji_object_set`** / **`fuji_array_set`**.
 
 ---
@@ -57,7 +58,7 @@ Release builds (`**-tags release**`) embed **llc** / **clang** (and **lld** on W
 1. **`go test ./...`**
 2. **`go build -o fuji ./cmd/fuji`** then **`fuji run tests/hello.fuji`**
 3. After runtime C changes: rebuild **`runtime/libfuji_runtime.a`** (see **`scripts/build-runtime.ps1`** / **`.sh`**)
-4. **`CHANGELOG.md`** **`[Unreleased]`** for user-visible compiler or runtime changes
+4. **`CHANGELOG.md`** — update **`[Unreleased]`** for user-visible compiler or runtime changes; see **[releasing.md](releasing.md)** to cut **`v*`** tags.
 
 ---
 

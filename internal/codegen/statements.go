@@ -127,6 +127,7 @@ func (g *Generator) emitIfStmt(s *parser.IfStmt) error {
 	if err != nil {
 		return err
 	}
+	g.shadowRewindTemps()
 
 	g.tempN++
 	thenBlock := g.block.Parent.NewBlock(fmt.Sprintf("then.%d", g.tempN))
@@ -144,6 +145,7 @@ func (g *Generator) emitIfStmt(s *parser.IfStmt) error {
 	}
 
 	g.block = elseBlock
+	g.shadowRewindTemps()
 	if s.Else != nil {
 		if err := g.emitStmt(s.Else); err != nil {
 			return err
@@ -154,6 +156,7 @@ func (g *Generator) emitIfStmt(s *parser.IfStmt) error {
 	}
 
 	g.block = mergeBlock
+	g.shadowRewindTemps()
 	return nil
 }
 
@@ -170,6 +173,7 @@ func (g *Generator) emitWhileStmt(s *parser.WhileStmt) error {
 	g.block.NewBr(condBlock)
 
 	g.block = condBlock
+	g.shadowRewindTemps()
 	cond, err := g.emitExpr(s.Condition)
 	if err != nil {
 		return err
@@ -177,12 +181,14 @@ func (g *Generator) emitWhileStmt(s *parser.WhileStmt) error {
 	g.block.NewCondBr(g.emitTruthy(cond), bodyBlock, afterBlock)
 
 	g.block = bodyBlock
+	g.shadowRewindTemps()
 	if err := g.emitStmt(s.Body); err != nil {
 		return err
 	}
 	g.block.NewBr(condBlock)
 
 	g.block = afterBlock
+	g.shadowRewindTemps()
 
 	// Pop loop context from stack
 	g.loopStack = g.loopStack[:len(g.loopStack)-1]
@@ -203,12 +209,14 @@ func (g *Generator) emitDoWhileStmt(s *parser.DoWhileStmt) error {
 	g.block.NewBr(bodyBlock)
 
 	g.block = bodyBlock
+	g.shadowRewindTemps()
 	if err := g.emitStmt(s.Body); err != nil {
 		return err
 	}
 	g.block.NewBr(condBlock)
 
 	g.block = condBlock
+	g.shadowRewindTemps()
 	cond, err := g.emitExpr(s.Condition)
 	if err != nil {
 		return err
@@ -216,6 +224,7 @@ func (g *Generator) emitDoWhileStmt(s *parser.DoWhileStmt) error {
 	g.block.NewCondBr(g.emitTruthy(cond), bodyBlock, afterBlock)
 
 	g.block = afterBlock
+	g.shadowRewindTemps()
 
 	// Pop loop context from stack
 	g.loopStack = g.loopStack[:len(g.loopStack)-1]
@@ -239,6 +248,7 @@ func (g *Generator) emitForOfStmt(s *parser.ForOfStmt) error {
 		return err
 	}
 	iterI := g.emitAsFujiI64(iterable)
+	g.shadowRewindTemps()
 
 	lenVal := g.block.NewCall(g.runtimeForOfLength, iterI)
 
@@ -399,6 +409,7 @@ func (g *Generator) emitForOfDynamicRange(s *parser.ForOfStmt, r *parser.RangeEx
 	valSlot := g.entryAlloca(types.I64)
 	g.locals[s.VarName.Lexeme] = valSlot
 	g.block.NewStore(g.block.NewLoad(types.I64, fromSlot), idxSlot)
+	g.shadowRewindTemps()
 
 	g.tempN++
 	condBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.dyn.cond.%d", g.tempN))
@@ -459,6 +470,7 @@ func (g *Generator) emitForStmt(s *parser.ForStmt) error {
 
 	// Condition block
 	g.block = condBlock
+	g.shadowRewindTemps()
 	if s.Condition != nil {
 		cond, err := g.emitExpr(s.Condition)
 		if err != nil {
@@ -472,6 +484,7 @@ func (g *Generator) emitForStmt(s *parser.ForStmt) error {
 
 	// Body block
 	g.block = bodyBlock
+	g.shadowRewindTemps()
 	if err := g.emitStmt(s.Body); err != nil {
 		return err
 	}
@@ -479,6 +492,7 @@ func (g *Generator) emitForStmt(s *parser.ForStmt) error {
 
 	// Increment block
 	g.block = incBlock
+	g.shadowRewindTemps()
 	for _, inc := range s.Increments {
 		_, err := g.emitExpr(inc)
 		if err != nil {
@@ -489,6 +503,7 @@ func (g *Generator) emitForStmt(s *parser.ForStmt) error {
 
 	// After block
 	g.block = afterBlock
+	g.shadowRewindTemps()
 
 	// Pop loop context from stack
 	g.loopStack = g.loopStack[:len(g.loopStack)-1]
@@ -509,6 +524,7 @@ func (g *Generator) emitForInStmt(s *parser.ForInStmt) error {
 		return err
 	}
 	iterI := g.emitAsFujiI64(iterable)
+	g.shadowRewindTemps()
 
 	lenVal := g.block.NewCall(g.runtimeForOfLength, iterI)
 
@@ -589,6 +605,7 @@ func (g *Generator) emitSwitchStmt(s *parser.SwitchStmt) error {
 		return err
 	}
 	subjI := g.emitAsFujiI64(subject)
+	g.shadowRewindTemps()
 
 	// Create merge block
 	mergeBlock := g.block.Parent.NewBlock("switch.merge")
@@ -607,6 +624,7 @@ func (g *Generator) emitSwitchStmt(s *parser.SwitchStmt) error {
 
 	// Emit comparisons and branches
 	for i, caseStmt := range s.Cases {
+		g.shadowRewindTemps()
 		caseVal, err := g.emitExpr(caseStmt.Value)
 		if err != nil {
 			return err
@@ -623,6 +641,7 @@ func (g *Generator) emitSwitchStmt(s *parser.SwitchStmt) error {
 
 	// Emit default case
 	g.block = caseBlocks[len(s.Cases)]
+	g.shadowRewindTemps()
 	for _, decl := range s.Default {
 		if err := g.emitDecl(decl); err != nil {
 			return err
@@ -633,6 +652,7 @@ func (g *Generator) emitSwitchStmt(s *parser.SwitchStmt) error {
 	// Emit case blocks
 	for i, caseStmt := range s.Cases {
 		g.block = caseBlocks[i]
+		g.shadowRewindTemps()
 
 		// Emit case body declarations
 		for _, decl := range caseStmt.Body {
@@ -650,6 +670,7 @@ func (g *Generator) emitSwitchStmt(s *parser.SwitchStmt) error {
 	}
 
 	g.block = mergeBlock
+	g.shadowRewindTemps()
 	return nil
 }
 

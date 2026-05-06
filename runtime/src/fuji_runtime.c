@@ -446,12 +446,38 @@ void fuji_gc_collect(void) {
 }
 
 void fuji_gc_frame_step(double budget_ms) {
-    (void)budget_ms;
-    size_t used = gc_nursery_used_bytes();
-    size_t half = gc_nursery_capacity_bytes() / 2u;
-    if (used >= half) {
-        gc_collect_minor();
+    if (gc_incremental_is_idle()) {
+        size_t used = gc_nursery_used_bytes();
+        size_t half = gc_nursery_capacity_bytes() / 2u;
+        if (used >= half) {
+            gc_collect_minor();
+        }
     }
+    if (budget_ms > 0.0) {
+        double ms = budget_ms;
+        if (ms < 0.0) {
+            ms = 0.0;
+        }
+        uint64_t budget_us = (uint64_t)(ms * 1000.0 + 0.999);
+        if (budget_us < 64u) {
+            budget_us = 64u;
+        }
+        gc_frame_step_incremental(budget_us);
+    }
+}
+
+Value fuji_gc_stats(int argc, Value* argv) {
+    (void)argc;
+    (void)argv;
+    GCStats st = gc_get_stats();
+    Value objv = fuji_allocate_object(5);
+    /* Property keys are ASCII lowercase: dot access (e.g. s.bytesAllocated) compiles to s["bytesallocated"]. */
+    fuji_object_set(objv, fuji_copy_string("collections", 11), NUMBER_VAL((double)st.collections));
+    fuji_object_set(objv, fuji_copy_string("bytesallocated", 14), NUMBER_VAL((double)st.bytes_allocated));
+    fuji_object_set(objv, fuji_copy_string("bytesfreed", 10), NUMBER_VAL((double)st.bytes_freed));
+    fuji_object_set(objv, fuji_copy_string("maxpausetimeus", 14), NUMBER_VAL((double)st.max_pause_time_us));
+    fuji_object_set(objv, fuji_copy_string("totalpausetimeus", 16), NUMBER_VAL((double)st.total_pause_time_us));
+    return objv;
 }
 
 Value* fuji_alloc_cell(void) {
@@ -559,6 +585,125 @@ Value fuji_allocate_object(int property_count) {
     return OBJ_VAL((Obj*)table);
 }
 
+Value fuji_allocate_struct(int field_count) {
+    ObjTable* table = allocate_struct_table(field_count);
+    return OBJ_VAL((Obj*)table);
+}
+
+static uint32_t fnv1a_bytes(const uint8_t* data, int len) {
+    uint32_t h = 2166136261u;
+    for (int i = 0; i < len; i++) {
+        h ^= (uint32_t)data[i];
+        h *= 16777619u;
+    }
+    return h == 0u ? 1u : h;
+}
+
+static uint32_t fuji_string_hash(ObjString* s) {
+    if (s->hash != 0u) {
+        return s->hash;
+    }
+    s->hash = fnv1a_bytes((const uint8_t*)s->chars, s->length);
+    if (s->hash == 0u) {
+        s->hash = 1u;
+    }
+    return s->hash;
+}
+
+static uint32_t fuji_hash_value(Value key) {
+    if (IS_OBJ(key)) {
+        Obj* ob = AS_OBJ(key);
+        if (ob != NULL && ob->type == OBJ_STRING) {
+            return fuji_string_hash((ObjString*)ob);
+        }
+    }
+    if (IS_NUMBER(key)) {
+        union {
+            Value v;
+            uint64_t u;
+        } u;
+        u.v = key;
+        uint32_t hi = (uint32_t)(u.u >> 32);
+        uint32_t lo = (uint32_t)u.u;
+        uint32_t h = hi ^ lo;
+        return h == 0u ? 1u : h;
+    }
+    return 1u;
+}
+
+Value fuji_struct_get(Value obj, int64_t index) {
+    if (!IS_OBJ(obj)) {
+        return NIL_VAL;
+    }
+    Obj* o = AS_OBJ(obj);
+    if (o->type != OBJ_TABLE) {
+        return NIL_VAL;
+    }
+    ObjTable* t = (ObjTable*)o;
+    if (!t->is_struct_layout) {
+        return NIL_VAL;
+    }
+    if (index < 0 || index >= t->count) {
+        return NIL_VAL;
+    }
+    return t->values[(int)index];
+}
+
+Value fuji_struct_set(Value obj, int64_t index, Value val) {
+    if (!IS_OBJ(obj)) {
+        return NIL_VAL;
+    }
+    Obj* o = AS_OBJ(obj);
+    if (o->type != OBJ_TABLE) {
+        return NIL_VAL;
+    }
+    ObjTable* t = (ObjTable*)o;
+    if (!t->is_struct_layout) {
+        return NIL_VAL;
+    }
+    if (index < 0 || index >= t->count) {
+        return NIL_VAL;
+    }
+    gc_write_barrier(&t->obj, val);
+    t->values[(int)index] = val;
+    return val;
+}
+
+static Value fuji_object_get_linear(ObjTable* table, Value key) {
+    for (int i = 0; i < table->count; i++) {
+        if (values_equal(table->keys[i], key)) {
+            return table->values[i];
+        }
+    }
+    return NIL_VAL;
+}
+
+static bool table_key_is_tombstone(Value k) {
+    return IS_BOOL(k) && AS_BOOL(k);
+}
+
+static Value fuji_object_get_hash(ObjTable* table, Value key) {
+    uint32_t cap = (uint32_t)table->capacity;
+    if (cap == 0u) {
+        return NIL_VAL;
+    }
+    uint32_t start = fuji_hash_value(key) % cap;
+    for (uint32_t p = 0u; p < cap; p++) {
+        uint32_t i = (start + p) % cap;
+        Value k = table->keys[i];
+        if (IS_NIL(k)) {
+            return NIL_VAL;
+        }
+        if (table_key_is_tombstone(k)) {
+            continue;
+        }
+        if (values_equal(k, key)) {
+            return table->values[i];
+        }
+    }
+    return NIL_VAL;
+}
+
 Value fuji_object_get(Value obj, Value key) {
     if (IS_NIL(obj)) {
         const char* prop = "?";
@@ -569,21 +714,50 @@ Value fuji_object_get(Value obj, Value key) {
         snprintf(msg, sizeof(msg), "cannot read property '%s' of null", prop);
         fuji_panic_str(msg);
     }
-    if (!IS_OBJ(obj)) return NIL_VAL;
-    Obj* o = AS_OBJ(obj);
-    if (o->type != OBJ_TABLE) return NIL_VAL;
-    
-    // Simple linear search for now (will be replaced with hash table lookup)
-    ObjTable* table = (ObjTable*)o;
-    for (int i = 0; i < table->count; i++) {
-        if (values_equal(table->keys[i], key)) {
-            return table->values[i];
-        }
+    if (!IS_OBJ(obj)) {
+        return NIL_VAL;
     }
-    return NIL_VAL;
+    Obj* o = AS_OBJ(obj);
+    if (o->type != OBJ_TABLE) {
+        return NIL_VAL;
+    }
+
+    ObjTable* table = (ObjTable*)o;
+    if (table->is_struct_layout) {
+        return fuji_object_get_linear(table, key);
+    }
+    if (table->hashes != NULL) {
+        return fuji_object_get_hash(table, key);
+    }
+    return fuji_object_get_linear(table, key);
 }
 
 static bool table_remove_pair(ObjTable* table, Value key) {
+    if (table->hashes != NULL && !table->is_struct_layout) {
+        uint32_t cap = (uint32_t)table->capacity;
+        if (cap == 0u) {
+            return false;
+        }
+        uint32_t start = fuji_hash_value(key) % cap;
+        for (uint32_t p = 0u; p < cap; p++) {
+            uint32_t i = (start + p) % cap;
+            Value k = table->keys[i];
+            if (IS_NIL(k)) {
+                return false;
+            }
+            if (table_key_is_tombstone(k)) {
+                continue;
+            }
+            if (values_equal(k, key)) {
+                table->keys[i] = TRUE_VAL;
+                table->values[i] = NIL_VAL;
+                table->hashes[i] = 0u;
+                table->count--;
+                return true;
+            }
+        }
+        return false;
+    }
     for (int i = 0; i < table->count; i++) {
         if (values_equal(table->keys[i], key)) {
             for (int j = i; j < table->count - 1; j++) {
@@ -607,16 +781,118 @@ Value fuji_object_remove(Value obj, Value key) {
     return BOOL_VAL(ok);
 }
 
+static void table_rehash_open(Obj* parent, ObjTable* table);
+
+static bool fuji_object_set_hash(Obj* parent, ObjTable* table, Value key, Value value) {
+    uint32_t cap = (uint32_t)table->capacity;
+    if (cap == 0u) {
+        return false;
+    }
+    if ((table->count + 1) * 10 > (int)cap * 7) {
+        table_rehash_open(parent, table);
+        cap = (uint32_t)table->capacity;
+        if (cap == 0u) {
+            return false;
+        }
+    }
+    uint32_t start = fuji_hash_value(key) % cap;
+    int first_tomb = -1;
+    for (uint32_t p = 0u; p < cap; p++) {
+        uint32_t i = (start + p) % cap;
+        Value k = table->keys[i];
+        if (IS_NIL(k)) {
+            int ins = (first_tomb >= 0) ? first_tomb : (int)i;
+            gc_write_barrier(parent, key);
+            gc_write_barrier(parent, value);
+            table->keys[ins] = key;
+            table->values[ins] = value;
+            table->hashes[ins] = fuji_hash_value(key);
+            table->count++;
+            return true;
+        }
+        if (table_key_is_tombstone(k)) {
+            if (first_tomb < 0) {
+                first_tomb = (int)i;
+            }
+            continue;
+        }
+        if (values_equal(k, key)) {
+            gc_write_barrier(parent, key);
+            gc_write_barrier(parent, value);
+            table->keys[i] = key;
+            table->values[i] = value;
+            return true;
+        }
+    }
+    table_rehash_open(parent, table);
+    return fuji_object_set_hash(parent, table, key, value);
+}
+
+static void table_rehash_open(Obj* parent, ObjTable* table) {
+    int old_cap = table->capacity;
+    Value* old_keys = table->keys;
+    Value* old_vals = table->values;
+    uint32_t* old_hashes = table->hashes;
+    int new_cap = old_cap < 8 ? 16 : old_cap * 2;
+    if (new_cap < old_cap) {
+        return;
+    }
+    table->capacity = new_cap;
+    table->count = 0;
+    table->keys = (Value*)gc_alloc(sizeof(Value) * (size_t)new_cap);
+    table->values = (Value*)gc_alloc(sizeof(Value) * (size_t)new_cap);
+    table->hashes = (uint32_t*)calloc((size_t)new_cap, sizeof(uint32_t));
+    for (int i = 0; i < new_cap; i++) {
+        table->keys[i] = NIL_VAL;
+        table->values[i] = NIL_VAL;
+    }
+    for (int i = 0; i < old_cap; i++) {
+        Value k = old_keys[i];
+        if (IS_NIL(k) || table_key_is_tombstone(k)) {
+            continue;
+        }
+        (void)fuji_object_set_hash(parent, table, k, old_vals[i]);
+    }
+    if (old_keys != NULL) {
+        gc_free(old_keys, (size_t)old_cap * sizeof(Value));
+    }
+    if (old_vals != NULL) {
+        gc_free(old_vals, (size_t)old_cap * sizeof(Value));
+    }
+    if (old_hashes != NULL) {
+        gc_free(old_hashes, (size_t)old_cap * sizeof(uint32_t));
+    }
+}
+
 Value fuji_object_set(Value obj, Value key, Value value) {
     if (!IS_OBJ(obj)) {
         return NIL_VAL;
     }
     Obj* o = AS_OBJ(obj);
-    if (o->type != OBJ_TABLE) return NIL_VAL;
-    
-    ObjTable* table = (ObjTable*)o;
+    if (o->type != OBJ_TABLE) {
+        return NIL_VAL;
+    }
 
-    // Update existing key in-place.
+    ObjTable* table = (ObjTable*)o;
+    if (table->is_struct_layout) {
+        for (int i = 0; i < table->count; i++) {
+            if (values_equal(table->keys[i], key)) {
+                gc_write_barrier(o, key);
+                gc_write_barrier(o, value);
+                table->keys[i] = key;
+                table->values[i] = value;
+                return value;
+            }
+        }
+        return NIL_VAL;
+    }
+    if (table->hashes != NULL) {
+        if (fuji_object_set_hash(o, table, key, value)) {
+            return value;
+        }
+        return NIL_VAL;
+    }
+
     for (int i = 0; i < table->count; i++) {
         if (values_equal(table->keys[i], key)) {
             gc_write_barrier(o, key);
@@ -626,8 +902,7 @@ Value fuji_object_set(Value obj, Value key, Value value) {
             return value;
         }
     }
-    
-    // Add new key-value pair if space available
+
     if (table->count < table->capacity) {
         gc_write_barrier(o, key);
         gc_write_barrier(o, value);
@@ -636,8 +911,7 @@ Value fuji_object_set(Value obj, Value key, Value value) {
         table->count++;
         return value;
     }
-    
-    // Table full - return nil for now (should trigger resize in production)
+
     return NIL_VAL;
 }
 

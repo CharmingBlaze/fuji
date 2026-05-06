@@ -158,6 +158,15 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 
 	functions["FUJI_allocate_object"] = mod.NewFunc("fuji_allocate_object", types.I64,
 		ir.NewParam("property_count", types.I32))
+	functions["FUJI_allocate_struct"] = mod.NewFunc("fuji_allocate_struct", types.I64,
+		ir.NewParam("field_count", types.I32))
+	functions["FUJI_struct_get"] = mod.NewFunc("fuji_struct_get", types.I64,
+		ir.NewParam("obj", types.I64),
+		ir.NewParam("index", types.I64))
+	functions["FUJI_struct_set"] = mod.NewFunc("fuji_struct_set", types.I64,
+		ir.NewParam("obj", types.I64),
+		ir.NewParam("index", types.I64),
+		ir.NewParam("value", types.I64))
 
 	functions["FUJI_unbox_number"] = mod.NewFunc("fuji_unbox_number", types.Double,
 		ir.NewParam("v", types.I64))
@@ -240,6 +249,7 @@ func declareRuntimeFunctions(mod *ir.Module) map[string]*ir.Func {
 	functions["FUJI_gc_collect"] = mod.NewFunc("fuji_gc_collect", types.Void)
 	functions["FUJI_gc_frame_step"] = mod.NewFunc("fuji_gc_frame_step", types.Void,
 		ir.NewParam("budget_ms", types.Double))
+	functions["FUJI_gc_stats"] = argvI64(mod, "fuji_gc_stats")
 
 	ptrPtr := types.NewPointer(types.NewPointer(types.I64))
 	functions["FUJI_push_frame"] = mod.NewFunc("fuji_push_frame", types.Void,
