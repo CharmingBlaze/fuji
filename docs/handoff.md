@@ -3,7 +3,8 @@
 **Audience:** Engineers working on the **native LLVM** compiler (lexer → parser → sema → LLVM IR → clang → static binary).  
 **Architecture overview:** [architecture.md](architecture.md).  
 **Language surface:** [language.md](../language.md) (root) or [docs/language.md](language.md), [README.md](../README.md).  
-**Shipped changes:** [CHANGELOG.md](../CHANGELOG.md).
+**Shipped changes:** [CHANGELOG.md](../CHANGELOG.md).  
+**Long-term roadmap (maintainers):** [MASTER_PLAN.md](MASTER_PLAN.md).
 
 **Stack:** Go **1.22+**, module **`fuji`** ([go.mod](../go.mod)), LLVM IR via [llir/llvm](https://github.com/llir/llvm) v0.3.6, C11 runtime under **`runtime/src/`** (linked as **`runtime/libfuji_runtime.a`**).
 

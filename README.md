@@ -87,6 +87,7 @@ See **`fuji help`** for the full command list (`disasm`, `paths`, `doctor`, `bun
 | [docs/language.md](docs/language.md) | Language specification |
 | [docs/distribution.md](docs/distribution.md) | Shipping games and bundles |
 | [docs/wrappers.md](docs/wrappers.md) | C/C++ FFI, **`fujiwrap`**, Raylib-style workflows |
+| [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md) | Maintainer roadmap (language, GC, tooling) — **not** required to *use* Fuji |
 
 ---
 

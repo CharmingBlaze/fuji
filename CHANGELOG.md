@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/MASTER_PLAN.md`** — maintainer-facing roadmap to “100%” (language, GC, runtime, DX, compiler, stdlib, tooling) with a **progress matrix** aligned to the current tree.
+
 ## [0.2.0] - 2026-05-06
 
 Second release: richer language surface, **`fuji fmt`**, shadow-stack / GC fixes, **`fuji watch`**, **`build --debug`**, and **`run --no-opt`**.

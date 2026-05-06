@@ -1,0 +1,274 @@
+# Fuji — master plan to 100%
+
+Long-term roadmap for **language completeness**, **GC/runtime hardening**, **DX**, **compiler quality**, **stdlib**, and **tooling**. This document is for **people working in the Fuji repository** (not end users — see **[README.md](../README.md)**). Update the **progress matrix** when you land work.
+
+---
+
+## Engineering standards
+
+- Correctness first: memory safety, GC invariants, and clear diagnostics beat feature count.
+- Read existing code before changing it; match local style; do not leave known holes.
+- Prefer complete implementations over TODOs and stubs.
+- **`go test ./...`** green before merging substantive compiler or runtime changes.
+- C runtime: keep **`runtime/src/*.c`** and **`internal/codegen/runtime.go`** declarations aligned.
+
+---
+
+## Do not regress (shipped baseline)
+
+These properties are expected today; treat regressions as release blockers.
+
+- Full **lexer → parser → sema → LLVM IR → clang → binary** pipeline.
+- **`lexer.NewLexer(source, file string)`** — file path on tokens.
+- **`sema.PrepareNativeBundle`** before codegen — bad programs must not reach LLVM.
+- **`diagnostic.MultiError`** — aggregate sema issues with snippets where applicable.
+- Call **arity** for `func` / `// fuji:extern` / known argv-style methods.
+- **`for`** loop head bindings scoped to the body.
+- **`defer`** — LIFO; **`return`** value computed before defers run.
+- **`for (let i of lo..hi)`** dynamic range — counted **`i64`** loop, unboxed bounds.
+- Integer literal folding (**`+` / `-` / `*`**, unary **`-` / `+`**, nested safe cases).
+- **`fuji check`** — full sema, no LLVM.
+- **`fuji fmt`** / **`fuji fmt --check`** / **`./...`** expansion.
+- **`fuji run --no-opt`** / **`fuji build --no-opt`** / **`api.BuildOptions`**.
+- **`fuji build --debug`** — **`-g`** through **`llc`** and **`clang`** (symbols; not full DI source maps).
+- **`fuji watch`** — poll-based rebuild + restart under entry directory.
+- Generational **GC**, **shadow stack**, **write barriers**, intern table sweep; string **`==`** stable.
+- **`fuji_runtime_init_ex` / `fuji_runtime_shutdown`** from generated **`main`**.
+- Shadow stack growth + hard cap panic message; **`fuji_shadow_stack_high_water()`**.
+- **`ObjArray` / `ObjTable`** NULL guards on partial allocation paths.
+- Globals + **`fuji_register_global_slot`** wiring.
+- **`FUJI_GC_DEBUG`** diagnostics where implemented.
+- **`stdlib/math.fuji`**, **`stdlib/vec2.fuji`**, **`stdlib/timer.fuji`**.
+- **`ok` / `err`**, **`panic`**, **`assert`**, **`readFile`**, **`writeFile`**, **`parseJSON`**, **`gcFrameStep`**, **`gcStats()`**.
+- Release **`-tags release`** embed story; **CI** (`go test`, fmt, check, native smokes, GC soak).
+
+---
+
+## Progress matrix (maintainers: update on merge)
+
+Legend: **Done** = meets plan intent in tree today · **Partial** = exists but missing plan details · **Open** = not started or only sketched.
+
+| Ref | Topic | Status | Notes |
+|-----|--------|--------|------|
+| **A1** | “Did you mean?” for undefined names | **Done** | `internal/sema/levenshtein.go`, `suggestName` hints; `tests/typo_suggestion.fuji` |
+| **A2** | `struct` types + literals + field checks | **Partial** | Parser/sema/codegen + `fuji_struct_get/set`; add **`tests/struct_typo_test.fuji`** (`fuji check` field typo) |
+| **A3** | `enum` + constant folding + switch hints | **Partial** | Parser AST + lowering; verify formatter + exhaustiveness **warning** story |
+| **A4** | `math.lerp` / `clamp` / `hypot` | **Done** | C + `stdlib/math.fuji` + tests elsewhere |
+| **A5** | `stdlib/timer.fuji` | **Done** | Library + `tests/timer_test.fuji` |
+| **B1** | Incremental major GC | **Partial** | `gc_collect_incremental`, `fuji_gc_frame_step`; validate game-loop budgets vs plan |
+| **B2** | ObjTable open addressing | **Partial** | `hashes[]` path exists in `object.c`; confirm threshold/probing vs plan + `tests/table_hash_test.fuji` |
+| **B3** | `gcDisable` / `gcEnable` / `gcCollect` builtins | **Open** | C has `fuji_gc_disable` etc.; not wired as first-class Fuji builtins per plan |
+| **B4** | `gcStats()` object | **Done** | Lowercase keys; `tests/gc_stats_frame_test.fuji` |
+| **B5** | Write-barrier static audit | **Open** | Add CI **`go test`** scanner over `fuji_runtime.c` as described |
+| **B6** | `tests/stress/` suite + CI job | **Open** | Dedicated long-run tests + wall-clock timeout job |
+| **C1** | Typed runtime errors (`fuji_type_error`, …) | **Open** | Broad audit of argv natives |
+| **C2** | OOB array access → panic w/ index | **Open** | Today may return nil; plan wants explicit panic |
+| **C3** | Capacity overflow guards | **Open** | `validate_capacity` style hardening |
+| **C4** | Shadow push/pop balance (debug) | **Open** | Extra checks under `FUJI_GC_DEBUG` / shutdown |
+| **D1** | LLVM debug **source locations** (DI) | **Partial** | **`--debug`** emits **`-g`**; full **`DIFile` / `DISubprogram`** not implemented |
+| **D2** | `fuji watch` | **Done** | Polling watcher (not `fsnotify`); upgrade optional |
+| **D3** | `fuji bench` | **Open** | |
+| **D4** | Property “did you mean?” at runtime | **Open** | Needs debug runtime path + key enumeration |
+| **E1** | Parse cache (`mtime`) | **Open** | |
+| **E2** | Parallel module parse | **Open** | |
+| **E3** | Wider constant folding | **Partial** | Extend beyond current literal rules |
+| **E4** | Dead-code elimination + `--warn-unused` | **Open** | |
+| **E5** | Unused binding warnings | **Open** | |
+| **F1–F7** | stdlib `vec3`, `color`, `input`, `easing`, `pool`, `str`, `array` | **Open** | Pure Fuji / small native additions as needed |
+| **G4** | Asset embedding in `fuji bundle` | **Open** | |
+| **G5** | `fuji doctor` depth | **Partial** | Extend probes (disk, lld freshness, etc.) |
+| **H1** | Parser fuzzing | **Open** | `go test -fuzz` target + CI budget |
+| **H2** | ASAN / Valgrind CI | **Open** | |
+| **H3** | Final integrated smoke script | **Partial** | Much covered by **`.github/workflows/ci.yml`**; unify doc list |
+
+---
+
+# SECTION A — Language completeness
+
+### A1. “Did you mean?” for undefined names
+
+**Goal:** typo’d identifiers get an edit-distance hint on diagnostics.
+
+**Status:** implemented in **`internal/sema`** (`levenshtein`, `suggestName`). Keep **`tests/typo_suggestion.fuji`** and `fuji check` coverage green.
+
+---
+
+### A2. `struct` declarations
+
+**Goal:** named struct types, literals, compile-time field validation, O(1) field access via **`fuji_struct_get` / `fuji_struct_set`**.
+
+**Remaining:** `tests/struct_typo_test.fuji` (and `fuji check` expectations). Formatter polish if gaps remain.
+
+---
+
+### A3. `enum` declarations
+
+**Goal:** zero-cost members; **`switch`** exhaustiveness **warnings** when subject is enum-typed.
+
+**Remaining:** verify formatter + sema diagnostics match the plan; implement missing warning paths.
+
+---
+
+### A4. `math.lerp`, `math.clamp`, `math.hypot`
+
+**Status:** present in runtime + **`stdlib/math.fuji`**. Add or consolidate **`tests/math_test.fuji`** if you want a single dedicated file.
+
+---
+
+### A5. `stdlib/timer.fuji`
+
+**Status:** shipped with tests. Keep **`update()`** + loop paths covered (shadow / multi-return).
+
+---
+
+# SECTION B — GC hardening for large programs
+
+### B1. Incremental major GC
+
+**Goal:** spread major collection work across frames; keep stop-the-world **`gc_collect()`** for shutdown/explicit full collect.
+
+**Work:** validate **`gc_collect_incremental`** + **`fuji_gc_frame_step`** against large workloads; add **`tests/incremental_gc_test.fuji`** (or `tests/stress/` variant) per plan.
+
+---
+
+### B2. ObjTable O(1) hashing
+
+**Goal:** open addressing over **`hashes[]`** for larger tables; small tables stay compact.
+
+**Work:** confirm FNV / load factor / resize matches design; extend **`tests/table_hash_test.fuji`** as needed.
+
+---
+
+### B3. GC pressure relief builtins
+
+**Goal:** **`gcDisable()`**, **`gcEnable()`**, **`gcCollect()`** with clear semantics (distinct from shadow-stack toggles — design carefully).
+
+**Work:** C ABI + **`builtin_globals.go`** + **`runtime.go`** + tests; document hazards (no allocations while “disabled” if that is the model).
+
+---
+
+### B4. `gcStats()` builtin
+
+**Status:** shipped. Keys are **lowercase** in object form (Fuji property normalization).
+
+---
+
+### B5. Write-barrier audit (automated)
+
+**Goal:** CI **`go test`** scans **`fuji_runtime.c`** for risky stores without **`gc_write_barrier`**.
+
+---
+
+### B6. Stress suite (`tests/stress/`)
+
+**Goal:** time-bounded jobs: large live graphs, deep recursion, string pressure, mixed alloc, incremental loop stability.
+
+---
+
+# SECTION C — Runtime hardening
+
+### C1–C4. Null/type errors, OOB array panic, capacity validation, shadow balance checks
+
+Implement as described in the original backlog: prioritize **high-frequency natives** first, then tables/arrays/structs.
+
+---
+
+# SECTION D — Developer experience
+
+### D1. Debug source maps / rich DI
+
+**Today:** **`fuji build --debug`** emits **`-g`**.
+
+**Next:** thread token file/line into **`DIFile` / `DISubprogram` / `DILocation`** in **`internal/codegen`** when `Debug` is set.
+
+### D2. `fuji watch`
+
+**Today:** directory poll of **`.fuji`** files; restart child on change.
+
+**Optional upgrade:** `fsnotify` (new dependency) + include-graph aware watching.
+
+### D3. `fuji bench`
+
+New **`fuji bench`** command + iteration protocol (`benchmarkDone()` or similar) + percentile reporting.
+
+### D4. Runtime property suggestions
+
+Near-match hints on missing keys (debug-gated; may require enumerating table keys safely).
+
+---
+
+# SECTION E — Compiler quality
+
+### E1–E2. Parse cache + parallel parse
+
+Speed up **`PrepareNativeBundle`** / **`LoadProgram`** for large multi-file projects.
+
+### E3–E5. Constant folding, DCE, unused warnings
+
+Broaden folds safely; add reachability / unused-symbol passes behind **`--warn-unused`**.
+
+---
+
+# SECTION F — Standard library completeness
+
+Ship **`vec3`**, **`color`**, **`input`**, **`easing`**, **`pool`**, expanded **`str`** / **`array`** helpers as **pure Fuji** where possible; add **`tests/*.fuji`** for each module.
+
+---
+
+# SECTION G — Tooling
+
+### G1–G3
+
+**Watch**, **bench**, **debug** — see sections **D2**, **D3**, **D1**.
+
+### G4. Asset embedding in `fuji bundle`
+
+Append/archive assets; **`assetPath()`**-style helper; document layout conventions.
+
+### G5. `fuji doctor`
+
+Richer environment report (disk, lld, runtime archive freshness vs compiler, etc.).
+
+---
+
+# SECTION H — Final hardening
+
+### H1. Parser fuzzing
+
+**`internal/parser`** fuzz target; short CI budget.
+
+### H2. ASAN / Valgrind
+
+Optional CI job building runtime with sanitizers + running stress subset.
+
+### H3. Smoke definition
+
+Keep **`ci.yml`** native smoke list aligned with this document; extend as **`tests/stress/`** lands.
+
+---
+
+## Hard rules (from backlog)
+
+- **No drive-by TODOs** for required behavior: implement or file a tracked issue with a test gap.
+- **Full registration chain** for every new C builtin: **`fuji_runtime.c`** / **`.h`** → **`internal/codegen/runtime.go`** → **`builtin_register.go`** / **`builtin_globals.go`** → docs/tests.
+- **Write barriers** on every mutating store into GC objects (see **B5**).
+- **Keep `runtime.go` and `fuji_runtime.c` in sync.**
+- **Every new surface area gets a `.fuji` or `go test` regression.**
+
+---
+
+## Commands (from a repository checkout)
+
+End users should follow **[README.md](../README.md)**. When hacking **this** repo:
+
+```bash
+go build -o fuji ./cmd/fuji
+go test ./... -count=1
+bash scripts/build-runtime.sh   # or scripts/build-runtime.ps1 on Windows
+./fuji check path/to/file.fuji
+./fuji run path/to/file.fuji
+./fuji build path/to/file.fuji -o out
+./fuji fmt --check ./...
+```
+
+See **[CONTRIBUTING.md](../CONTRIBUTING.md)** and **[docs/handoff.md](handoff.md)** for the full contributor loop.
