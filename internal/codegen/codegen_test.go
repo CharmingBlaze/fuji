@@ -108,6 +108,29 @@ func main() {
 	}
 }
 
+func TestEmitPrefixNegIntegerLiteralNoUnbox(t *testing.T) {
+	src := `func main() { return -42; }`
+	program := parseForTest(t, src)
+	if err := sema.NewAnalyzer().Analyze(program); err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := sema.PrepareNativeBundle(&parser.ProgramBundle{Entry: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := NewGenerator(ctx).Generate(ctx.Bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir := mod.String()
+	if strings.Contains(ir, "call double @fuji_unbox_number") {
+		t.Fatalf("expected -literal fold to avoid unbox calls, got:\n%s", ir)
+	}
+	if !strings.Contains(ir, "call i64 @fuji_box_number") {
+		t.Fatalf("expected boxed numeric result, got:\n%s", ir)
+	}
+}
+
 func TestEmitInfixIntegerLiteralMulFoldNoUnbox(t *testing.T) {
 	src := `func main() { return 6 * 7; }`
 	program := parseForTest(t, src)

@@ -120,7 +120,7 @@ func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 		return g.emitNullishCoalesce(e)
 	}
 
-	// Integer literal + / - / * : fold at compile time (no FUJI_unbox_number / FAdd on this path).
+	// Integer literal + / - / * : fold at compile time (no fuji_unbox_number / FAdd on this path).
 	if e.Operator == "+" || e.Operator == "-" || e.Operator == "*" {
 		a, okL := literalInt64(e.Left)
 		b, okR := literalInt64(e.Right)

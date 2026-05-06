@@ -666,13 +666,6 @@ func (g *Generator) emitExpr(expr parser.Expr) (value.Value, error) {
 }
 
 func (g *Generator) emitPrefix(e *parser.PrefixExpr) (value.Value, error) {
-	// Emit the right-hand side expression
-	right, err := g.emitExpr(e.Right)
-	if err != nil {
-		return nil, err
-	}
-
-	// Handle different prefix operators
 	switch e.Operator {
 	case "typeof":
 		rv, err := g.emitExpr(e.Right)
@@ -681,11 +674,25 @@ func (g *Generator) emitPrefix(e *parser.PrefixExpr) (value.Value, error) {
 		}
 		return g.block.NewCall(g.runtimeType, g.emitAsFujiI64(rv)), nil
 	case "!":
+		right, err := g.emitExpr(e.Right)
+		if err != nil {
+			return nil, err
+		}
 		truthy := g.emitTruthy(right)
 		notTruthy := g.block.NewXor(truthy, constant.NewBool(true))
 		return g.emitBoxBoolNaN(notTruthy), nil
 	case "-":
-		// Unary negation on numeric values (NaN-boxed)
+		// Integer literal: fold -k at compile time when negation is exact in float64 (Tier 9D).
+		if v, ok := literalInt64(e.Right); ok {
+			fv := float64(v)
+			if float64(int64(fv)) == fv && int64(fv) == v {
+				return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, -fv)), nil
+			}
+		}
+		right, err := g.emitExpr(e.Right)
+		if err != nil {
+			return nil, err
+		}
 		ri := g.emitAsFujiI64(right)
 		rd := g.block.NewCall(g.runtimeUnboxNumber, ri)
 		neg := g.block.NewFNeg(rd)
