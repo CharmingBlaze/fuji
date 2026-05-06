@@ -1,108 +1,87 @@
-# Getting started with Fuji
+# Getting started with Fuji (beginner path)
+
+This guide is only about **using Fuji**.
+
+## 1) Install Fuji the easy way
+
+Download the latest `fuji` binary from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases), then run:
+
+```bash
+fuji version
+```
+
+Do not compile Fuji from source for normal usage. The source tree is maintainer-focused and not the intended beginner install route.
 
 ---
 
-## Prerequisites
+## 2) Your first program
 
-- Go 1.22 or later
-- **Clang** and **llc** (LLVM) for **`fuji run`**, **`fuji build`**, and **`fuji bundle`** (all use the native pipeline)
-- A C compiler (`gcc`/`clang`) and `ar` to build **`runtime/libfuji_runtime.a`** once (see [CONTRIBUTING.md](../../CONTRIBUTING.md))
-
-On Windows, install LLVM from https://releases.llvm.org or via `winget install LLVM.LLVM`, and use MinGW-w64 for `gcc`/`ar` when running `scripts/build-runtime.ps1`.
-
----
-
-## Build the CLI (and optional fujiwrap)
-
-From the repository root, **`fuji`** and **`fujiwrap`** (C-header → `.fuji` + `wrapper.c`; sources under **`cmd/wrapgen`**) share the same `go.mod`.
-
-```powershell
-git clone <repo>
-cd fuji-main
-
-# One-shot (Windows): see scripts under repo root, or:
-make build
-
-# Or by hand
-go build -o fuji.exe ./cmd/fuji
-go build -o fujiwrap.exe ./cmd/wrapgen
-```
-
-On macOS/Linux you can use `make build` to populate `./bin/`.
-
----
-
-## Run a script
-
-**`fuji run`** compiles with LLVM and executes the binary (same pipeline as **`fuji build`** — you need Clang + llc + built **`runtime/libfuji_runtime.a`**).
-
-```powershell
-.\fuji.exe run tests\hello.fuji
-```
-
----
-
-## Check and inspect
-
-```powershell
-.\fuji.exe check .\myscript.fuji        # parse and validate only
-.\fuji.exe disasm .\myscript.fuji       # print LLVM IR (after sema + codegen)
-```
-
----
-
-## Build a native executable
-
-```powershell
-.\fuji.exe build .\myscript.fuji -o .\myscript.exe
-```
-
-Requires Clang on `PATH` (or set `FUJI_CLANG`).
-
----
-
-## Bundle for distribution
-
-```powershell
-.\fuji.exe bundle .\mygame.fuji -o .\dist\mygame
-```
-
-This creates:
-
-```
-dist/mygame/
-  mygame.exe
-  run.bat
-  README.md
-  bundle-info.txt
-```
-
-To include extra files (DLLs, assets, licenses):
-
-```powershell
-$env:FUJI_BUNDLE_FILES = ".\raylib.dll .\assets\logo.png .\LICENSE.txt"
-.\fuji.exe bundle .\mygame.fuji -o .\dist\mygame
-```
-
----
-
-## Hello World
+Create `hello.fuji`:
 
 ```fuji
-print("Hello, World!");
+print("Hello, Fuji!");
 ```
 
 Run it:
 
-```powershell
-.\fuji.exe run .\hello.fuji
+```bash
+fuji run hello.fuji
 ```
 
 ---
 
-## Next steps
+## 3) Commands you will use every day
 
-- [Language reference](../language/syntax.md) — full syntax documentation
-- [Game development guide](game-dev.md) — using Raylib with Fuji
-- [Distribution guide](distribution.md) — shipping apps and games
-- [Wrapper guide](../../WRAPPERS.md) — integrating C/C++ libraries
+```bash
+# Run (temporary executable)
+fuji run game.fuji
+
+# Build a native executable
+fuji build game.fuji -o game.exe
+
+# Debug-friendly build
+fuji build --debug game.fuji -o game_debug.exe
+
+# Check parse + semantic errors
+fuji check game.fuji
+
+# Format source
+fuji fmt game.fuji
+fuji fmt --check .
+
+# Rebuild/rerun when files change
+fuji watch game.fuji
+
+# Package for sharing
+fuji bundle game.fuji -o dist/MyGame
+```
+
+---
+
+## 4) Using the wrapper tool (`fujiwrap`)
+
+`fujiwrap` generates `.fuji` bindings + `wrapper.c` from C/C++ headers.
+
+```bash
+fuji wrap --help
+```
+
+Typical flow:
+
+1. Generate bindings from a header.
+2. Import generated `.fuji` module in your game.
+3. Build/run with native glue via `FUJI_NATIVE_SOURCES` and linker flags via `FUJI_LINKFLAGS`.
+
+Full details: `docs/wrappers.md`.
+
+---
+
+## 5) Learn the whole language
+
+- `language.md` — complete language catalog (operators, statements, builtins, methods)
+- `docs/user_guide.md` — practical beginner/intermediate walkthrough
+- `docs/reference.md` — builtins and runtime-facing APIs
+- `docs/guides/game-dev.md` — game-focused usage patterns
+- `docs/distribution.md` — shipping and bundles
+
+If docs and behavior ever differ, run a tiny `.fuji` example and trust the CLI result.

@@ -107,6 +107,8 @@ func runCompileAndLink(tc *fujihome.Toolchain, irFile, outAbs, rootDir string, o
 		linkArgs = append(linkArgs, res...)
 	}
 	linkArgs = append(linkArgs, inputFile, "-I", runtimeInclude)
+	// LLVM IR often carries a target triple; suppress noisy override warning from clang.
+	linkArgs = append(linkArgs, "-Wno-override-module")
 	nativeSrc := os.Getenv("FUJI_NATIVE_SOURCES")
 	if strings.TrimSpace(nativeSrc) == "" {
 		nativeSrc = os.Getenv("FUJI_NATIVE_SOURCES")

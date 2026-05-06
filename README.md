@@ -6,6 +6,14 @@ The **[language.md](language.md)** page is the compact catalog of syntax, operat
 
 ---
 
+## Start here (important)
+
+- Use the prebuilt **release binaries** from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases).
+- Do **not** compile Fuji from source for normal usage. This repo includes maintainer/developer internals and is not the beginner install path.
+- If your goal is to make games/apps with Fuji, use `fuji` + `fujiwrap` binaries and the guides below.
+
+---
+
 ## Get the compiler (`fuji`)
 
 **Recommended:** download a **release build** from **[GitHub Releases](https://github.com/CharmingBlaze/fuji/releases)** (tags **`v*`**). Those binaries embed **Clang**, **`libfuji_runtime.a`**, and on Windows **lld**, so you can **`fuji build`** / **`fuji run`** without installing LLVM yourself.
@@ -32,7 +40,7 @@ On **Linux / macOS**, mark the file executable after download: `chmod +x fuji-li
 
 **`fujiwrap`** turns C/C++ headers into **`.fuji`** bindings plus a **`wrapper.c`** you link with **`FUJI_NATIVE_SOURCES`**. It ships **next to `fuji`** on the same **[Releases](https://github.com/CharmingBlaze/fuji/releases)** page when published for your platform (for example **`fujiwrap-windows-amd64.exe`**, **`fujiwrap-linux-amd64`**, **`fujiwrap-darwin-arm64`**).
 
-You can also build **`fujiwrap`** from this repo’s source if you already use Go—see **`cmd/wrapgen`** in the tree—or run **`fuji wrap …`** from the CLI: **`fuji`** looks for **`fujiwrap`** beside itself, then **`wrapgen`**, then **`kujiwrap`**, then **`PATH`**.
+Run **`fuji wrap …`** from the CLI: **`fuji`** looks for **`fujiwrap`** beside itself, then **`wrapgen`**, then **`kujiwrap`**, then **`PATH`**.
 
 ```bash
 fuji wrap --help
@@ -77,10 +85,11 @@ See **`fuji help`** for the full command list (`disasm`, `paths`, `doctor`, `bun
 
 ---
 
-## Documentation (using Fuji)
+## Documentation (using Fuji only)
 
 | Document | Contents |
 |----------|----------|
+| [docs/guides/getting-started.md](docs/guides/getting-started.md) | Beginner onboarding (release binary path only) |
 | [language.md](language.md) | Keywords, operators, statements, builtins |
 | [docs/user_guide.md](docs/user_guide.md) | Longer guide to writing Fuji |
 | [docs/reference.md](docs/reference.md) | Stdlib and builtins |

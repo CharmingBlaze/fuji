@@ -1,10 +1,12 @@
 # Fuji — complete language catalog
 
-**Shape of the language (implemented):** the **JavaScript-like** surface—syntax, objects, arrays, functions, templates, common methods—is lowered by **`internal/parser`** and **`internal/codegen`**. The **C-like** part is the **native** artifact and runtime: LLVM emission, **`runtime/src/`** (NaN-boxed values, GC), **`fuji build`** output—no bytecode VM in the shipping path.
+This page is the practical, user-facing catalog of Fuji language features and builtins.
 
-Single-page overview of **everything the Fuji surface syntax and native builtins expose today**. Deep tutorials live in **[docs/user_guide.md](docs/user_guide.md)**; the shorter **[docs/language.md](docs/language.md)** overlaps partially — prefer **tests under `tests/`** when behavior is ambiguous.
+Use it as the "what can I write?" reference, then pair it with:
 
-**Implementation:** lexer **`internal/lexer/`**, grammar **`internal/parser/`**, LLVM lowering **`internal/codegen/`**, C runtime **`runtime/src/`**.
+- `docs/guides/getting-started.md` for setup + first project flow
+- `docs/user_guide.md` for walkthroughs and examples
+- `docs/wrappers.md` for C/C++ integration with `fujiwrap`
 
 ---
 

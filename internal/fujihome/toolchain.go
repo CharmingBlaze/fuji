@@ -38,6 +38,11 @@ type Toolchain struct {
 func FindToolchain() (*Toolchain, error) {
 	tc, err := embeddedToolchain()
 	if err != nil {
+		// Release-tag builds can be compiled without populated embedded assets in dev checkouts.
+		// Fall back to system toolchain so local runs stay usable/noiseless.
+		if errors.Is(err, ErrIncompleteEmbeddedToolchain) {
+			return findSystemToolchain()
+		}
 		return nil, err
 	}
 	if tc != nil {
@@ -56,6 +61,16 @@ func findSystemToolchain() (*Toolchain, error) {
 		return nil, err
 	}
 	llc, _ := LLCWithSource()
+	if strings.TrimSpace(llc) == "" {
+		if p := findLLCBinary(); p != "" {
+			llc = p
+		}
+	}
+	if strings.TrimSpace(llc) == "" {
+		if alt := llcSiblingOfClang(clang); alt != "" {
+			llc = alt
+		}
+	}
 	lld := findLLDBinary()
 	return &Toolchain{
 		LLC:        llc,
@@ -64,6 +79,50 @@ func findSystemToolchain() (*Toolchain, error) {
 		RuntimeLib: filepath.Join(root, "runtime", "libfuji_runtime.a"),
 		LinkMode:   LinkClang,
 	}, nil
+}
+
+func llcSiblingOfClang(clang string) string {
+	clang = strings.TrimSpace(clang)
+	if clang == "" {
+		return ""
+	}
+	dir := filepath.Dir(clang)
+	if dir == "." || dir == "" {
+		return ""
+	}
+	name := "llc"
+	if runtime.GOOS == "windows" {
+		name = "llc.exe"
+	}
+	p := filepath.Join(dir, name)
+	if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+		return p
+	}
+	return ""
+}
+
+func findLLCBinary() string {
+	candidates := []string{"llc-18", "llc-14", "llc"}
+	if runtime.GOOS == "windows" {
+		candidates = []string{
+			`C:\Program Files\LLVM\bin\llc.exe`,
+			"llc.exe",
+			"llc-18.exe",
+			"llc-14.exe",
+		}
+	}
+	for _, c := range candidates {
+		if filepath.IsAbs(c) {
+			if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
+				return c
+			}
+			continue
+		}
+		if p, err := exec.LookPath(c); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 func resolveDevClang() (string, error) {
