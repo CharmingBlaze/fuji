@@ -682,12 +682,8 @@ func (g *Generator) emitPrefix(e *parser.PrefixExpr) (value.Value, error) {
 		notTruthy := g.block.NewXor(truthy, constant.NewBool(true))
 		return g.emitBoxBoolNaN(notTruthy), nil
 	case "-":
-		// Integer literal: fold -k at compile time when negation is exact in float64 (Tier 9D).
-		if v, ok := literalInt64(e.Right); ok {
-			fv := float64(v)
-			if float64(int64(fv)) == fv && int64(fv) == v {
-				return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, -fv)), nil
-			}
+		if res, ok := compileTimeInt64(e); ok {
+			return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, float64(res))), nil
 		}
 		right, err := g.emitExpr(e.Right)
 		if err != nil {

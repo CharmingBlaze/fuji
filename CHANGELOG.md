@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Codegen — integer literal `+` / `-` / `*`** — when **both** operands are integer **literals**, the result is **constant-folded** at compile time (**`fuji_box_number` only**, no **`fuji_unbox_number`** on that subexpression). Applies per infix node (e.g. **`(1+2)+3`** folds in steps).
 - **Codegen — unary `-` on integer literals** — folded to a single **`fuji_box_number`** when the value round-trips through **`float64`** (same safety rule as literal infix fold).
+- **Codegen — nested integer literal folds** — **`compileTimeInt64`** folds trees of **`+` / `-` / `*`**, unary **`-`**, and parentheses over integer literals only (overflow / precision loss → runtime path).
 - **`tests/assert_string_eq.fuji`** — regression for **`assert`** with **`==`** on string literals and variables (interning / **`values_equal`**).
 - **`stdlib/math.fuji`** — re-exports **`degrees`**, **`radians`**, **`wrap`**, and **`approach`** from the injected **`math`** prelude; **`deg`** / **`rad`** remain as aliases.
 

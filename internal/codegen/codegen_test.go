@@ -131,6 +131,46 @@ func TestEmitPrefixNegIntegerLiteralNoUnbox(t *testing.T) {
 	}
 }
 
+func TestEmitCompileTimeInt64ChainNoUnbox(t *testing.T) {
+	src := `func main() { return 1 + 2 + 3; }`
+	program := parseForTest(t, src)
+	if err := sema.NewAnalyzer().Analyze(program); err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := sema.PrepareNativeBundle(&parser.ProgramBundle{Entry: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := NewGenerator(ctx).Generate(ctx.Bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir := mod.String()
+	if strings.Contains(ir, "call double @fuji_unbox_number") {
+		t.Fatalf("expected chained literal fold to avoid unbox, got:\n%s", ir)
+	}
+}
+
+func TestEmitCompileTimeNegOfProductNoUnbox(t *testing.T) {
+	src := `func main() { return -(2 * 3); }`
+	program := parseForTest(t, src)
+	if err := sema.NewAnalyzer().Analyze(program); err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := sema.PrepareNativeBundle(&parser.ProgramBundle{Entry: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := NewGenerator(ctx).Generate(ctx.Bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir := mod.String()
+	if strings.Contains(ir, "call double @fuji_unbox_number") {
+		t.Fatalf("expected -(2*3) fold to avoid unbox, got:\n%s", ir)
+	}
+}
+
 func TestEmitInfixIntegerLiteralMulFoldNoUnbox(t *testing.T) {
 	src := `func main() { return 6 * 7; }`
 	program := parseForTest(t, src)

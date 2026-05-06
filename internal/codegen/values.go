@@ -109,6 +109,79 @@ func literalInt64(e parser.Expr) (int64, bool) {
 	}
 }
 
+// tryConstInt64Binop returns (a op b) when the result is exactly representable as int64 (no silent wrap).
+func tryConstInt64Binop(op string, a, b int64) (int64, bool) {
+	fa, fb := float64(a), float64(b)
+	var fr float64
+	switch op {
+	case "+":
+		fr = fa + fb
+	case "-":
+		fr = fa - fb
+	case "*":
+		fr = fa * fb
+	default:
+		return 0, false
+	}
+	if math.IsNaN(fr) || math.IsInf(fr, 0) || fr != math.Trunc(fr) {
+		return 0, false
+	}
+	if fr < float64(math.MinInt64) || fr > float64(math.MaxInt64) {
+		return 0, false
+	}
+	r := int64(fr)
+	if float64(r) != fr {
+		return 0, false
+	}
+	return r, true
+}
+
+// compileTimeInt64 folds +, -, *, unary - over integer-only literal trees (Tier 9D).
+func compileTimeInt64(e parser.Expr) (int64, bool) {
+	switch x := e.(type) {
+	case *parser.GroupingExpr:
+		return compileTimeInt64(x.Expr)
+	case *parser.LiteralExpr:
+		return literalInt64(e)
+	case *parser.PrefixExpr:
+		if x.Operator != "-" {
+			return 0, false
+		}
+		v, ok := compileTimeInt64(x.Right)
+		if !ok {
+			return 0, false
+		}
+		fv := float64(v)
+		if float64(int64(fv)) != fv || int64(fv) != v {
+			return 0, false
+		}
+		neg := -fv
+		if math.IsNaN(neg) || math.IsInf(neg, 0) || neg != math.Trunc(neg) {
+			return 0, false
+		}
+		if neg < float64(math.MinInt64) || neg > float64(math.MaxInt64) {
+			return 0, false
+		}
+		r := int64(neg)
+		if float64(r) != neg {
+			return 0, false
+		}
+		return r, true
+	case *parser.InfixExpr:
+		if x.Operator != "+" && x.Operator != "-" && x.Operator != "*" {
+			return 0, false
+		}
+		a, ok1 := compileTimeInt64(x.Left)
+		b, ok2 := compileTimeInt64(x.Right)
+		if !ok1 || !ok2 {
+			return 0, false
+		}
+		return tryConstInt64Binop(x.Operator, a, b)
+	default:
+		return 0, false
+	}
+}
+
 // emitInfix emits LLVM IR for infix expressions.
 func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 	switch e.Operator {
@@ -120,20 +193,9 @@ func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 		return g.emitNullishCoalesce(e)
 	}
 
-	// Integer literal + / - / * : fold at compile time (no fuji_unbox_number / FAdd on this path).
+	// Pure integer literal + / - / * tree: fold whole subtree (e.g. 1+2+3, -(4*5)) at compile time.
 	if e.Operator == "+" || e.Operator == "-" || e.Operator == "*" {
-		a, okL := literalInt64(e.Left)
-		b, okR := literalInt64(e.Right)
-		if okL && okR {
-			var res int64
-			switch e.Operator {
-			case "+":
-				res = a + b
-			case "-":
-				res = a - b
-			case "*":
-				res = a * b
-			}
+		if res, ok := compileTimeInt64(e); ok {
 			return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, float64(res))), nil
 		}
 	}
