@@ -52,6 +52,9 @@ Thumbs.db
 *.swo
 .idea/
 
+# Windsurf IDE workspace rules (optional; keep local only)
+.windsurf/
+
 # Logs
 *.log
 
