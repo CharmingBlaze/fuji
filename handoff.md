@@ -43,6 +43,7 @@ go build -o kuji ./cmd/kuji
 - **Integer-based Tokens**: `TokenType` is a `uint8` for fast switch-based dispatch in the parser.
 - **Decoupled AST**: The AST does not depend on the VM or Codegen, allowing for better testability and modularity.
 
-## Contact & Links
-- **Lead Architect**: Antigravity (AI)
-- **Mission**: Ship Fuji v1.0 Production Release
+## Contact & links
+
+- **Mission:** ship Fuji v1.0 production release.
+- **Upstream:** [github.com/CharmingBlaze/fuji](https://github.com/CharmingBlaze/fuji).

@@ -1,4 +1,4 @@
-# Git workflow (for humans and automation)
+# Git workflow (contributors)
 
 This repository uses **`main`** as the default branch. The remote is conventionally named **`origin`** (for example `https://github.com/CharmingBlaze/fuji.git`).
 
@@ -26,7 +26,7 @@ git push origin main
 
 ## Credentials
 
-Pushing requires Git authentication for **`origin`** (SSH key, HTTPS credential helper, or `gh auth`). Agents running in environments without credentials cannot push; surface that failure to the operator.
+Pushing requires Git authentication for **`origin`** (SSH key, HTTPS credential helper, or **`gh auth`**). Environments without configured credentials cannot push until a maintainer signs in or installs credentials.
 
 ## Large or generated paths
 

@@ -26,7 +26,7 @@ See **[docs/releasing.md](docs/releasing.md)** for version bumps, changelog, and
 
 ## Git: commit and push to `main`
 
-Step-by-step (including for automation): **[docs/git-workflow-for-agents.md](docs/git-workflow-for-agents.md)**.
+Step-by-step: **[docs/git-workflow.md](docs/git-workflow.md)**.
 
 ## Formatting
 

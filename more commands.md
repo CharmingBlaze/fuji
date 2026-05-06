@@ -729,9 +729,11 @@ Add to v2.0 (Advanced):
 🔵 Modules (import/export)
 
 
-Add This to Cursor Prompt
-Add this section to the Cursor prompt:
-markdown## Standard Library - Built-in Functions
+## Standard library wishlist (notes)
+
+Possible directions for builtins and stdlib (for planning only):
+
+## Standard Library - Built-in Functions
 
 Implement these essential functions for game/app development:
 
