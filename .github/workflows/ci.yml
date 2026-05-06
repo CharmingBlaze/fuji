@@ -62,6 +62,8 @@ jobs:
           /tmp/defer_test | head -n 5
           /tmp/fuji build tests/assert_string_eq.fuji -o /tmp/assert_string_eq
           /tmp/assert_string_eq | head -n 5
+          /tmp/fuji build tests/unary_plus_fold.fuji -o /tmp/unary_plus_fold
+          /tmp/unary_plus_fold | head -n 5
 
       - name: GC soak (serialized, time-bounded)
         run: |

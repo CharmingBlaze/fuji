@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Parser / codegen — unary `+`** — **`+expr`** is accepted; on integer-only literal trees it folds like unary **`-`**; otherwise it is a no-op on the emitted operand.
 - **Codegen — nested integer literal folds** — **`compileTimeInt64`** folds trees of **`+` / `-` / `*`**, unary **`-`**, and parentheses over integer literals only (overflow / precision loss → runtime path).
 - **`tests/assert_string_eq.fuji`** — regression for **`assert`** with **`==`** on string literals and variables (interning / **`values_equal`**).
+- **`tests/unary_plus_fold.fuji`** — native smoke for unary **`+`** (literal fold and identity on a variable); run in **CI** alongside other **`fuji build`** smokes.
 - **`stdlib/math.fuji`** — re-exports **`degrees`**, **`radians`**, **`wrap`**, and **`approach`** from the injected **`math`** prelude; **`deg`** / **`rad`** remain as aliases.
 
 - **`defer` statement** — defers a call (or any expression) until the enclosing **`func`** / closure / **`user_main`** exits: **LIFO** vs other defers, after the **`return`** value is computed, immediately before call-trace pop and shadow-stack pop. Lexer **`TokenDefer`**, AST **`DeferStmt`**, sema, shadow walk, formatter, and LLVM codegen. **`tests/defer_test.fuji`** covers LIFO order and defers before an early **`return`**.
