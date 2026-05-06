@@ -681,6 +681,11 @@ func (g *Generator) emitPrefix(e *parser.PrefixExpr) (value.Value, error) {
 		truthy := g.emitTruthy(right)
 		notTruthy := g.block.NewXor(truthy, constant.NewBool(true))
 		return g.emitBoxBoolNaN(notTruthy), nil
+	case "+":
+		if res, ok := compileTimeInt64(e); ok {
+			return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, float64(res))), nil
+		}
+		return g.emitExpr(e.Right)
 	case "-":
 		if res, ok := compileTimeInt64(e); ok {
 			return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, float64(res))), nil

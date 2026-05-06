@@ -136,7 +136,7 @@ func tryConstInt64Binop(op string, a, b int64) (int64, bool) {
 	return r, true
 }
 
-// compileTimeInt64 folds +, -, *, unary - over integer-only literal trees (Tier 9D).
+// compileTimeInt64 folds +, -, *, unary + / - over integer-only literal trees (Tier 9D).
 func compileTimeInt64(e parser.Expr) (int64, bool) {
 	switch x := e.(type) {
 	case *parser.GroupingExpr:
@@ -144,6 +144,9 @@ func compileTimeInt64(e parser.Expr) (int64, bool) {
 	case *parser.LiteralExpr:
 		return literalInt64(e)
 	case *parser.PrefixExpr:
+		if x.Operator == "+" {
+			return compileTimeInt64(x.Right)
+		}
 		if x.Operator != "-" {
 			return 0, false
 		}

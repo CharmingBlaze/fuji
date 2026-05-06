@@ -136,7 +136,7 @@ func (p *Parser) getPrefixFn(typ lexer.TokenType) prefixParseFn {
 		return p.parseBooleanLiteral
 	case lexer.TokenNull:
 		return p.parseNullLiteral
-	case lexer.TokenBang, lexer.TokenMinus:
+	case lexer.TokenBang, lexer.TokenPlus, lexer.TokenMinus:
 		return p.parsePrefixExpression
 	case lexer.TokenTypeof:
 		return p.parseTypeofExpression
