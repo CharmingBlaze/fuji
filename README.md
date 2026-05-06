@@ -1,5 +1,7 @@
 # Fuji
 
+![Fuji Logo](assets/fuji-logo.png)
+
 **Fuji** is a **JavaScript-style** language that compiles **`.fuji`** programs to **native executables** (LLVM). You write familiar syntax—objects, functions, control flow—and ship a **single binary** (plus any assets you bundle). Players do **not** install a separate Fuji runtime.
 
 The **[language.md](language.md)** page is the compact catalog of syntax, operators, builtins, and stdlib surface.
