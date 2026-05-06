@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`language.md`** / **`docs/language.md`** — precedence summary and unary operator list now spell out **`+`**, **`-`**, **`!`**, and **`typeof`** (binary **`+` / `-`** called out where both appear in the same line).
+
 - **`README.md`** — links **`docs/handoff.md`** for the compiler/runtime layout and invariants.
 - **`docs/handoff.md`** — rewritten for the **LLVM-only** pipeline (no VM / **`kuji`**); points at **`docs/architecture.md`** and invariants for new contributors.
 

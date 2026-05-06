@@ -223,7 +223,7 @@ Additional natives (`gc`, type predicates, JSON/math/io modules) exist for the V
 
 ## 13. Precedence (summary)
 
-Highest: call, member, index → unary → `* / %` → `+ -` → comparisons → `==` `!=` `===` `!==` → `&&` → `||` → assignment (see parser sources for exact grammar).
+Highest: call, member, index → unary (`+`, `-`, `!`, `typeof`) → `* / %` → `+ -` (binary) → comparisons → `==` `!=` `===` `!==` → `&&` → `||` → assignment (see parser sources for exact grammar).
 
 ---
 

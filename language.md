@@ -125,6 +125,7 @@ Directive-style tokens:
 
 **Unary**
 
+`+` `-` `!` — numeric sign (**`+`** is a no-op on the emitted operand except when an integer-only literal subtree is constant-folded) and boolean **`!`**.  
 `typeof` — unary operator (**`typeof x`**, same spelling as JS); behaviour matches the **`type(...)`** builtin (type name string).
 
 ---
@@ -337,7 +338,7 @@ Runtime **`FUJI_is_truthy`** (conceptually): **`false`**, **`null`**, **`0`**, *
 
 ## 16. Precedence (summary)
 
-Highest → lowest (approximate): **call, member, index** → unary (`typeof`, …) → `* / %` → `+ -` → comparisons → **`==` `!=` `===` `!==`** → **`&&`** → **`||`** → **`??`** → assignment.
+Highest → lowest (approximate): **call, member, index** → unary (`+`, `-`, `!`, `typeof`, …) → `* / %` → **`+` `-` (binary)** → comparisons → **`==` `!=` `===` `!==`** → **`&&`** → **`||`** → **`??`** → assignment.
 
 Exact rules: **`internal/parser/parser_expr.go`** (Pratt parsing).
 

@@ -104,6 +104,21 @@ func TestFormatImportExpr(t *testing.T) {
 	}
 }
 
+func TestFormatUnaryPlusIdempotent(t *testing.T) {
+	src := "let x=+1+(+2*3);\n"
+	out, err := Format(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out2, err := Format(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != out2 {
+		t.Fatalf("not idempotent:\n---first---\n%s\n---second---\n%s", out, out2)
+	}
+}
+
 func TestFormatClosureTest(t *testing.T) {
 	path := filepath.Join("..", "..", "tests", "closure_test.fuji")
 	b, err := os.ReadFile(path)
