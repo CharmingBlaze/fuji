@@ -58,13 +58,17 @@ let sign = math.sign;
 
 let lerp = math.lerp;
 
-let deg = func(r) {
-    return r * (180 / 3.141592653589793);
-};
+let degrees = math.degrees;
 
-let rad = func(d) {
-    return d * (3.141592653589793 / 180);
-};
+let radians = math.radians;
+
+let wrap = math.wrap;
+
+let approach = math.approach;
+
+let deg = degrees;
+
+let rad = radians;
 
 let random = math.random;
 

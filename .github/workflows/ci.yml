@@ -60,6 +60,8 @@ jobs:
           /tmp/for_of_dynamic_range | head -n 5
           /tmp/fuji build tests/defer_test.fuji -o /tmp/defer_test
           /tmp/defer_test | head -n 5
+          /tmp/fuji build tests/assert_string_eq.fuji -o /tmp/assert_string_eq
+          /tmp/assert_string_eq | head -n 5
 
       - name: GC soak (serialized, time-bounded)
         run: |

@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/llir/llvm/ir/constant"
@@ -85,6 +86,29 @@ func (g *Generator) emitStringLiteral(s string) value.Value {
 	return strObj
 }
 
+// literalInt64 returns true when e is a numeric literal exactly representable as int64 (Tier 9D fast-path helper).
+func literalInt64(e parser.Expr) (int64, bool) {
+	lit, ok := e.(*parser.LiteralExpr)
+	if !ok {
+		return 0, false
+	}
+	switch v := lit.Value.(type) {
+	case int:
+		return int64(v), true
+	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, false
+		}
+		iv := int64(v)
+		if float64(iv) != v {
+			return 0, false
+		}
+		return iv, true
+	default:
+		return 0, false
+	}
+}
+
 // emitInfix emits LLVM IR for infix expressions.
 func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 	switch e.Operator {
@@ -94,6 +118,24 @@ func (g *Generator) emitInfix(e *parser.InfixExpr) (value.Value, error) {
 		return g.emitLogicalOr(e)
 	case "??":
 		return g.emitNullishCoalesce(e)
+	}
+
+	// Integer literal + / - / * : fold at compile time (no FUJI_unbox_number / FAdd on this path).
+	if e.Operator == "+" || e.Operator == "-" || e.Operator == "*" {
+		a, okL := literalInt64(e.Left)
+		b, okR := literalInt64(e.Right)
+		if okL && okR {
+			var res int64
+			switch e.Operator {
+			case "+":
+				res = a + b
+			case "-":
+				res = a - b
+			case "*":
+				res = a * b
+			}
+			return g.block.NewCall(g.runtimeBoxNumber, constant.NewFloat(types.Double, float64(res))), nil
+		}
 	}
 
 	left, err := g.emitExpr(e.Left)
