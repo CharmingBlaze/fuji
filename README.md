@@ -1,117 +1,102 @@
 # Fuji
 
-**Fuji** is a **JavaScript-syntax** scripting language that compiles to **native binaries** via LLVM. That combination is **implemented today**, not only planned: **simple JavaScript**—objects, functions, familiar control flow—and **simple C**—**`fuji build`** produces a native executable (LLVM IR → object + **`libfuji_runtime.a`**), explicit statements, predictable performance, and **no separate runtime** for players to install.
+**Fuji** is a **JavaScript-style** language that compiles **`.fuji`** programs to **native executables** (LLVM). You write familiar syntax—objects, functions, control flow—and ship a **single binary** (plus any assets you bundle). Players do **not** install a separate Fuji runtime.
 
-The **[language.md](language.md)** catalog lists the full surface (including **string/array methods**, **template `` `${}` `` literals**, **`math.*`** prelude, **`typeof`**, **`delete`**, **spread**, **destructuring**, **`?.`**, **`??`**, and **`matches()`** for substring checks).
-
-A small language for **games and apps**: **plain `.fuji` files** you can read, diff, and ship. The compiler and CLI are **`fuji`**. Use **`fuji fmt`** for canonical formatting (`CONTRIBUTING.md`).
-
-| Who | What they need |
-|-----|----------------|
-| **Players / Customers** | Only your **bundle** folder (`.exe` + assets). No Go, Python, or C++. |
-| **You (Author)** | **Go** to build **`fuji`** once. Either a **self-contained release binary** (no LLVM install) or **Clang** + **llc** on `PATH`, plus a C compiler to build **`runtime/libfuji_runtime.a`** when not using a prebuilt archive. Optional **`fujiwrap`** (same sources as **`wrapgen`**) for C header bindings. |
-
-See **[CHANGELOG.md](CHANGELOG.md)** for **v0.2.0** and earlier (native pipeline, **`fuji fmt`**, GC/shadow-stack fixes, **`fuji watch`**, **`build --debug`**). Contributors: **[CONTRIBUTING.md](CONTRIBUTING.md)** (tests, **`fuji fmt --check`**, runtime build). Compiler/runtime package map and invariants: **[docs/handoff.md](docs/handoff.md)**. Cutting a GitHub Release: **[docs/releasing.md](docs/releasing.md)**.
-
-### Verify v0.2.0 locally (Windows)
-
-Use **Developer Command Prompt for VS 2022** (or any shell where **`clang`**, **`llc`**, and a C compiler are on **`PATH`**).
-
-```bat
-cd path\to\fuji-main
-.\scripts\build-runtime.ps1
-go build -o fuji.exe ./cmd/fuji
-fuji.exe build tests\hello.fuji -o hello.exe
-hello.exe
-fuji.exe build tests\error_handling_test.fuji -o error_test.exe
-error_test.exe
-fuji.exe build tests\phase1_surface.fuji -o surface.exe
-surface.exe
-```
-
-**Expected (roughly):** **`hello.fuji`** prints `Hello, Fuji!` plus type lines for number, string, boolean, and null. **`error_handling_test.fuji`** ends with **`PASS: error handling works`**. **`phase1_surface.fuji`** follows whatever that test prints today (see the file under **`tests/`**).
-
-From a **GitHub Release** artifact (**`fuji-windows-amd64.exe`**), the same commands work **without** installing LLVM, because the binary embeds **`llc`**, **`lld`**, and **`libfuji_runtime.a`** (**`go build -tags release`**).
+The **[language.md](language.md)** page is the compact catalog of syntax, operators, builtins, and stdlib surface.
 
 ---
 
-## Quick Start
+## Get the compiler (`fuji`)
 
-Fuji compiles **only** through the LLVM native pipeline (`fuji run` builds a temp binary and runs it — same lowering as `fuji build`).
+**Recommended:** download a **release build** from **[GitHub Releases](https://github.com/CharmingBlaze/fuji/releases)** (tags **`v*`**). Those binaries embed **Clang**, **`libfuji_runtime.a`**, and on Windows **lld**, so you can **`fuji build`** / **`fuji run`** without installing LLVM yourself.
 
-**Build the toolchain:**
+| Platform | Compiler binary | Typical download name |
+|----------|-----------------|-------------------------|
+| Windows (x64) | `fuji` | **`fuji-windows-amd64.exe`** |
+| Linux (x64) | `fuji` | **`fuji-linux-amd64`** |
+| Linux (ARM64) | `fuji` | **`fuji-linux-arm64`** |
+| macOS Intel | `fuji` | **`fuji-darwin-amd64`** |
+| macOS Apple Silicon | `fuji` | **`fuji-darwin-arm64`** |
+
+Put the binary on your **`PATH`**, or run it by full path. Then:
+
 ```bash
-make build    # ./bin/fuji and ./bin/fujiwrap (see Makefile; `make wrapgen` also builds legacy bin/wrapgen)
+fuji version
 ```
 
-**Run an example:**
-```bash
-./bin/fuji run examples/hello.fuji
-```
-
-**Watch + rerun on edits:**
-```bash
-./bin/fuji watch examples/hello.fuji
-```
-
-**Build a native app** (requires **`llc`**, **`clang`**, and **`runtime/libfuji_runtime.a`** unless using a **release-tagged** `fuji` binary):
-```bash
-./bin/fuji build examples/hello.fuji -o hello.exe
-```
-
-**Bundle for distribution:**
-```bash
-./bin/fuji bundle examples/games/production_brick_breaker.fuji -o dist/BrickBreaker
-```
+On **Linux / macOS**, mark the file executable after download: `chmod +x fuji-linux-amd64` (example).
 
 ---
 
-## Project Structure
+## Get the C header wrapper (`fujiwrap`)
 
-- **`bin/`**: Compiled toolchain binaries.
-- **`cmd/`**: CLI source code (compiler and wrapper generator).
-- **`docs/`**: Extensive documentation, guides, and references.
-- **`examples/`**: Sample Fuji programs and games.
-- **`internal/`**: Core compiler and runtime implementation.
-- **`stdlib/`**: The Fuji standard library.
-- **`wrappers/`**: C/C++ library wrappers.
-- **`dist/`**: Output directory for generated application bundles.
+**`fujiwrap`** turns C/C++ headers into **`.fuji`** bindings plus a **`wrapper.c`** you link with **`FUJI_NATIVE_SOURCES`**. It ships **next to `fuji`** on the same **[Releases](https://github.com/CharmingBlaze/fuji/releases)** page when published for your platform (for example **`fujiwrap-windows-amd64.exe`**, **`fujiwrap-linux-amd64`**, **`fujiwrap-darwin-arm64`**).
+
+You can also build **`fujiwrap`** from this repo’s source if you already use Go—see **`cmd/wrapgen`** in the tree—or run **`fuji wrap …`** from the CLI: **`fuji`** looks for **`fujiwrap`** beside itself, then **`wrapgen`**, then **`kujiwrap`**, then **`PATH`**.
+
+```bash
+fuji wrap --help
+```
+
+Full workflow: **[docs/wrappers.md](docs/wrappers.md)** and **`fuji help`** (environment variables **`FUJI_NATIVE_SOURCES`**, **`FUJI_LINKFLAGS`**, **`FUJI_BUNDLE_FILES`**, etc.).
 
 ---
 
-## Documentation
+## Use `fuji` on your project
+
+From a directory that contains your entry **`.fuji`** file (and any **`#include`** / **`@module`** dependencies the loader can resolve):
+
+```bash
+# Run (builds a temp exe, runs it, deletes it)
+fuji run examples/hello.fuji
+
+# Same pipeline, optional flags
+fuji run --no-opt path/to/big_program.fuji
+
+# Native executable you keep
+fuji build mygame.fuji -o mygame.exe
+
+# Debug symbols + unoptimized (easier stepping in a debugger)
+fuji build --debug mygame.fuji -o mygame_debug.exe
+
+# Rebuild + rerun when .fuji files change under the entry file’s folder
+fuji watch src/main.fuji
+
+# Folder you zip or ship (exe + README + extras)
+fuji bundle mygame.fuji -o dist/MyGame
+
+# Check syntax/semantics only (no LLVM)
+fuji check mygame.fuji
+
+# Canonical formatting
+fuji fmt mygame.fuji
+fuji fmt --check .
+```
+
+See **`fuji help`** for the full command list (`disasm`, `paths`, `doctor`, `bundle`, …).
+
+---
+
+## Documentation (using Fuji)
 
 | Document | Contents |
 |----------|----------|
-| [language.md](language.md) | **Single-page catalog** — keywords, operators, statements, builtins |
-| [docs/user_guide.md](docs/user_guide.md) | Comprehensive guide to Fuji |
-| [docs/reference.md](docs/reference.md) | Standard library and built-in functions |
-| [docs/language.md](docs/language.md) | Syntax and language specification |
-| [docs/distribution.md](docs/distribution.md) | How to ship your games |
-| [docs/wrappers.md](docs/wrappers.md) | C/C++ FFI and Raylib integration |
-| [docs/architecture.md](docs/architecture.md) | Compiler pipeline (LLVM native only) |
-| [docs/windows-native-toolchain.md](docs/windows-native-toolchain.md) | Windows 11: LLVM 14, MSVC, Make, CGo for go-llvm |
-
-For the included Brick Breaker on Windows (raylib shim path), run:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\play-brick-breaker.ps1
-```
-
-**Release downloads** (GitHub **Releases**, tag `v*`): self-contained **`fuji`** binaries with embedded **`llc`**, **`lld`**, and **`libfuji_runtime.a`** are built by **`.github/workflows/release.yml`** (`go build -tags release`). No LLVM install is required to use those artifacts for **`fuji build`** / **`fuji run`**.
+| [language.md](language.md) | Keywords, operators, statements, builtins |
+| [docs/user_guide.md](docs/user_guide.md) | Longer guide to writing Fuji |
+| [docs/reference.md](docs/reference.md) | Stdlib and builtins |
+| [docs/language.md](docs/language.md) | Language specification |
+| [docs/distribution.md](docs/distribution.md) | Shipping games and bundles |
+| [docs/wrappers.md](docs/wrappers.md) | C/C++ FFI, **`fujiwrap`**, Raylib-style workflows |
 
 ---
 
-## Requirements
+## Optional examples
 
-- **Authors:** Go **1.22+**, **Clang** and **llc** on `PATH` for native builds, plus a C toolchain to build **`runtime/libfuji_runtime.a`** (see [CONTRIBUTING.md](CONTRIBUTING.md)).
-- **Players:** Nothing required — just your shipped executable and data files.
+- **`examples/`** — small programs and games (**[examples/games/README.md](examples/games/README.md)**).
+- **Brick Breaker (Windows, Raylib path):** `powershell -ExecutionPolicy Bypass -File .\scripts\play-brick-breaker.ps1` (from a full checkout with scripts).
 
 ---
 
-## Runtime Invariants (GC Safety)
+## Changelog
 
-- Generated binaries should call **`fuji_runtime_init_ex(stack_base)`**; **`fuji_runtime_init()`** is a compatibility wrapper.
-- Any stack slot that can temporarily hold a live object across calls/allocation must be shadow-rooted.
-- Writes from old objects to younger objects must go through runtime write-barrier paths (`fuji_object_set`, `fuji_array_set`, `fuji_array_push`, `fuji_cell_write`, etc.).
-- Top-level globals in generated code are registered as global slots so GC marks current values, not stale snapshots.
-- Optional debug stats/checks are enabled with **`FUJI_GC_DEBUG=1`** (remembered-set overflow count, shadow-depth high-water mark, global slot stats, and object-header sanity checks).
+**[CHANGELOG.md](CHANGELOG.md)** lists shipped features and fixes by version.
