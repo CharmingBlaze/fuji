@@ -258,3 +258,58 @@ func TestSemaDeferStmtAnalyzesCallee(t *testing.T) {
 		t.Fatalf("sema: %v", err)
 	}
 }
+
+func TestSemaArgvMethodAritySplitTooFew(t *testing.T) {
+	src := `func main() {
+		"a".split();
+	}`
+	program := parseForTest(t, src)
+	a := NewAnalyzer()
+	if err := a.Analyze(program); err == nil {
+		t.Fatal("expected arity error for split with 0 arguments")
+	}
+}
+
+func TestSemaArgvMethodArityTrimTooMany(t *testing.T) {
+	src := `func main() {
+		"a".trim(1);
+	}`
+	program := parseForTest(t, src)
+	a := NewAnalyzer()
+	if err := a.Analyze(program); err == nil {
+		t.Fatal("expected arity error for trim with 1 argument")
+	}
+}
+
+func TestSemaArgvMethodArityTrimOk(t *testing.T) {
+	src := `func main() {
+		"a".trim();
+	}`
+	program := parseForTest(t, src)
+	if err := NewAnalyzer().Analyze(program); err != nil {
+		t.Fatalf("sema: %v", err)
+	}
+}
+
+func TestSemaArgvMethodArityComputedIndexSkipped(t *testing.T) {
+	src := `func main() {
+		let m = "split";
+		"x"[m]();
+	}`
+	program := parseForTest(t, src)
+	if err := NewAnalyzer().Analyze(program); err != nil {
+		t.Fatalf("dynamic method name must not trigger argv arity: %v", err)
+	}
+}
+
+func TestSemaArgvMethodArityReduceZeroArgs(t *testing.T) {
+	src := `func main() {
+		let a = [1];
+		a.reduce();
+	}`
+	program := parseForTest(t, src)
+	a := NewAnalyzer()
+	if err := a.Analyze(program); err == nil {
+		t.Fatal("expected arity error for reduce with 0 arguments")
+	}
+}

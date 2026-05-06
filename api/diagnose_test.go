@@ -65,6 +65,23 @@ func TestDiagnoseCallArity(t *testing.T) {
 	}
 }
 
+func TestDiagnoseArgvMethodArity(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "mArity.fuji")
+	src := "func main() {\n\t\"x\".split();\n}\n"
+	if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := Diagnose(p, "")
+	if len(d) == 0 {
+		t.Fatal("want argv method arity diagnostic")
+	}
+	msg := strings.ToLower(d[0].Message)
+	if !strings.Contains(msg, "split") || !strings.Contains(msg, "wrong number") {
+		t.Fatalf("message: %q", d[0].Message)
+	}
+}
+
 func TestDiagnoseMultipleSemaErrorsAggregated(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "multi.fuji")
