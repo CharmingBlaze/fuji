@@ -18,7 +18,7 @@ extern int fuji_global_slots_count;
 
 void fuji_mark_module_cache(void);
 void fuji_mark_open_upvalues(void);
-void fuji_mark_interned_strings(void);
+void fuji_sweep_intern_table(void);
 
 #define REMEMBERED_SET_MAX 4096
 #define NURSERY_SIZE (256u * 1024u)
@@ -221,13 +221,16 @@ void gc_collect_minor(void) {
     }
     fuji_mark_module_cache();
     fuji_mark_open_upvalues();
-    fuji_mark_interned_strings();
 
     for (int i = 0; i < gc_state.remembered_count; i++) {
         if (gc_state.remembered[i] != NULL) {
             gc_mark_object(gc_state.remembered[i]);
         }
     }
+
+    /* Drop intern-table slots for nursery strings that did not survive this mark phase
+     * (while is_marked is still valid), before we repurpose flags in the nursery walk. */
+    fuji_sweep_intern_table();
 
     for (Obj* obj = gc_state.objects; obj != NULL; obj = obj->next) {
         if (obj->generation == GEN_NURSERY) {
@@ -307,6 +310,7 @@ void gc_mark_object(Obj* obj) {
     switch (obj->type) {
         case OBJ_ARRAY: {
             ObjArray* array = (ObjArray*)obj;
+            /* elements buffer is allocated after the ObjArray header; GC may run in between. */
             if (array->elements == NULL) {
                 break;
             }
@@ -318,7 +322,7 @@ void gc_mark_object(Obj* obj) {
         case OBJ_TABLE: {
             ObjTable* table = (ObjTable*)obj;
             if (table->keys == NULL || table->values == NULL) {
-                break;
+                break; /* same partial-allocation window as ObjArray.elements */
             }
             for (int i = 0; i < table->count; i++) {
                 gc_mark_value(table->keys[i]);
@@ -483,7 +487,6 @@ void gc_mark_roots(void) {
     }
     fuji_mark_module_cache();
     fuji_mark_open_upvalues();
-    fuji_mark_interned_strings();
 }
 
 static void gc_unmark_all(void) {
@@ -519,6 +522,7 @@ void gc_collect(void) {
     if (gc_debug_enabled()) {
         gc_debug_validate_objects();
     }
+    fuji_sweep_intern_table();
     gc_sweep();
 
     for (Obj* obj = gc_state.objects; obj != NULL; obj = obj->next) {

@@ -19,7 +19,7 @@ From repo root (Windows PowerShell):
 
 ## Architecture (do not contradict docs in repo)
 
-- **`fuji run`** / **`fuji build`** / **`fuji bundle`**: LLVM native pipeline (no separate bytecode VM).
+- **`fuji run`** / **`fuji build`** / **`fuji bundle`**: LLVM native pipeline (no separate bytecode VM). Statements include **`defer expr;`** (LIFO at function exit; see **`tests/defer_test.fuji`**).
 - Raylib is **not** vendored as part of the language; local `temp_raylib/` is optional and gitignored. Wrappers live under `wrappers/`.
 
 ## When refactoring

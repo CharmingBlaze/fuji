@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -51,6 +52,28 @@ func TestIdentifierSpanAt(t *testing.T) {
 	}
 	if IdentifierSpanAt(`  x`, 99) != 1 {
 		t.Fatal("oob col")
+	}
+}
+
+func TestFormatErrorMultiErrorRendersChildren(t *testing.T) {
+	p1 := filepath.Join(t.TempDir(), "a.fuji")
+	p2 := filepath.Join(t.TempDir(), "b.fuji")
+	if err := os.WriteFile(p1, []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p2, []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := &MultiError{
+		Label: "prog.fuji",
+		List: []error{
+			&DiagnosticError{File: p1, Line: 1, Col: 1, Message: "first"},
+			&DiagnosticError{File: p2, Line: 1, Col: 1, Message: "second"},
+		},
+	}
+	out := FormatError(m)
+	if !strings.Contains(out, "2 errors") || !strings.Contains(out, "first") || !strings.Contains(out, "second") {
+		t.Fatalf("FormatError multi:\n%s", out)
 	}
 }
 

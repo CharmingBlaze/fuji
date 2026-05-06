@@ -16,7 +16,7 @@ func TestParseClassicForLoop(t *testing.T) {
 			total += i;
 		}
 	}`
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestParseForOfDestructuring(t *testing.T) {
 		let o = { a: 1 };
 		for (let [k, v] of o) { print(k); }
 	}`
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestParseForOfDestructuring(t *testing.T) {
 
 func TestParseClassicForInfinite(t *testing.T) {
 	src := `func main() { for (;;) { break; } }`
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestParseClassicForInfinite(t *testing.T) {
 }
 
 func TestVarReservedUseLet(t *testing.T) {
-	l := lexer.NewLexer(`var x = 1;`)
+	l := lexer.NewLexer(`var x = 1;`, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestVarReservedUseLet(t *testing.T) {
 }
 
 func TestVarReservedInExpression(t *testing.T) {
-	l := lexer.NewLexer(`func main() { let a = var; }`)
+	l := lexer.NewLexer(`func main() { let a = var; }`, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -112,10 +112,68 @@ func TestVarReservedInExpression(t *testing.T) {
 	}
 }
 
+func TestParseRangeInForOf(t *testing.T) {
+	src := `func main() {
+		let lo = 1;
+		let hi = 4;
+		for (let i of lo..hi) { print(i); }
+	}`
+	prog := parseForTest(t, src)
+	fn := prog.Declarations[0].(*FuncDecl)
+	forOf := fn.Body.Declarations[2].(*ForOfStmt)
+	r, ok := forOf.Iterable.(*RangeExpr)
+	if !ok {
+		t.Fatalf("expected RangeExpr iterable, got %T", forOf.Iterable)
+	}
+	if _, ok := r.From.(*IdentifierExpr); !ok {
+		t.Fatalf("range From: want ident, got %T", r.From)
+	}
+	if _, ok := r.To.(*IdentifierExpr); !ok {
+		t.Fatalf("range To: want ident, got %T", r.To)
+	}
+}
+
+func TestParseDeferStmt(t *testing.T) {
+	src := `func main() { defer print(1); }`
+	l := lexer.NewLexer(src, "")
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := NewParser(tokens).Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := prog.Declarations[0].(*FuncDecl)
+	ds := fn.Body.Declarations[0].(*DeferStmt)
+	if _, ok := ds.Expr.(*CallExpr); !ok {
+		t.Fatalf("expected call in defer, got %T", ds.Expr)
+	}
+}
+
+func TestParseNullishAssign(t *testing.T) {
+	src := `func main() { let x = null; x ??= 1; }`
+	l := lexer.NewLexer(src, "")
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := NewParser(tokens).Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := prog.Declarations[0].(*FuncDecl)
+	es := fn.Body.Declarations[1].(*ExpressionStmt)
+	as, ok := es.Expr.(*AssignExpr)
+	if !ok || as.Token.Type != lexer.TokenQuestionQuestionEqual {
+		t.Fatalf("expected ??= assign, got %#v", es.Expr)
+	}
+}
+
 func TestParserCaseFoldsBoundNames(t *testing.T) {
 	src := `LET X = 1;
 func G() { RETURN X; }`
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -140,7 +198,7 @@ func G() { RETURN X; }`
 }
 
 func TestParserRejectDuplicateParams(t *testing.T) {
-	l := lexer.NewLexer(`func f(A, a) { return 1; }`)
+	l := lexer.NewLexer(`func f(A, a) { return 1; }`, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +222,7 @@ func TestParser(t *testing.T) {
 			add(x, 2);
 		}
 	`
-	l := lexer.NewLexer(source)
+	l := lexer.NewLexer(source, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatalf("Lexer failed: %v", err)
@@ -188,7 +246,7 @@ func TestParser(t *testing.T) {
 
 func parseForTest(t *testing.T, source string) *Program {
 	t.Helper()
-	l := lexer.NewLexer(source)
+	l := lexer.NewLexer(source, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatalf("Lexer failed: %v", err)
@@ -272,7 +330,7 @@ func TestParserBreakContinueAndInclude(t *testing.T) {
 }
 
 func TestParserRejectsInvalidRestParams(t *testing.T) {
-	l := lexer.NewLexer(`func bad(...rest, x) { return x; }`)
+	l := lexer.NewLexer(`func bad(...rest, x) { return x; }`, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatalf("Lexer failed: %v", err)
@@ -315,7 +373,7 @@ func TestProgramIncludeLoadsShim(t *testing.T) {
 
 func TestParseNotPropertyAccess(t *testing.T) {
 	src := `assert(!bad.ok, "m");`
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, "")
 	toks, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -340,7 +398,7 @@ func TestParseCompoundAssignStatement(t *testing.T) {
 	src := `let x = 10;
 x += 3;
 `
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -363,5 +421,32 @@ x += 3;
 	}
 	if ae.Token.Type != lexer.TokenPlusEqual {
 		t.Fatalf("assign token: got %v", ae.Token.Type)
+	}
+}
+
+func TestParseDeferStatement(t *testing.T) {
+	src := `func main() {
+		defer print(1);
+		print(0);
+	}`
+	l := lexer.NewLexer(src, "")
+	tokens, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := NewParser(tokens).Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := prog.Declarations[0].(*FuncDecl)
+	if len(fn.Body.Declarations) != 2 {
+		t.Fatalf("body decls: want 2, got %d", len(fn.Body.Declarations))
+	}
+	ds, ok := fn.Body.Declarations[0].(*DeferStmt)
+	if !ok {
+		t.Fatalf("first stmt: want *DeferStmt, got %T", fn.Body.Declarations[0])
+	}
+	if _, ok := ds.Expr.(*CallExpr); !ok {
+		t.Fatalf("defer expr: want *CallExpr, got %T", ds.Expr)
 	}
 }

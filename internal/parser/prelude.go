@@ -33,7 +33,7 @@ sqrt: sqrt, abs: abs, min: min, max: max, sign: sign,
 random: random, pi: pi, e: e, lerp: lerp, clamp: clamp,
 hypot: hypot, fmod: fmod, degrees: degrees, radians: radians, wrap: wrap, approach: approach, smoothdamp: smoothdamp
 };`
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, "<builtin:math-prelude>")
 	toks, err := l.Tokenize()
 	if err != nil || len(toks) == 0 {
 		return

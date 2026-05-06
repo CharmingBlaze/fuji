@@ -149,6 +149,18 @@ func (s *ReturnStmt) String() string {
 	return fmt.Sprintf("return %s;", s.Value.String())
 }
 
+// DeferStmt schedules Expr to run (for side effects) when the enclosing function returns, LIFO vs other defers.
+type DeferStmt struct {
+	Token lexer.Token
+	Expr  Expr
+}
+
+func (s *DeferStmt) declNode() {}
+func (s *DeferStmt) stmtNode() {}
+func (s *DeferStmt) String() string {
+	return fmt.Sprintf("defer %s;", s.Expr.String())
+}
+
 type IfStmt struct {
 	Token     lexer.Token
 	Condition Expr

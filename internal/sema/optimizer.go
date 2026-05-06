@@ -113,6 +113,8 @@ func (c *NativeEmitContext) walkStmtAssignments(s parser.Stmt, cb func(parser.De
 		if stmt.Value != nil {
 			c.walkExprAssignments(stmt.Value, cb)
 		}
+	case *parser.DeferStmt:
+		c.walkExprAssignments(stmt.Expr, cb)
 	}
 }
 
@@ -332,6 +334,12 @@ func (c *NativeEmitContext) foldStmtWithConstants(s parser.Stmt, constants map[p
 				stmt.Value = newVal
 				changed = true
 			}
+		}
+	case *parser.DeferStmt:
+		newExpr, c1 := c.foldExprWithConstants(stmt.Expr, constants)
+		if c1 {
+			stmt.Expr = newExpr
+			changed = true
 		}
 	}
 	return s, changed
@@ -725,6 +733,12 @@ func (c *NativeEmitContext) inlineStmt(s parser.Stmt, inlinable map[*parser.Func
 				stmt.Value = newVal
 				changed = true
 			}
+		}
+	case *parser.DeferStmt:
+		newExpr, ok := c.inlineExpr(stmt.Expr, inlinable)
+		if ok {
+			stmt.Expr = newExpr
+			changed = true
 		}
 	}
 	return s, changed

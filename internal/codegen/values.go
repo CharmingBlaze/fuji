@@ -63,7 +63,7 @@ func (g *Generator) emitIdentifier(e *parser.IdentifierExpr) (value.Value, error
 		return fn, nil
 	}
 
-	return nil, g.undefinedVarError(name, e.Name.Line, e.Name.Col)
+	return nil, g.undefinedVarError(name, e.Name.File, e.Name.Line, e.Name.Col)
 }
 
 // emitStringLiteral creates a string object using the runtime.

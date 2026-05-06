@@ -12,9 +12,16 @@ type Lexer struct {
 	current   int
 	line      int
 	lineStart int
+	file      string // absolute path; attached to every produced token
 }
 
-func NewLexer(source string) *Lexer {
+// SetFile sets the source path recorded on each token (typically absolute).
+func (l *Lexer) SetFile(path string) {
+	l.file = path
+}
+
+// NewLexer constructs a lexer for source. file is stored on every token for diagnostics (use "" if unknown).
+func NewLexer(source, file string) *Lexer {
 	src := []byte(source)
 	// Handle BOM
 	if len(src) >= 3 && src[0] == 0xEF && src[1] == 0xBB && src[2] == 0xBF {
@@ -23,6 +30,7 @@ func NewLexer(source string) *Lexer {
 	return &Lexer{
 		source: src,
 		line:   1,
+		file:   file,
 	}
 }
 
@@ -71,7 +79,11 @@ func (l *Lexer) scanToken() error {
 		l.addToken(TokenColon)
 	case '?':
 		if l.match('?') {
-			l.addToken(TokenQuestionQuestion)
+			if l.match('=') {
+				l.addToken(TokenQuestionQuestionEqual)
+			} else {
+				l.addToken(TokenQuestionQuestion)
+			}
 		} else if l.match('.') {
 			l.addToken(TokenOptionalDot)
 		} else {
@@ -86,6 +98,7 @@ func (l *Lexer) scanToken() error {
 			Lexeme: "`",
 			Line:   line,
 			Col:    col,
+			File:   l.file,
 		})
 		return l.scanTemplateTail()
 	case '-':
@@ -353,6 +366,8 @@ func (l *Lexer) lookupKeyword(text string) TokenType {
 		return TokenContinue
 	case "default":
 		return TokenDefault
+	case "defer":
+		return TokenDefer
 	case "delete":
 		return TokenDelete
 	case "do":
@@ -421,6 +436,7 @@ func (l *Lexer) scanTemplateTail() error {
 			Lexeme: "`",
 			Line:   l.line,
 			Col:    l.current - l.lineStart,
+			File:   l.file,
 		})
 		return nil
 	}
@@ -436,6 +452,7 @@ func (l *Lexer) scanTemplateTail() error {
 				Lexeme: "`",
 				Line:   l.line,
 				Col:    l.current - l.lineStart,
+				File:   l.file,
 			})
 			return nil
 		}
@@ -471,6 +488,7 @@ func (l *Lexer) scanTemplateTail() error {
 				Lexeme: body,
 				Line:   l.line,
 				Col:    exprStart - l.lineStart + 1,
+				File:   l.file,
 			})
 			continue
 		}
@@ -497,6 +515,7 @@ func (l *Lexer) scanTemplateTail() error {
 				Lexeme: unescapeTemplateRun(raw),
 				Line:   l.line,
 				Col:    textStart - l.lineStart + 1,
+				File:   l.file,
 			})
 		}
 	}
@@ -548,6 +567,7 @@ func (l *Lexer) addTokenWithLexeme(typ TokenType, lexeme string) {
 		Lexeme: lexeme,
 		Line:   l.line,
 		Col:    l.start - l.lineStart + 1,
+		File:   l.file,
 	})
 }
 

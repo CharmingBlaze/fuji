@@ -34,7 +34,7 @@ CI runs **`fuji fmt --check ./...`** after building **`fuji`**.
 
 ## Compiler diagnostics
 
-Lexer and parser failures include the source line and a caret when reporting errors from **`parser.LoadProgram`** (used by **`fuji check`**, **`fuji run`**, **`fuji build`**, etc.).
+Lexer and parser failures include the source line and a caret when reporting errors from **`parser.LoadProgram`** (used by **`fuji run`**, **`fuji build`**, etc.). **`fuji check`** runs the same load step plus **`sema.PrepareNativeBundle`** (semantic errors, no LLVM).
 
 ## Native toolchain
 

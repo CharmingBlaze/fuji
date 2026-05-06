@@ -28,6 +28,7 @@ const (
 
 var precedences = map[lexer.TokenType]int{
 	lexer.TokenEqual:               PrecedenceAssign,
+	lexer.TokenQuestionQuestionEqual: PrecedenceAssign,
 	lexer.TokenPlusEqual:           PrecedenceAssign,
 	lexer.TokenMinusEqual:          PrecedenceAssign,
 	lexer.TokenStarEqual:           PrecedenceAssign,
@@ -57,6 +58,7 @@ var precedences = map[lexer.TokenType]int{
 	lexer.TokenAndAnd:              PrecedenceAnd,
 	lexer.TokenOrOr:                PrecedenceOr,
 	lexer.TokenQuestionQuestion:    PrecedenceOr,
+	lexer.TokenDotDot:              PrecedenceEquals, // `a..b` — tighter than +, looser than calls; same tier as == for RHS extent
 	lexer.TokenAnd:                 PrecedenceBitAnd,
 	lexer.TokenOr:                  PrecedenceBitOr,
 	lexer.TokenCaret:               PrecedenceBitXor,
@@ -173,7 +175,7 @@ func (p *Parser) getInfixFn(typ lexer.TokenType) infixParseFn {
 		return p.parseInfixExpression
 	case lexer.TokenLParen:
 		return p.parseCallExpression
-	case lexer.TokenEqual, lexer.TokenPlusEqual, lexer.TokenMinusEqual, lexer.TokenStarEqual,
+	case lexer.TokenEqual, lexer.TokenQuestionQuestionEqual, lexer.TokenPlusEqual, lexer.TokenMinusEqual, lexer.TokenStarEqual,
 		lexer.TokenSlashEqual, lexer.TokenPercentEqual, lexer.TokenAndEqual, lexer.TokenOrEqual,
 		lexer.TokenCaretEqual, lexer.TokenLessLessEqual, lexer.TokenGreaterGreaterEqual:
 		return p.parseAssignExpression
@@ -185,9 +187,20 @@ func (p *Parser) getInfixFn(typ lexer.TokenType) infixParseFn {
 		return p.parseIndexExpression
 	case lexer.TokenQuestionQuestion:
 		return p.parseNullishCoalesceExpression
+	case lexer.TokenDotDot:
+		return p.parseRangeExpression
 	default:
 		return nil
 	}
+}
+
+func (p *Parser) parseRangeExpression(left Expr) (Expr, error) {
+	token := p.previous()
+	right, err := p.parseExpression(PrecedenceEquals)
+	if err != nil {
+		return nil, err
+	}
+	return &RangeExpr{Token: token, From: left, To: right}, nil
 }
 
 func (p *Parser) parseIdentifier() (Expr, error) {
@@ -379,8 +392,8 @@ func (p *Parser) parseTemplateLiteral() (Expr, error) {
 			st := p.previous()
 			parts = append(parts, &LiteralExpr{Token: st, Value: st.Lexeme})
 		case p.match(lexer.TokenTemplateInterp):
-			exSrc := p.previous().Lexeme
-			ex, err := p.parseEmbeddedExpression(exSrc)
+			interp := p.previous()
+			ex, err := p.parseEmbeddedExpression(interp.Lexeme, interp.File)
 			if err != nil {
 				return nil, err
 			}
@@ -395,8 +408,8 @@ func (p *Parser) parseTemplateLiteral() (Expr, error) {
 	return &TemplateExpr{Token: tok, Parts: parts}, nil
 }
 
-func (p *Parser) parseEmbeddedExpression(src string) (Expr, error) {
-	l := lexer.NewLexer(src)
+func (p *Parser) parseEmbeddedExpression(src, file string) (Expr, error) {
+	l := lexer.NewLexer(src, file)
 	toks, err := l.Tokenize()
 	if err != nil {
 		return nil, fmt.Errorf("template embedded expr: %w", err)

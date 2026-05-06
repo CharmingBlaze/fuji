@@ -25,6 +25,7 @@ const (
 
 var tokenPrec = map[lexer.TokenType]int{
 	lexer.TokenEqual:                 precAssign,
+	lexer.TokenQuestionQuestionEqual: precAssign,
 	lexer.TokenPlusEqual:             precAssign,
 	lexer.TokenMinusEqual:            precAssign,
 	lexer.TokenStarEqual:             precAssign,

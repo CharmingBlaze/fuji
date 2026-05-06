@@ -14,6 +14,7 @@ import (
 	"fuji/internal/fujihome"
 	"fuji/internal/nativebuild"
 	"fuji/internal/parser"
+	"fuji/internal/sema"
 )
 
 func parseBuildCommandArgs(args []string) (src string, out string, noOpt bool, err error) {
@@ -148,7 +149,7 @@ USAGE
 COMMANDS
   run     <file.fuji>              Compile with LLVM and run the native binary (same pipeline as build)
   native  <file.fuji>              Same as run (backward-compatible alias)
-  check   <file.fuji>              Parse + load imports only; prints OK if valid
+  check   <file.fuji>              Parse, resolve imports, run sema (no LLVM); prints OK if valid
   fmt     [--check] <files...>     Canonical spacing (4 spaces); ./... walks .fuji files (--check exits 1 if diffs)
   disasm  <file.fuji>              Print LLVM IR for the program (after sema + codegen)
   build   [--no-opt] <file.fuji> [-o <exe>]   Native executable (needs llc + Clang; see CONTRIBUTING.md)
@@ -288,7 +289,11 @@ func defaultExeName(source string) string {
 }
 
 func checkFile(path string) error {
-	_, err := parser.LoadProgram(path)
+	bundle, err := parser.LoadProgram(path)
+	if err != nil {
+		return err
+	}
+	_, err = sema.PrepareNativeBundle(bundle)
 	return err
 }
 func disasmFile(path string) error {

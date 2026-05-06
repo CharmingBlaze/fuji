@@ -40,6 +40,12 @@ jobs:
       - name: fuji fmt --check
         run: /tmp/fuji fmt --check ./...
 
+      - name: fuji check (sema, no LLVM)
+        run: |
+          /tmp/fuji check tests/hello.fuji
+          if /tmp/fuji check tests/undefined_var.fuji 2>/dev/null; then echo "expected check to fail"; exit 1; fi
+          if /tmp/fuji check tests/sema_errors.fuji 2>/dev/null; then echo "expected sema_errors check to fail"; exit 1; fi
+
       - name: Native smoke (fuji build)
         run: |
           /tmp/fuji build tests/smoke_native.fuji -o /tmp/smoke_native
@@ -48,6 +54,12 @@ jobs:
           /tmp/fuji build tests/for_of_pairs.fuji -o /tmp/for_of_pairs
           test -x /tmp/for_of_pairs
           /tmp/for_of_pairs | head -n 10
+          /tmp/fuji build tests/nullish_assign.fuji -o /tmp/nullish_assign
+          /tmp/nullish_assign | head -n 5
+          /tmp/fuji build tests/for_of_dynamic_range.fuji -o /tmp/for_of_dynamic_range
+          /tmp/for_of_dynamic_range | head -n 5
+          /tmp/fuji build tests/defer_test.fuji -o /tmp/defer_test
+          /tmp/defer_test | head -n 5
 
       - name: GC soak (serialized, time-bounded)
         run: |

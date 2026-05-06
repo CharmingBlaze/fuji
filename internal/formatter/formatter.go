@@ -12,7 +12,7 @@ import (
 
 // Format parses Fuji source and returns canonical spaced formatting.
 func Format(src string) (string, error) {
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		return "", err
@@ -71,8 +71,10 @@ func (e *emitter) formatProgram(prog *parser.Program) error {
 // statements (e.g. consecutive print calls), which stay visually grouped.
 func topLevelNeedsBlankLine(prev, cur parser.Decl) bool {
 	_, prevExpr := prev.(*parser.ExpressionStmt)
+	_, prevDefer := prev.(*parser.DeferStmt)
 	_, curExpr := cur.(*parser.ExpressionStmt)
-	return !(prevExpr && curExpr)
+	_, curDefer := cur.(*parser.DeferStmt)
+	return !((prevExpr || prevDefer) && (curExpr || curDefer))
 }
 
 func (e *emitter) emitDeclCore(d parser.Decl) error {
@@ -198,6 +200,13 @@ func (e *emitter) emitStmt(s parser.Stmt) error {
 			if err := e.emitExpr(n.Value, precLowest); err != nil {
 				return err
 			}
+		}
+		e.write(";\n")
+		return nil
+	case *parser.DeferStmt:
+		e.write("defer ")
+		if err := e.emitExpr(n.Expr, precLowest); err != nil {
+			return err
 		}
 		e.write(";\n")
 		return nil

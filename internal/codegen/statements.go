@@ -42,6 +42,8 @@ func (g *Generator) emitStmt(stmt parser.Stmt) error {
 		return g.emitSwitchStmt(s)
 	case *parser.DeleteStmt:
 		return g.emitDeleteStmt(s)
+	case *parser.DeferStmt:
+		return g.emitDeferStmt(s)
 	default:
 		return fmt.Errorf("unsupported statement type: %T", stmt)
 	}
@@ -58,20 +60,64 @@ func (g *Generator) emitBlockStmt(s *parser.BlockStmt) error {
 }
 
 // emitReturnStmt emits LLVM IR for return statements.
+// Return value is evaluated before defers run (same order as Go), so defers observe the outgoing result slot only after their side effects.
 func (g *Generator) emitReturnStmt(s *parser.ReturnStmt) error {
 	if s.Value != nil {
 		val, err := g.emitExpr(s.Value)
 		if err != nil {
 			return err
 		}
+		retSlot := g.entryAlloca(types.I64)
+		g.block.NewStore(g.emitAsFujiI64(val), retSlot)
+		if err := g.emitDefersForCurrentLayer(); err != nil {
+			return err
+		}
 		g.emitCallTracePop()
 		g.emitShadowPop()
-		g.block.NewRet(g.emitAsFujiI64(val))
-	} else {
-		g.emitCallTracePop()
-		g.emitShadowPop()
-		g.block.NewRet(constant.NewInt(types.I64, 0))
+		g.block.NewRet(g.block.NewLoad(types.I64, retSlot))
+		return nil
 	}
+	if err := g.emitDefersForCurrentLayer(); err != nil {
+		return err
+	}
+	g.emitCallTracePop()
+	g.emitShadowPop()
+	g.block.NewRet(constant.NewInt(types.I64, 0))
+	return nil
+}
+
+func (g *Generator) pushDeferLayer() {
+	g.deferLayers = append(g.deferLayers, nil)
+}
+
+func (g *Generator) popDeferLayer() {
+	if len(g.deferLayers) == 0 {
+		return
+	}
+	g.deferLayers = g.deferLayers[:len(g.deferLayers)-1]
+}
+
+func (g *Generator) emitDefersForCurrentLayer() error {
+	if len(g.deferLayers) == 0 {
+		return nil
+	}
+	i := len(g.deferLayers) - 1
+	layer := g.deferLayers[i]
+	for j := len(layer) - 1; j >= 0; j-- {
+		if _, err := g.emitExpr(layer[j]); err != nil {
+			return err
+		}
+	}
+	g.deferLayers[i] = nil
+	return nil
+}
+
+func (g *Generator) emitDeferStmt(s *parser.DeferStmt) error {
+	if len(g.deferLayers) == 0 {
+		return fmt.Errorf("defer outside function body")
+	}
+	idx := len(g.deferLayers) - 1
+	g.deferLayers[idx] = append(g.deferLayers[idx], s.Expr)
 	return nil
 }
 
@@ -184,6 +230,7 @@ func (g *Generator) emitForOfStmt(s *parser.ForOfStmt) error {
 			if from, to, ok := rangeConstBounds(r); ok {
 				return g.emitForOfConstRange(s, from, to)
 			}
+			return g.emitForOfDynamicRange(s, r)
 		}
 	}
 
@@ -305,6 +352,68 @@ func (g *Generator) emitForOfConstRange(s *parser.ForOfStmt, from int64, to int6
 	g.block = condBlock
 	cur := g.block.NewLoad(types.I64, idxSlot)
 	cmp := g.block.NewICmp(enum.IPredSLT, cur, constant.NewInt(types.I64, to))
+	g.block.NewCondBr(cmp, bodyBlock, afterBlock)
+
+	g.block = bodyBlock
+	curD := g.block.NewSIToFP(cur, types.Double)
+	curBoxed := g.block.NewCall(g.runtimeBoxNumber, curD)
+	g.block.NewStore(curBoxed, valSlot)
+	if err := g.emitStmt(s.Body); err != nil {
+		return err
+	}
+	g.block.NewBr(incBlock)
+
+	g.block = incBlock
+	next := g.block.NewAdd(g.block.NewLoad(types.I64, idxSlot), constant.NewInt(types.I64, 1))
+	g.block.NewStore(next, idxSlot)
+	g.block.NewBr(condBlock)
+
+	g.block = afterBlock
+	g.loopStack = g.loopStack[:len(g.loopStack)-1]
+	return nil
+}
+
+// emitForOfDynamicRange lowers `for (let i of from..to)` when bounds are not both numeric literals,
+// using a counted i64 loop and no FUJI_range allocation (half-open [from, to) like emitRange).
+func (g *Generator) emitForOfDynamicRange(s *parser.ForOfStmt, r *parser.RangeExpr) error {
+	fromVal, err := g.emitExpr(r.From)
+	if err != nil {
+		return err
+	}
+	toVal, err := g.emitExpr(r.To)
+	if err != nil {
+		return err
+	}
+	// Bounds are Fuji values (NaN-boxed); the loop counter uses plain i64 like emitForOfConstRange.
+	fromBoxed := g.emitAsFujiI64(fromVal)
+	toBoxed := g.emitAsFujiI64(toVal)
+	fromInt := g.block.NewFPToSI(g.block.NewCall(g.runtimeUnboxNumber, fromBoxed), types.I64)
+	toInt := g.block.NewFPToSI(g.block.NewCall(g.runtimeUnboxNumber, toBoxed), types.I64)
+
+	fromSlot := g.entryAlloca(types.I64)
+	toSlot := g.entryAlloca(types.I64)
+	g.block.NewStore(fromInt, fromSlot)
+	g.block.NewStore(toInt, toSlot)
+
+	idxSlot := g.entryAlloca(types.I64)
+	valSlot := g.entryAlloca(types.I64)
+	g.locals[s.VarName.Lexeme] = valSlot
+	g.block.NewStore(g.block.NewLoad(types.I64, fromSlot), idxSlot)
+
+	g.tempN++
+	condBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.dyn.cond.%d", g.tempN))
+	bodyBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.dyn.body.%d", g.tempN))
+	incBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.dyn.inc.%d", g.tempN))
+	afterBlock := g.block.Parent.NewBlock(fmt.Sprintf("forof.dyn.after.%d", g.tempN))
+	ctx := loopContext{condBlock: condBlock, incBlock: incBlock, afterBlock: afterBlock}
+	g.loopStack = append(g.loopStack, ctx)
+
+	g.block.NewBr(condBlock)
+
+	g.block = condBlock
+	cur := g.block.NewLoad(types.I64, idxSlot)
+	limit := g.block.NewLoad(types.I64, toSlot)
+	cmp := g.block.NewICmp(enum.IPredSLT, cur, limit)
 	g.block.NewCondBr(cmp, bodyBlock, afterBlock)
 
 	g.block = bodyBlock

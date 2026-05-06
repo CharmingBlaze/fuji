@@ -2,7 +2,6 @@ package sema
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 
 	"fuji/internal/diagnostic"
@@ -61,14 +60,12 @@ func PrepareNativeBundle(bundle *parser.ProgramBundle) (*NativeEmitContext, erro
 	if bundle.Entry != nil {
 		analyzer := NewAnalyzer()
 		if err := analyzer.Analyze(bundle.Entry); err != nil {
-			var de *diagnostic.DiagnosticError
-			if errors.As(err, &de) {
-				if de.File == "" {
-					de.File = entryPath
-				}
-				return nil, err
+			var me *diagnostic.MultiError
+			if errors.As(err, &me) && me != nil {
+				me.Label = entryPath
 			}
-			return nil, fmt.Errorf("%s: %w", entryPath, err)
+			patchEmptyDiagnosticFiles(err, entryPath)
+			return nil, err
 		}
 	}
 
@@ -97,4 +94,22 @@ func PrepareNativeBundle(bundle *parser.ProgramBundle) (*NativeEmitContext, erro
 func ValidateNativeEmitSupport(ctx *NativeEmitContext) error {
 	_ = ctx
 	return nil
+}
+
+func patchEmptyDiagnosticFiles(err error, entryPath string) {
+	var me *diagnostic.MultiError
+	if errors.As(err, &me) && me != nil {
+		for _, e := range me.List {
+			patchOneDiagnosticFile(e, entryPath)
+		}
+		return
+	}
+	patchOneDiagnosticFile(err, entryPath)
+}
+
+func patchOneDiagnosticFile(err error, entryPath string) {
+	var de *diagnostic.DiagnosticError
+	if errors.As(err, &de) && de != nil && de.File == "" {
+		de.File = entryPath
+	}
 }

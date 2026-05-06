@@ -257,6 +257,22 @@ func FormatError(err error) string {
 	if err == nil {
 		return ""
 	}
+	var multi *MultiError
+	if errors.As(err, &multi) && multi != nil && len(multi.List) > 0 {
+		var b strings.Builder
+		if multi.Label != "" {
+			fmt.Fprintf(&b, "%d errors in %s\n\n", len(multi.List), multi.Label)
+		} else {
+			fmt.Fprintf(&b, "%d errors\n\n", len(multi.List))
+		}
+		for i, child := range multi.List {
+			if i > 0 {
+				b.WriteString("\n\n")
+			}
+			b.WriteString(FormatError(child))
+		}
+		return b.String()
+	}
 	var d *DiagnosticError
 	if errors.As(err, &d) && d != nil {
 		var b strings.Builder

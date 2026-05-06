@@ -1,0 +1,7 @@
+// Interning + value equality: same text must compare equal from literals and bindings.
+assert("idle" == "idle", "two string literals with same text");
+let a = "game";
+let b = "game";
+assert(a == b, "two bindings to same literal text");
+assert("a" + "b" == "ab", "concat produces equal text");
+print("PASS: string literal equality");

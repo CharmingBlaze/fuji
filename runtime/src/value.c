@@ -11,6 +11,9 @@ bool values_equal(Value a, Value b) {
         Obj* oa = AS_OBJ(a);
         Obj* ob = AS_OBJ(b);
         if (oa->type == OBJ_STRING && ob->type == OBJ_STRING) {
+            if (oa == ob) {
+                return true;
+            }
             ObjString* sa = (ObjString*)oa;
             ObjString* sb = (ObjString*)ob;
             if (sa->length != sb->length) {

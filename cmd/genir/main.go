@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	"fuji/internal/codegen"
 	"fuji/internal/lexer"
@@ -16,13 +17,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	source, err := ioutil.ReadFile(os.Args[1])
+	sourcePath, err := filepath.Abs(os.Args[1])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving path: %v\n", err)
+		os.Exit(1)
+	}
+	source, err := ioutil.ReadFile(sourcePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
 	}
 
-	l := lexer.NewLexer(string(source))
+	l := lexer.NewLexer(string(source), sourcePath)
 	tokens, err := l.Tokenize()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Lexer error: %v\n", err)

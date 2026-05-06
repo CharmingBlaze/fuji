@@ -66,6 +66,7 @@ const (
 	TokenCaretEqual          // ^=
 	TokenLessLessEqual       // <<=
 	TokenGreaterGreaterEqual // >>=
+	TokenQuestionQuestionEqual // ??=
 
 	// Literals
 	TokenIdentifier
@@ -77,6 +78,7 @@ const (
 	TokenCase
 	TokenContinue
 	TokenDefault
+	TokenDefer
 	TokenDelete
 	TokenDo
 	TokenElse
@@ -218,6 +220,8 @@ func (t TokenType) String() string {
 		return "<<="
 	case TokenGreaterGreaterEqual:
 		return ">>="
+	case TokenQuestionQuestionEqual:
+		return "??="
 	case TokenIdentifier:
 		return "IDENTIFIER"
 	case TokenString:
@@ -232,6 +236,8 @@ func (t TokenType) String() string {
 		return "continue"
 	case TokenDefault:
 		return "default"
+	case TokenDefer:
+		return "defer"
 	case TokenDelete:
 		return "delete"
 	case TokenDo:
@@ -290,8 +296,13 @@ type Token struct {
 	Lexeme string
 	Line   int
 	Col    int
+	// File is the absolute path of the source file this token was lexed from, if known.
+	File string
 }
 
 func (t Token) String() string {
+	if t.File != "" {
+		return fmt.Sprintf("%s:%d:%d %s '%s'", t.File, t.Line, t.Col, t.Type, t.Lexeme)
+	}
 	return fmt.Sprintf("%d:%d %s '%s'", t.Line, t.Col, t.Type, t.Lexeme)
 }

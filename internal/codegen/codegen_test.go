@@ -11,7 +11,7 @@ import (
 
 func parseForTest(t *testing.T, source string) *parser.Program {
 	t.Helper()
-	l := lexer.NewLexer(source)
+	l := lexer.NewLexer(source, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatalf("Lexer failed: %v", err)

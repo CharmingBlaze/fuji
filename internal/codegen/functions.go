@@ -94,6 +94,8 @@ func (g *Generator) emitFuncDecl(d *parser.FuncDecl) error {
 	}
 	g.beginShadowFrame(g.shadowLayout, thisSlot, paramNames)
 	g.emitCallTracePush(llvmName, g.sourcePath, d.Name.Line)
+	g.pushDeferLayer()
+	defer g.popDeferLayer()
 
 	for _, decl := range d.Body.Declarations {
 		if err := g.emitDecl(decl); err != nil {
@@ -102,6 +104,9 @@ func (g *Generator) emitFuncDecl(d *parser.FuncDecl) error {
 	}
 
 	if g.block.Term == nil {
+		if err := g.emitDefersForCurrentLayer(); err != nil {
+			return err
+		}
 		g.emitCallTracePop()
 		g.emitShadowPop()
 		g.block.NewRet(constant.NewInt(types.I64, 0))
@@ -191,6 +196,8 @@ func (g *Generator) emitFuncExpr(e *parser.FuncExpr) (value.Value, error) {
 	}
 	g.beginShadowFrame(layout, thisSlot, paramNames)
 	g.emitCallTracePush(name, g.sourcePath, e.Token.Line)
+	g.pushDeferLayer()
+	defer g.popDeferLayer()
 	if layout != nil {
 		for _, name := range g.ctx.FreeVarsExpr[e] {
 			if idx, ok := layout.FreeVarIndex[name]; ok {
@@ -209,6 +216,9 @@ func (g *Generator) emitFuncExpr(e *parser.FuncExpr) (value.Value, error) {
 	}
 
 	if g.block.Term == nil {
+		if err := g.emitDefersForCurrentLayer(); err != nil {
+			return nil, err
+		}
 		g.emitCallTracePop()
 		g.emitShadowPop()
 		g.block.NewRet(constant.NewInt(types.I64, 0))

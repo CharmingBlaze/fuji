@@ -83,7 +83,7 @@ void fuji_push_frame(Value** slot_ptrs, int count) {
     fuji_shadow_stack_init();
     if (fuji_shadow_depth >= fuji_shadow_capacity) {
         if (fuji_shadow_capacity >= FUJI_SHADOW_STACK_MAX_CAPACITY) {
-            fuji_panic_str("stack overflow");
+            fuji_panic_str("stack overflow — maximum recursion depth reached");
         }
         int next_capacity = fuji_shadow_capacity * 2;
         if (next_capacity > FUJI_SHADOW_STACK_MAX_CAPACITY) {
@@ -114,6 +114,10 @@ void fuji_pop_frame(void) {
 
 int fuji_get_shadow_depth(void) {
     return fuji_shadow_depth;
+}
+
+int fuji_shadow_stack_high_water(void) {
+    return fuji_shadow_depth_high_water;
 }
 
 #define FUJI_CALL_STACK_MAX 256
@@ -159,12 +163,19 @@ static void fuji_intern_add(ObjString* str) {
     fuji_string_intern.entries[fuji_string_intern.count++] = str;
 }
 
-void fuji_mark_interned_strings(void) {
-    for (int i = 0; i < fuji_string_intern.count; i++) {
-        if (fuji_string_intern.entries[i] != NULL) {
-            gc_mark_object((Obj*)fuji_string_intern.entries[i]);
+void fuji_sweep_intern_table(void) {
+    int w = 0;
+    for (int r = 0; r < fuji_string_intern.count; r++) {
+        ObjString* s = fuji_string_intern.entries[r];
+        if (s == NULL) {
+            continue;
+        }
+        /* Keep only strings that the mark phase proved reachable from real roots. */
+        if (s->obj.is_marked) {
+            fuji_string_intern.entries[w++] = s;
         }
     }
+    fuji_string_intern.count = w;
 }
 
 void fuji_push_call(const char* fn_name, const char* file_name, int line) {

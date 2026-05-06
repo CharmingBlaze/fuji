@@ -7,8 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Lexer API** — `lexer.NewLexer` now takes `(source, file string)` so the source path is always threaded at construction time; `loader` passes each module’s absolute path. **Template literal** tokens (start, string segments, `${}` interp markers, close) now set `Token.File` like other tokens. **Embedded template expressions** are re-lexed with the surrounding file path so sema diagnostics inside `` `${...}` `` point at the real `.fuji` file. Injected **math prelude** tokens use the synthetic path `<builtin:math-prelude>`.
+- **Sema diagnostics** — analysis records **all** issues in a function body or expression tree (undefined names, invalid targets, etc.), not only the first. Two or more problems return a **`diagnostic.MultiError`** (with `Unwrap() []error` so `errors.As` still finds the first `*DiagnosticError`). **`fuji build` / `FormatError`** print a short summary plus each error with Rust-style snippets. A single error is still returned as a plain `*DiagnosticError`.
+- **Sema — call arity** — for callees resolved to a **`func`** declaration (or an **`// fuji:extern`** **`func` / `let`**), argument count is checked against parameters: required slots (no default), optional defaults, **`...rest`** (unbounded tail), and exact count for native **`Arity`**. **`print`** and other builtins are unchanged (not modeled as `FuncDecl`). Member calls like **`obj.m()`** are not checked yet.
+- **GC intern table** — interned strings are no longer treated as unconditional GC roots. After each mark phase, **`fuji_sweep_intern_table`** compacts the table to entries whose `ObjString` was marked reachable from real roots, so dead strings can be collected and intern slots never dangle across **`gc_sweep`**. (Full collect: sweep runs after mark; minor collect: sweep runs after remembered set, before nursery demotion.) **`fuji_allocate_string` / `fuji_copy_string`** still intern so equal text shares one object when live.
+- **String `==`** — `values_equal` short-circuits identical string object pointers before `memcmp`.
+- **`fuji check`** — now runs **`sema.PrepareNativeBundle`** after **`parser.LoadProgram`** (flatten, math prelude, full semantic analysis) so undefined names and other sema errors are reported **without** invoking LLVM or the native linker. Still prints `OK` on success.
+
+### Fixed
+
+- **`defer` + `return value`** — **`return`** now evaluates and spills the result **before** running deferred calls, matching Go-style ordering for side effects.
+
+- **Shadow stack hard cap** — when the growable shadow stack hits **`FUJI_SHADOW_STACK_MAX_CAPACITY`**, **`fuji_panic_str`** now reports **`stack overflow — maximum recursion depth reached`** instead of a bare **`stack overflow`** (Tier 6 polish).
+
+- **Sema — `for-in` / `for-of` loop heads** — loop bindings (`let i`, `let [k, v]`, etc.) are now defined in an inner scope for the body so uses like **`sum + i`** are not reported as undefined.
+- **Codegen — dynamic `for-of` range** — lower and upper bounds are **unboxed to integer `i64`** for the counted loop; comparing raw NaN-boxed tags with **`icmp`** could hang or mis-compare.
+
+- **GC mark (`OBJ_ARRAY` / `OBJ_TABLE`)** — documented the existing **NULL guard** on `elements` / `keys` / `values` during partial allocation (GC may run between header and buffer allocation).
+
 ### Added
 
+- **`defer` statement** — defers a call (or any expression) until the enclosing **`func`** / closure / **`user_main`** exits: **LIFO** vs other defers, after the **`return`** value is computed, immediately before call-trace pop and shadow-stack pop. Lexer **`TokenDefer`**, AST **`DeferStmt`**, sema, shadow walk, formatter, and LLVM codegen. **`tests/defer_test.fuji`** covers LIFO order and defers before an early **`return`**.
+- **`??=` (nullish assignment)** — lexer/parser/formatter support; LLVM lowers to nil-check + conditional store (identifier and index targets). **`a..b` range expressions** are now parsed as **`RangeExpr`** (the lexer had **`..`** but the Pratt table did not). **`for (let i of lo..hi)`** with non-literal bounds uses a counted **`i64`** loop and **no** range object allocation.
+- **`fuji_shadow_stack_high_water()`** — C API returning max shadow-stack depth since **`fuji_runtime_init`** (for diagnostics; high-water is tracked unconditionally).
+- **`stdlib/vec2.fuji`** — small **`{x, y}`** helpers (**`add`**, **`sub`**, **`scale`**, **`dot`**, **`length`**, **`normalize`**, etc.) on top of existing **`sqrt`**.
+- **Tests / CI** — **`api/diagnose_test.go`** covers load + **`sema.PrepareNativeBundle`** (same pipeline as **`fuji check`**): valid program, undefined name, overlay override, and aggregated multi-error text. Linux CI runs **`fuji check tests/hello.fuji`**, expects **`fuji check tests/undefined_var.fuji`** and **`tests/sema_errors.fuji`** to fail, and native-smoke builds **`tests/nullish_assign.fuji`** / **`tests/for_of_dynamic_range.fuji`** / **`tests/defer_test.fuji`**. **`internal/sema/arity_test.go`** and **`TestSemaCallArity*`** cover **call arity** rules.
 - **Language surface (native / LLVM)** — template literals with **`${}`**; unary **`typeof`**; **`delete obj.key`**; array literal spread **`[...a]`**; **`??`** and **`?.`**; **`let { x, y } = obj`** destructuring; **`matches(haystack, pattern)`** (substring / **`strstr`**, not full regex); string methods (**`split`**, **`join`** on arrays, **`trim`**, **`replace`** / **`replaceAll`**, **`indexOf`**, **`toUpper`** / **`tolower`**, **`slice`**, **`startsWith`** / **`endsWith`**); array methods (**`map`**, **`filter`**, **`reduce`**, **`find`**, **`slice`**, **`sort`**, **`reverse`**, **`includes`**, **`concat`**, **`join`**); prelude **`math`** object (**`math.floor`**, …) alongside existing math globals; runtime symbols **`fuji_array_join`**, **`fuji_object_remove`**, **`fuji_matches`** (rebuild **`runtime/libfuji_runtime.a`** after pulling).
 - **`fuji fmt`** — canonical AST-based formatting (`internal/formatter`): 4-space indent, spacing around operators and after commas, `if (` / `while (` / `for (` style, `} else {` kept on one line when both branches are blocks, `import "…"` expressions, `fuji fmt --check`, directory and **`./...`** expansion (skips `.git`, `.FUJI_build`, `bin`, `node_modules`, `vendor`). Top-level **consecutive** expression statements (e.g. back-to-back `print`) stay compact; other top-level declarations stay separated by a blank line.
 - **Classic `for (init; cond; step)`** — parsed and lowered alongside `while` / `for-in` / `for-of` (`internal/parser`, `internal/codegen`).

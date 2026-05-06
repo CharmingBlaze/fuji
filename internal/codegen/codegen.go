@@ -21,7 +21,7 @@ func PrepareNativeBundle(bundle *parser.ProgramBundle) (*sema.NativeEmitContext,
 	return sema.PrepareNativeBundle(bundle)
 }
 
-func (g *Generator) undefinedVarError(name string, line int, col int) error {
+func (g *Generator) undefinedVarError(name string, file string, line int, col int) error {
 	candidates := make([]string, 0, len(g.locals)+len(g.moduleGlobals)+len(g.globals)+len(g.funcs))
 	for k := range g.locals {
 		candidates = append(candidates, k)
@@ -39,8 +39,12 @@ func (g *Generator) undefinedVarError(name string, line int, col int) error {
 	if s, ok := diagnostic.BestSuggestion(name, candidates, 2); ok {
 		hint = fmt.Sprintf("did you mean '%s'?", s)
 	}
+	srcPath := file
+	if srcPath == "" {
+		srcPath = g.sourcePath
+	}
 	return &diagnostic.DiagnosticError{
-		File:    g.sourcePath,
+		File:    srcPath,
 		Line:    line,
 		Col:     col,
 		Message: fmt.Sprintf("undefined variable '%s'", name),
@@ -211,6 +215,9 @@ type Generator struct {
 	shadowFrameArrTy *types.ArrayType
 	shadowPushed     bool
 	shadowTempNext   int
+
+	// deferLayers: per active Fuji function (and user_main), deferred expressions in source order (LIFO at exit).
+	deferLayers [][]parser.Expr
 }
 
 // loopContext tracks information about the current loop for break/continue.
@@ -415,6 +422,8 @@ func (g *Generator) Generate(bundle *parser.ProgramBundle) (*ir.Module, error) {
 	var emptyParams []string
 	g.beginShadowFrame(g.ctx.ShadowEntry, thisSlot, emptyParams)
 	g.emitCallTracePush("user_main", g.sourcePath, 0)
+	g.pushDeferLayer()
+	defer g.popDeferLayer()
 
 	// Emit all top-level declarations and statements
 	for _, decl := range entry.Declarations {
@@ -430,6 +439,9 @@ func (g *Generator) Generate(bundle *parser.ProgramBundle) (*ir.Module, error) {
 
 	// Terminate user_main
 	if g.block.Term == nil {
+		if err := g.emitDefersForCurrentLayer(); err != nil {
+			return nil, err
+		}
 		g.emitCallTracePop()
 		g.emitShadowPop()
 		g.block.NewRet(constant.NewInt(types.I64, 0))

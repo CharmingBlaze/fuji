@@ -7,7 +7,7 @@ import (
 
 func assertTokenTypes(t *testing.T, source string, expected []TokenType) {
 	t.Helper()
-	l := NewLexer(source)
+	l := NewLexer(source, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatalf("Tokenize failed: %v", err)
@@ -19,6 +19,35 @@ func assertTokenTypes(t *testing.T, source string, expected []TokenType) {
 		if tok.Type != expected[i] {
 			t.Errorf("At index %d: expected %v, got %v (%s)", i, expected[i], tok.Type, tok.Lexeme)
 		}
+	}
+}
+
+func TestLexerTemplateTokensCarryFile(t *testing.T) {
+	const path = "/tmp/tpl.fuji"
+	l := NewLexer("`a${x}b`", path)
+	toks, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tok := range toks {
+		if tok.Type == TokenEOF {
+			continue
+		}
+		if tok.File != path {
+			t.Fatalf("token %s missing file: got %q", tok.Type, tok.File)
+		}
+	}
+}
+
+func TestLexerSetFilePropagates(t *testing.T) {
+	l := NewLexer("let x = 1;", "")
+	l.SetFile("/tmp/example.fuji")
+	toks, err := l.Tokenize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(toks) < 2 || toks[0].File != "/tmp/example.fuji" {
+		t.Fatalf("expected File on tokens, got %#v", toks[0])
 	}
 }
 
@@ -39,7 +68,7 @@ func TestLexer(t *testing.T) {
 }
 
 func TestLexerCaseInsensitiveKeywords(t *testing.T) {
-	l := NewLexer("LET X = 1;\nFUNC F() { RETURN X; }\n")
+	l := NewLexer("LET X = 1;\nFUNC F() { RETURN X; }\n", "")
 	toks, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +88,7 @@ func TestLexerCaseInsensitiveKeywords(t *testing.T) {
 }
 
 func TestLexerIncludeDirectiveCase(t *testing.T) {
-	l := NewLexer("#INCLUDE \"a.fuji\"\n")
+	l := NewLexer("#INCLUDE \"a.fuji\"\n", "")
 	toks, err := l.Tokenize()
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +106,21 @@ func TestLexerComplex(t *testing.T) {
 		TokenRBrace, TokenEOF,
 	}
 	assertTokenTypes(t, source, expected)
+}
+
+func TestLexerDeferKeyword(t *testing.T) {
+	assertTokenTypes(t, `defer cleanup();`, []TokenType{
+		TokenDefer, TokenIdentifier, TokenLParen, TokenRParen, TokenSemicolon,
+		TokenEOF,
+	})
+}
+
+func TestLexerNullishAssign(t *testing.T) {
+	assertTokenTypes(t, `a ??= b; x ?? y;`, []TokenType{
+		TokenIdentifier, TokenQuestionQuestionEqual, TokenIdentifier, TokenSemicolon,
+		TokenIdentifier, TokenQuestionQuestion, TokenIdentifier, TokenSemicolon,
+		TokenEOF,
+	})
 }
 
 func TestLexerStrictEquality(t *testing.T) {
@@ -110,7 +154,7 @@ let shifts = x << 2 >> 1;`
 
 func TestLexerCommentsBOMAndPositions(t *testing.T) {
 	source := "\ufefflet first = 1; // line comment\n/* block\ncomment */\nlet second = 2;"
-	l := NewLexer(source)
+	l := NewLexer(source, "")
 	tokens, err := l.Tokenize()
 	if err != nil {
 		t.Fatalf("Tokenize failed: %v", err)
@@ -137,7 +181,7 @@ func TestLexerCommentsBOMAndPositions(t *testing.T) {
 }
 
 func TestVarIsReservedKeyword(t *testing.T) {
-	tokens, err := NewLexer("var x = 1;").Tokenize()
+	tokens, err := NewLexer("var x = 1;", "").Tokenize()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,10 +191,10 @@ func TestVarIsReservedKeyword(t *testing.T) {
 }
 
 func TestLexerReportsErrors(t *testing.T) {
-	if _, err := NewLexer("let x = @;").Tokenize(); err == nil {
+	if _, err := NewLexer("let x = @;", "").Tokenize(); err == nil {
 		t.Fatal("expected invalid character error")
 	}
-	if _, err := NewLexer(`"unterminated`).Tokenize(); err == nil {
+	if _, err := NewLexer(`"unterminated`, "").Tokenize(); err == nil {
 		t.Fatal("expected unterminated string error")
 	}
 }
@@ -167,7 +211,7 @@ for (let i = 0; i < 100; i++) {
 }
 `
 	for i := 0; i < b.N; i++ {
-		if _, err := NewLexer(source).Tokenize(); err != nil {
+		if _, err := NewLexer(source, "").Tokenize(); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -188,7 +232,7 @@ let x = 1 + 2 * 3; let s = "hello\"world"; // comment
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := NewLexer(source).Tokenize(); err != nil {
+		if _, err := NewLexer(source, "").Tokenize(); err != nil {
 			b.Fatal(err)
 		}
 	}

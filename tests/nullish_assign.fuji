@@ -1,0 +1,12 @@
+let x = null;
+x ??= 42;
+assert(x == 42, "??= should assign when null");
+
+let y = 7;
+y ??= 99;
+assert(y == 7, "??= should not overwrite non-nullish");
+
+let t = {};
+t.k ??= 100;
+assert(t.k == 100, "??= on table key");
+print("PASS: nullish assign");

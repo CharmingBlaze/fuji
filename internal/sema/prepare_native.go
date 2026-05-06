@@ -108,6 +108,8 @@ func walkStmt(s parser.Stmt, ctx *NativeEmitContext, walkBlock func(*parser.Bloc
 		walkBlock(st)
 	case *parser.DeleteStmt:
 		walkExpr(st.Target, nil, ctx, nil)
+	case *parser.DeferStmt:
+		walkExpr(st.Expr, nil, ctx, nil)
 	case *parser.ExpressionStmt:
 		walkExpr(st.Expr, nil, ctx, nil)
 	case *parser.ReturnStmt:
@@ -188,6 +190,8 @@ func walkStmtFull(s parser.Stmt, env *envFrame, ctx *NativeEmitContext, curFunc 
 		}
 	case *parser.DeleteStmt:
 		walkExpr(st.Target, env, ctx, curFunc)
+	case *parser.DeferStmt:
+		walkExpr(st.Expr, env, ctx, curFunc)
 	case *parser.ExpressionStmt:
 		walkExpr(st.Expr, env, ctx, curFunc)
 	case *parser.ReturnStmt:

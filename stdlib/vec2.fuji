@@ -1,0 +1,37 @@
+// vec2 — plain {x, y} tables; no runtime C. Use: let v2 = import "@vec2";
+
+func vec2(x, y) {
+    return { x: x, y: y };
+}
+
+func add(a, b) {
+    return vec2(a.x + b.x, a.y + b.y);
+}
+
+func sub(a, b) {
+    return vec2(a.x - b.x, a.y - b.y);
+}
+
+func scale(a, s) {
+    return vec2(a.x * s, a.y * s);
+}
+
+func dot(a, b) {
+    return a.x * b.x + a.y * b.y;
+}
+
+func lengthsq(a) {
+    return dot(a, a);
+}
+
+func length(a) {
+    return sqrt(lengthsq(a));
+}
+
+func normalize(a) {
+    let len = length(a);
+    if (len == 0) {
+        return vec2(0, 0);
+    }
+    return vec2(a.x / len, a.y / len);
+}

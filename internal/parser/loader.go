@@ -64,7 +64,7 @@ func loadModule(path string, bundle *ProgramBundle, visited map[string]bool, ove
 		src = string(b)
 	}
 
-	l := lexer.NewLexer(src)
+	l := lexer.NewLexer(src, path)
 	tokens, err := l.Tokenize()
 	if err != nil {
 		return diagnostic.WrapLexer(path, src, err)

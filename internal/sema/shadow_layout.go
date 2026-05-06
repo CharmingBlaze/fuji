@@ -139,6 +139,10 @@ func shadowRegisterInStmt(s parser.Stmt, ctx *NativeEmitContext) {
 		}
 	case *parser.ExpressionStmt:
 		shadowScanExprForFuncExprs(st.Expr, ctx)
+	case *parser.DeferStmt:
+		shadowScanExprForFuncExprs(st.Expr, ctx)
+	case *parser.DeleteStmt:
+		shadowScanExprForFuncExprs(st.Target, ctx)
 	case *parser.ReturnStmt:
 		if st.Value != nil {
 			shadowScanExprForFuncExprs(st.Value, ctx)
@@ -207,6 +211,8 @@ func shadowScanStmtForFuncExprs(s parser.Stmt, ctx *NativeEmitContext) {
 			shadowScanDeclForFuncExprs(cd, ctx)
 		}
 	case *parser.ExpressionStmt:
+		shadowScanExprForFuncExprs(st.Expr, ctx)
+	case *parser.DeferStmt:
 		shadowScanExprForFuncExprs(st.Expr, ctx)
 	}
 }
@@ -384,6 +390,8 @@ func shadowWalkStmt(s parser.Stmt, L *ShadowLayout, next *int) {
 			shadowWalkDecl(cd, L, next)
 		}
 	case *parser.ExpressionStmt:
+		shadowWalkExprLets(st.Expr, L, next)
+	case *parser.DeferStmt:
 		shadowWalkExprLets(st.Expr, L, next)
 	}
 }

@@ -113,7 +113,7 @@ func (p *Parser) parseLetDeclarations() ([]Decl, error) {
 		}
 		tmpLexeme := fmt.Sprintf("__fuji_destruct_%d", p.destructTmp)
 		p.destructTmp++
-		tmpTok := lexer.Token{Type: lexer.TokenIdentifier, Lexeme: tmpLexeme, Line: token.Line, Col: token.Col}
+		tmpTok := lexer.Token{Type: lexer.TokenIdentifier, Lexeme: tmpLexeme, Line: token.Line, Col: token.Col, File: token.File}
 
 		out := []Decl{
 			&LetDecl{Token: token, Name: tmpTok, Init: init},
@@ -241,6 +241,9 @@ func (p *Parser) parseStatement() (Stmt, error) {
 	}
 	if p.match(lexer.TokenReturn) {
 		return p.parseReturnStatement()
+	}
+	if p.match(lexer.TokenDefer) {
+		return p.parseDeferStatement()
 	}
 	if p.match(lexer.TokenBreak) {
 		token := p.previous()
@@ -601,6 +604,18 @@ func (p *Parser) parseReturnStatement() (Stmt, error) {
 	}
 
 	return &ReturnStmt{Token: token, Value: value}, nil
+}
+
+func (p *Parser) parseDeferStatement() (Stmt, error) {
+	token := p.previous()
+	expr, err := p.parseExpression(PrecedenceLowest)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(lexer.TokenSemicolon, "expected ';' after defer expression"); err != nil {
+		return nil, err
+	}
+	return &DeferStmt{Token: token, Expr: expr}, nil
 }
 
 func (p *Parser) parseDeleteStatement() (Stmt, error) {

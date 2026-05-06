@@ -1,0 +1,30 @@
+// Tier 9A: defer runs LIFO at function exit; return value is computed before defers (codegen order).
+let sum = 0;
+
+func add(x) {
+    sum = sum + x;
+}
+
+func f() {
+    defer add(3);
+    defer add(2);
+    defer add(1);
+}
+
+func g() {
+    defer add(2);
+    if (1) {
+        defer add(1);
+        return;
+    }
+    defer add(100);
+}
+
+f();
+assert(sum == 6, "defer LIFO: 1+2+3");
+
+sum = 0;
+g();
+assert(sum == 3, "defer with early return: 1+2");
+
+print("PASS: defer");

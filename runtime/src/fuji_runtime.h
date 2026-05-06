@@ -55,7 +55,8 @@ void fuji_panic(int argc, Value* argv);
 Value fuji_assert(int argc, Value* argv);
 Value fuji_err_str(const char* msg);
 void fuji_panic_str(const char* msg);
-void fuji_mark_interned_strings(void);
+/** After a full mark pass, drop intern slots for unmarked strings (weak refs); call before gc_sweep. */
+void fuji_sweep_intern_table(void);
 
 /** Optional call stack for panic stack traces (native codegen). */
 void fuji_push_call(const char* fn_name, const char* file_name, int line);
@@ -84,6 +85,8 @@ Value fuji_box_number(double d);
 Value fuji_get(Value obj, Value key);
 Value fuji_set(Value obj, Value key, Value value);
 int fuji_get_shadow_depth(void);
+/** High-water shadow stack depth since runtime init (for diagnostics). */
+int fuji_shadow_stack_high_water(void);
 
 // Bool value helper (not in value.h, needed for wrapper)
 static inline Value BOOL_VAL(bool b) {

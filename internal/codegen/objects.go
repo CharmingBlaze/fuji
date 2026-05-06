@@ -13,6 +13,89 @@ import (
 	"fuji/internal/parser"
 )
 
+// storeNaNBoxedToAssignTarget writes boxed (i64) rhs to an identifier or index assign target.
+func (g *Generator) storeNaNBoxedToAssignTarget(left parser.Expr, boxed value.Value) error {
+	switch l := left.(type) {
+	case *parser.IdentifierExpr:
+		name := l.Name.Lexeme
+		if slot, ok := g.locals[name]; ok {
+			if g.localIsCell != nil && g.localIsCell[name] {
+				g.block.NewCall(g.runtimeCellWrite, slot, boxed)
+			} else {
+				g.block.NewStore(boxed, slot)
+			}
+			return nil
+		}
+		if slot, ok := g.moduleGlobals[name]; ok {
+			if g.moduleGlobalIsCell != nil && g.moduleGlobalIsCell[name] {
+				g.block.NewCall(g.runtimeCellWrite, slot, boxed)
+			} else {
+				g.block.NewStore(boxed, slot)
+			}
+			return nil
+		}
+		if global, ok := g.globals[name]; ok {
+			g.block.NewStore(boxed, global)
+			return nil
+		}
+		return g.undefinedVarError(name, l.Name.File, l.Name.Line, l.Name.Col)
+	case *parser.IndexExpr:
+		obj, err := g.emitExpr(l.Object)
+		if err != nil {
+			return err
+		}
+		key, err := g.emitExpr(l.Index)
+		if err != nil {
+			return err
+		}
+		g.block.NewCall(g.runtimeSet, g.emitAsFujiI64(obj), g.emitAsFujiI64(key), boxed)
+		return nil
+	default:
+		return fmt.Errorf("??= unsupported assignment target: %T", left)
+	}
+}
+
+// emitNullishAssign lowers `lhs ??= rhs` to: if lhs is nil then lhs = rhs; result is lhs after.
+func (g *Generator) emitNullishAssign(e *parser.AssignExpr) (value.Value, error) {
+	rhs, err := g.emitExpr(e.Value)
+	if err != nil {
+		return nil, err
+	}
+	rhsI := g.emitAsFujiI64(rhs)
+
+	cur, err := g.emitExpr(e.Left)
+	if err != nil {
+		return nil, err
+	}
+	curI := g.emitAsFujiI64(cur)
+
+	nilTag := constant.NewInt(types.I64, llvmNilTagged)
+	isNil := g.block.NewICmp(enum.IPredEQ, curI, nilTag)
+
+	g.tempN++
+	suf := fmt.Sprintf("qna%d", g.tempN)
+	ifB := g.currentFn.NewBlock("qna.if." + suf)
+	elseB := g.currentFn.NewBlock("qna.el." + suf)
+	mergeB := g.currentFn.NewBlock("qna.mg." + suf)
+	g.block.NewCondBr(isNil, ifB, elseB)
+
+	g.block = ifB
+	if err := g.storeNaNBoxedToAssignTarget(e.Left, rhsI); err != nil {
+		return nil, err
+	}
+	ifB.NewBr(mergeB)
+
+	g.block = elseB
+	elseB.NewBr(mergeB)
+
+	g.block = mergeB
+	out := mergeB.NewPhi(
+		ir.NewIncoming(rhsI, ifB),
+		ir.NewIncoming(curI, elseB),
+	)
+	return out, nil
+}
+
 // emitObject emits LLVM IR for object expressions.
 func (g *Generator) emitObject(e *parser.ObjectExpr) (value.Value, error) {
 	nKeys := len(e.Keys) + len(e.ComputedKeys)
@@ -112,6 +195,9 @@ func (g *Generator) emitIndex(e *parser.IndexExpr) (value.Value, error) {
 
 // emitAssign emits LLVM IR for assignment expressions.
 func (g *Generator) emitAssign(e *parser.AssignExpr) (value.Value, error) {
+	if e.Token.Type == lexer.TokenQuestionQuestionEqual {
+		return g.emitNullishAssign(e)
+	}
 	if e.Token.Type != lexer.TokenEqual {
 		return g.emitCompoundAssign(e, e.Token.Lexeme)
 	}
@@ -146,7 +232,7 @@ func (g *Generator) emitAssign(e *parser.AssignExpr) (value.Value, error) {
 			g.block.NewStore(g.emitAsFujiI64(val), global)
 			return val, nil
 		}
-		return nil, g.undefinedVarError(name, left.Name.Line, left.Name.Col)
+		return nil, g.undefinedVarError(name, left.Name.File, left.Name.Line, left.Name.Col)
 	case *parser.IndexExpr:
 		// Property or array assignment
 		obj, err := g.emitExpr(left.Object)
@@ -228,7 +314,7 @@ func (g *Generator) emitCompoundAssign(e *parser.AssignExpr, op string) (value.V
 			g.block.NewStore(g.emitAsFujiI64(result), global)
 			return result, nil
 		}
-		return nil, g.undefinedVarError(name, left.Name.Line, left.Name.Col)
+		return nil, g.undefinedVarError(name, left.Name.File, left.Name.Line, left.Name.Col)
 	case *parser.IndexExpr:
 		obj, err := g.emitExpr(left.Object)
 		if err != nil {

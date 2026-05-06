@@ -73,20 +73,29 @@ func NewAnalyzer() *Analyzer {
 
 // Analyze performs semantic analysis on a program.
 func (a *Analyzer) Analyze(prog *parser.Program) error {
+	a.errors = nil
 	for _, decl := range prog.Declarations {
-		if err := a.analyzeDecl(decl); err != nil {
-			a.errors = append(a.errors, err)
-		}
+		a.analyzeDecl(decl)
 	}
-	if len(a.errors) > 0 {
+	switch len(a.errors) {
+	case 0:
+		return nil
+	case 1:
 		return a.errors[0]
+	default:
+		return &diagnostic.MultiError{List: append([]error(nil), a.errors...)}
 	}
-	return nil
 }
 
 // Errors returns all errors found during analysis.
 func (a *Analyzer) Errors() []error {
 	return a.errors
+}
+
+func (a *Analyzer) record(err error) {
+	if err != nil {
+		a.errors = append(a.errors, err)
+	}
 }
 
 func (a *Analyzer) enterScope() {
@@ -102,184 +111,161 @@ func (a *Analyzer) exitScope() {
 	}
 }
 
-func (a *Analyzer) analyzeDecl(decl parser.Decl) error {
+func (a *Analyzer) analyzeDecl(decl parser.Decl) {
 	switch d := decl.(type) {
 	case *parser.LetDecl:
-		return a.analyzeLetDecl(d)
+		a.analyzeLetDecl(d)
 	case *parser.FuncDecl:
-		return a.analyzeFuncDecl(d)
+		a.analyzeFuncDecl(d)
 	case *parser.FuncExpr:
-		return a.analyzeFuncExpr(d)
+		a.analyzeFuncExpr(d)
 	case *parser.IncludeDecl:
-		return nil
+		return
 	case parser.Stmt:
-		return a.analyzeStmt(d)
+		a.analyzeStmt(d)
 	}
-	return nil
 }
 
-func (a *Analyzer) analyzeLetDecl(d *parser.LetDecl) error {
+func (a *Analyzer) analyzeLetDecl(d *parser.LetDecl) {
 	name := d.Name.Lexeme
 	if _, ok := a.currentScope.symbols[name]; ok {
-		return &diagnostic.DiagnosticError{
+		a.record(&diagnostic.DiagnosticError{
+			File:    d.Name.File,
 			Line:    d.Name.Line,
 			Col:     d.Name.Col,
 			Message: fmt.Sprintf("duplicate binding '%s' in the same scope", name),
-		}
+		})
+		return
 	}
 	a.currentScope.Define(name, d)
 	if d.Init != nil {
-		return a.analyzeExpr(d.Init)
+		a.analyzeExpr(d.Init)
 	}
-	return nil
 }
 
-func (a *Analyzer) analyzeFuncDecl(d *parser.FuncDecl) error {
+func (a *Analyzer) analyzeFuncDecl(d *parser.FuncDecl) {
 	name := d.Name.Lexeme
 	if _, ok := a.currentScope.symbols[name]; ok {
-		return &diagnostic.DiagnosticError{
+		a.record(&diagnostic.DiagnosticError{
+			File:    d.Name.File,
 			Line:    d.Name.Line,
 			Col:     d.Name.Col,
 			Message: fmt.Sprintf("duplicate function '%s' in the same scope", name),
-		}
+		})
+		return
 	}
 	a.currentScope.Define(name, d)
 
 	a.enterScope()
+	defer a.exitScope()
 
 	for _, param := range d.Params {
 		a.currentScope.Define(param.Name, d)
 		if param.Default != nil {
-			if err := a.analyzeExpr(param.Default); err != nil {
-				return err
-			}
+			a.analyzeExpr(param.Default)
 		}
 	}
 
-	if err := a.analyzeStmt(d.Body); err != nil {
-		a.exitScope()
-		return err
-	}
-
-	a.exitScope()
-	return nil
+	a.analyzeStmt(d.Body)
 }
 
-func (a *Analyzer) analyzeFuncExpr(e *parser.FuncExpr) error {
+func (a *Analyzer) analyzeFuncExpr(e *parser.FuncExpr) {
 	a.enterScope()
 	defer a.exitScope()
 	for _, param := range e.Params {
 		a.currentScope.Define(param.Name, e)
 		if param.Default != nil {
-			if err := a.analyzeExpr(param.Default); err != nil {
-				return err
-			}
+			a.analyzeExpr(param.Default)
 		}
 	}
-	return a.analyzeStmt(e.Body)
+	a.analyzeStmt(e.Body)
 }
 
-func (a *Analyzer) analyzeStmt(stmt parser.Stmt) error {
+func (a *Analyzer) analyzeStmt(stmt parser.Stmt) {
 	switch s := stmt.(type) {
 	case *parser.BlockStmt:
-		return a.analyzeBlockStmt(s)
+		a.analyzeBlockStmt(s)
 	case *parser.ExpressionStmt:
-		return a.analyzeExpr(s.Expr)
+		a.analyzeExpr(s.Expr)
 	case *parser.ReturnStmt:
 		if s.Value != nil {
-			return a.analyzeExpr(s.Value)
+			a.analyzeExpr(s.Value)
 		}
-		return nil
 	case *parser.IfStmt:
-		if err := a.analyzeExpr(s.Condition); err != nil {
-			return err
-		}
-		if err := a.analyzeStmt(s.Then); err != nil {
-			return err
-		}
+		a.analyzeExpr(s.Condition)
+		a.analyzeStmt(s.Then)
 		if s.Else != nil {
-			return a.analyzeStmt(s.Else)
+			a.analyzeStmt(s.Else)
 		}
-		return nil
 	case *parser.WhileStmt:
-		if err := a.analyzeExpr(s.Condition); err != nil {
-			return err
-		}
-		return a.analyzeStmt(s.Body)
+		a.analyzeExpr(s.Condition)
+		a.analyzeStmt(s.Body)
 	case *parser.DoWhileStmt:
-		if err := a.analyzeStmt(s.Body); err != nil {
-			return err
-		}
-		return a.analyzeExpr(s.Condition)
+		a.analyzeStmt(s.Body)
+		a.analyzeExpr(s.Condition)
 	case *parser.ForStmt:
 		for _, ini := range s.Inits {
-			if err := a.analyzeDecl(ini); err != nil {
-				return err
-			}
+			a.analyzeDecl(ini)
 		}
 		if s.Condition != nil {
-			if err := a.analyzeExpr(s.Condition); err != nil {
-				return err
-			}
+			a.analyzeExpr(s.Condition)
 		}
 		for _, inc := range s.Increments {
-			if err := a.analyzeExpr(inc); err != nil {
-				return err
-			}
+			a.analyzeExpr(inc)
 		}
-		return a.analyzeStmt(s.Body)
+		a.analyzeStmt(s.Body)
 	case *parser.ForInStmt:
-		if err := a.analyzeExpr(s.Iterable); err != nil {
-			return err
+		a.analyzeExpr(s.Iterable)
+		a.enterScope()
+		if s.KeyVar != nil {
+			a.currentScope.Define(s.KeyVar.Lexeme, s)
 		}
-		return a.analyzeStmt(s.Body)
+		if s.ValueVar != nil {
+			a.currentScope.Define(s.ValueVar.Lexeme, s)
+		}
+		a.analyzeStmt(s.Body)
+		a.exitScope()
 	case *parser.ForOfStmt:
-		if err := a.analyzeExpr(s.Iterable); err != nil {
-			return err
+		a.analyzeExpr(s.Iterable)
+		a.enterScope()
+		a.currentScope.Define(s.VarName.Lexeme, s)
+		if s.ValueVar != nil {
+			a.currentScope.Define(s.ValueVar.Lexeme, s)
 		}
-		return a.analyzeStmt(s.Body)
+		a.analyzeStmt(s.Body)
+		a.exitScope()
 	case *parser.SwitchStmt:
-		if err := a.analyzeExpr(s.Subject); err != nil {
-			return err
-		}
+		a.analyzeExpr(s.Subject)
 		for _, c := range s.Cases {
-			if err := a.analyzeExpr(c.Value); err != nil {
-				return err
-			}
+			a.analyzeExpr(c.Value)
 			for _, cd := range c.Body {
-				if err := a.analyzeDecl(cd); err != nil {
-					return err
-				}
+				a.analyzeDecl(cd)
 			}
 		}
 		for _, cd := range s.Default {
-			if err := a.analyzeDecl(cd); err != nil {
-				return err
-			}
+			a.analyzeDecl(cd)
 		}
-		return nil
 	case *parser.DeleteStmt:
-		return a.analyzeExpr(s.Target)
+		a.analyzeExpr(s.Target)
+	case *parser.DeferStmt:
+		a.analyzeExpr(s.Expr)
 	case *parser.BreakStmt, *parser.ContinueStmt:
-		return nil
+		return
 	default:
-		return fmt.Errorf("unsupported statement type: %T", stmt)
+		a.record(fmt.Errorf("unsupported statement type: %T", stmt))
 	}
 }
 
-func (a *Analyzer) analyzeBlockStmt(s *parser.BlockStmt) error {
+func (a *Analyzer) analyzeBlockStmt(s *parser.BlockStmt) {
 	a.enterScope()
 	defer a.exitScope()
 
 	for _, decl := range s.Declarations {
-		if err := a.analyzeDecl(decl); err != nil {
-			return err
-		}
+		a.analyzeDecl(decl)
 	}
-	return nil
 }
 
-func (a *Analyzer) analyzeExpr(expr parser.Expr) error {
+func (a *Analyzer) analyzeExpr(expr parser.Expr) {
 	switch e := expr.(type) {
 	case *parser.IdentifierExpr:
 		name := e.Name.Lexeme
@@ -288,42 +274,32 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) error {
 			if s, ok := diagnostic.BestSuggestion(name, a.currentScope.VisibleNames(), 2); ok {
 				hint = fmt.Sprintf("did you mean '%s'?", s)
 			}
-			return &diagnostic.DiagnosticError{
+			a.record(&diagnostic.DiagnosticError{
+				File:    e.Name.File,
 				Line:    e.Name.Line,
 				Col:     e.Name.Col,
 				Message: fmt.Sprintf("undefined variable '%s'", name),
 				Hint:    hint,
-			}
+			})
 		}
-		return nil
 	case *parser.LiteralExpr:
-		return nil
+		return
 	case *parser.PrefixExpr:
-		return a.analyzeExpr(e.Right)
+		a.analyzeExpr(e.Right)
 	case *parser.InfixExpr:
-		if err := a.analyzeExpr(e.Left); err != nil {
-			return err
-		}
-		return a.analyzeExpr(e.Right)
+		a.analyzeExpr(e.Left)
+		a.analyzeExpr(e.Right)
 	case *parser.LogicalExpr:
-		if err := a.analyzeExpr(e.Left); err != nil {
-			return err
-		}
-		return a.analyzeExpr(e.Right)
+		a.analyzeExpr(e.Left)
+		a.analyzeExpr(e.Right)
 	case *parser.CallExpr:
-		if err := a.analyzeExpr(e.Function); err != nil {
-			return err
-		}
+		a.analyzeExpr(e.Function)
 		for _, arg := range e.Arguments {
-			if err := a.analyzeExpr(arg); err != nil {
-				return err
-			}
+			a.analyzeExpr(arg)
 		}
-		return nil
+		a.maybeCheckCallArity(e)
 	case *parser.AssignExpr:
-		if err := a.analyzeExpr(e.Value); err != nil {
-			return err
-		}
+		a.analyzeExpr(e.Value)
 		if ident, ok := e.Left.(*parser.IdentifierExpr); ok {
 			name := ident.Name.Lexeme
 			if _, ok := a.currentScope.Resolve(name); !ok {
@@ -331,134 +307,96 @@ func (a *Analyzer) analyzeExpr(expr parser.Expr) error {
 				if s, ok := diagnostic.BestSuggestion(name, a.currentScope.VisibleNames(), 2); ok {
 					hint = fmt.Sprintf("did you mean '%s'?", s)
 				}
-				return &diagnostic.DiagnosticError{
+				a.record(&diagnostic.DiagnosticError{
+					File:    ident.Name.File,
 					Line:    ident.Name.Line,
 					Col:     ident.Name.Col,
 					Message: fmt.Sprintf("undefined variable '%s'", name),
 					Hint:    hint,
-				}
+				})
 			}
-			return nil
+			return
 		}
 		if ix, ok := e.Left.(*parser.IndexExpr); ok {
-			if err := a.analyzeExpr(ix.Object); err != nil {
-				return err
-			}
-			return a.analyzeExpr(ix.Index)
+			a.analyzeExpr(ix.Object)
+			a.analyzeExpr(ix.Index)
+			return
 		}
-		return &diagnostic.DiagnosticError{
+		a.record(&diagnostic.DiagnosticError{
+			File:    e.Token.File,
 			Line:    e.Token.Line,
 			Col:     e.Token.Col,
 			Message: "invalid assignment target",
 			Hint:    "left side of '=' must be a variable or index expression",
-		}
+		})
 	case *parser.GroupingExpr:
-		return a.analyzeExpr(e.Expr)
+		a.analyzeExpr(e.Expr)
 	case *parser.ImportExpr:
-		return nil
+		return
 	case *parser.IndexExpr:
-		if err := a.analyzeExpr(e.Object); err != nil {
-			return err
-		}
-		return a.analyzeExpr(e.Index)
+		a.analyzeExpr(e.Object)
+		a.analyzeExpr(e.Index)
 	case *parser.SpreadExpr:
-		return a.analyzeExpr(e.Expr)
+		a.analyzeExpr(e.Expr)
 	case *parser.TemplateExpr:
 		for _, p := range e.Parts {
-			if err := a.analyzeExpr(p); err != nil {
-				return err
-			}
+			a.analyzeExpr(p)
 		}
-		return nil
 	case *parser.ThisExpr:
-		return nil
+		return
 	case *parser.ArrayExpr:
 		for _, el := range e.Elements {
-			if err := a.analyzeExpr(el); err != nil {
-				return err
-			}
+			a.analyzeExpr(el)
 		}
-		return nil
 	case *parser.ObjectExpr:
 		for _, v := range e.Values {
-			if err := a.analyzeExpr(v); err != nil {
-				return err
-			}
+			a.analyzeExpr(v)
 		}
 		for _, ck := range e.ComputedKeys {
 			if ck == nil {
 				continue
 			}
-			if err := a.analyzeExpr(ck); err != nil {
-				return err
-			}
+			a.analyzeExpr(ck)
 		}
-		return nil
 	case *parser.FuncExpr:
-		return a.analyzeFuncExpr(e)
+		a.analyzeFuncExpr(e)
 	case *parser.RangeExpr:
-		if err := a.analyzeExpr(e.From); err != nil {
-			return err
-		}
-		return a.analyzeExpr(e.To)
+		a.analyzeExpr(e.From)
+		a.analyzeExpr(e.To)
 	case *parser.UpdateExpr:
-		return a.analyzeExpr(e.Operand)
+		a.analyzeExpr(e.Operand)
 	case *parser.TupleExpr:
 		for _, el := range e.Elements {
-			if err := a.analyzeExpr(el); err != nil {
-				return err
-			}
+			a.analyzeExpr(el)
 		}
-		return nil
 	case *parser.IfExpr:
-		if err := a.analyzeExpr(e.Condition); err != nil {
-			return err
-		}
-		if err := a.analyzeExpr(e.Then); err != nil {
-			return err
-		}
+		a.analyzeExpr(e.Condition)
+		a.analyzeExpr(e.Then)
 		if e.Else != nil {
-			return a.analyzeExpr(e.Else)
+			a.analyzeExpr(e.Else)
 		}
-		return nil
 	case *parser.SwitchExpr:
-		if err := a.analyzeExpr(e.Subject); err != nil {
-			return err
-		}
+		a.analyzeExpr(e.Subject)
 		for _, c := range e.Cases {
-			if err := a.analyzeExpr(c.Value); err != nil {
-				return err
-			}
-			if err := a.analyzeExpr(c.Body); err != nil {
-				return err
-			}
+			a.analyzeExpr(c.Value)
+			a.analyzeExpr(c.Body)
 		}
 		if e.Default != nil {
-			return a.analyzeExpr(e.Default)
+			a.analyzeExpr(e.Default)
 		}
-		return nil
 	case *parser.SliceExpr:
-		if err := a.analyzeExpr(e.Object); err != nil {
-			return err
-		}
+		a.analyzeExpr(e.Object)
 		if e.Start != nil {
-			if err := a.analyzeExpr(e.Start); err != nil {
-				return err
-			}
+			a.analyzeExpr(e.Start)
 		}
 		if e.End != nil {
-			return a.analyzeExpr(e.End)
+			a.analyzeExpr(e.End)
 		}
-		return nil
 	case *parser.TernaryExpr:
-		if err := a.analyzeExpr(e.Condition); err != nil {
-			return err
-		}
-		if err := a.analyzeExpr(e.Then); err != nil {
-			return err
-		}
-		return a.analyzeExpr(e.Else)
+		a.analyzeExpr(e.Condition)
+		a.analyzeExpr(e.Then)
+		a.analyzeExpr(e.Else)
 	default:
-		return fmt.Errorf("unsupported expression type: %T", expr)
+		a.record(fmt.Errorf("unsupported expression type: %T", expr))
 	}
 }
