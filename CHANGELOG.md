@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`README.md`** — links **`docs/handoff.md`** for the compiler/runtime layout and invariants.
 - **`docs/handoff.md`** — rewritten for the **LLVM-only** pipeline (no VM / **`kuji`**); points at **`docs/architecture.md`** and invariants for new contributors.
 
 - **Lexer API** — `lexer.NewLexer` now takes `(source, file string)` so the source path is always threaded at construction time; `loader` passes each module’s absolute path. **Template literal** tokens (start, string segments, `${}` interp markers, close) now set `Token.File` like other tokens. **Embedded template expressions** are re-lexed with the surrounding file path so sema diagnostics inside `` `${...}` `` point at the real `.fuji` file. Injected **math prelude** tokens use the synthetic path `<builtin:math-prelude>`.
