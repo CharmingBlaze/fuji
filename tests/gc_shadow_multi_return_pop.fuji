@@ -1,4 +1,3 @@
-// Regression: multi-return functions must emit fuji_pop_frame on every ret path.
 func f() {
     if (false) {
         return 1;

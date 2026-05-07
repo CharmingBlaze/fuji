@@ -1,2 +1,1 @@
-// Intentionally invalid: used by scripts / docs to verify sema diagnostics (fuji check / fuji run).
-thisNameDoesNotExist + 1;
+thisnamedoesnotexist + 1;

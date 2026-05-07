@@ -253,7 +253,7 @@ ZERO-SETUP DISTRIBUTION (same folder as fuji.exe / fuji)
 EXAMPLES
   fuji run tests\hello.fuji
   fuji run --no-opt tests\loops.fuji
-  fuji build game.fuji -o game.exe
+  fuji build game.fuji -o game%s
   fuji bundle game.fuji -o dist\mygame
 `, versionLine(), exeExt())
 }

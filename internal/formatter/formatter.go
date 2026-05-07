@@ -589,6 +589,21 @@ func (e *emitter) emitExpr(ex parser.Expr, minPrec int) error {
 		}
 		e.write(v.Operator.Lexeme)
 		return nil
+	case *parser.RangeExpr:
+		opPrec := precEquals
+		if opPrec < minPrec {
+			e.write("(")
+			if err := e.emitExpr(ex, precLowest); err != nil {
+				return err
+			}
+			e.write(")")
+			return nil
+		}
+		if err := e.emitExpr(v.From, opPrec); err != nil {
+			return err
+		}
+		e.write("..")
+		return e.emitExpr(v.To, opPrec+1)
 	case *parser.ImportExpr:
 		e.write("import ")
 		e.write(v.Path.Lexeme)

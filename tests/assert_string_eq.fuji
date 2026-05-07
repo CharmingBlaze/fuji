@@ -1,5 +1,8 @@
 assert("hello" == "hello", "string literal ==");
+
 let a = "x";
+
 let b = "x";
+
 assert(a == b, "same interned or equal string");
 print("PASS: assert string ==");

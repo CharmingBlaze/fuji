@@ -1,4 +1,3 @@
-// Short-lived allocations + gcFrameStep — verifies incremental GC sees consistent roots each frame.
 func main() {
     let last = null;
     let i = 0;

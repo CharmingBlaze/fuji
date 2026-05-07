@@ -1,5 +1,3 @@
-// vec2 — plain {x, y} tables; no runtime C. Use: let v2 = import "@vec2";
-
 func vec2(x, y) {
     return { x: x, y: y };
 }

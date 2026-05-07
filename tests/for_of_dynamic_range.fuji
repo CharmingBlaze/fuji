@@ -1,9 +1,12 @@
-// for-of over non-literal range: must not require FUJI_range allocation at iterable.
 let lo = 1;
+
 let hi = 4;
+
 let sum = 0;
+
 for (let i of lo..hi) {
     sum = sum + i;
 }
+
 assert(sum == 6, "1+2+3");
 print("PASS: for-of dynamic range");

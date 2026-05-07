@@ -34,6 +34,18 @@ func TestFormatCanonicalSpacing(t *testing.T) {
 	}
 }
 
+func TestFormatRangeExpr(t *testing.T) {
+	src := "for(let i of lo..hi){print(i);}\n"
+	out, err := Format(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "for (let i of lo..hi) {\n    print(i);\n}\n"
+	if out != want {
+		t.Fatalf("got:\n%q\nwant:\n%q", out, want)
+	}
+}
+
 func TestFormatHelloFuji(t *testing.T) {
 	path := filepath.Join("..", "..", "tests", "hello.fuji")
 	b, err := os.ReadFile(path)

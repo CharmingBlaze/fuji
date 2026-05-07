@@ -1,272 +1,618 @@
-# Using the Fuji language (complete beginner guide)
+# Getting Started with Fuji
 
-This page explains **how to write and run Fuji programs** and what the language offers end-to-end. For a compact **syntax and builtin catalog**, keep **[language.md](../language.md)** open beside this guide. For **CLI commands** (`fuji run`, `fuji build`, …), see **[commands.md](commands.md)**.
+Fuji is a language for making games and applications. It looks a lot like JavaScript, but it compiles straight to a fast native binary — no VM, no interpreter. This guide walks you from your very first program all the way to writing a game loop.
 
----
-
-## 1. How you run Fuji code
-
-You always work with **`.fuji`** text files and the **`fuji`** command-line tool (from [Releases](https://github.com/CharmingBlaze/fuji/releases)):
-
-| Goal | Command |
-|------|---------|
-| Run once | `fuji run main.fuji` |
-| Keep an `.exe` / binary | `fuji build main.fuji -o game.exe` |
-| Check mistakes without compiling | `fuji check main.fuji` |
-| Format code | `fuji fmt main.fuji` or `fuji fmt ./...` |
-| Live reload while editing | `fuji watch main.fuji` |
-| Ship a folder | `fuji bundle main.fuji -o dist/MyGame` |
-
-If your program defines **`func main()`**, that function is the usual entry point. You can also use **top-level statements** (code not inside any `func`) like a script.
+Keep **[../language.md](../language.md)** open beside this page — it has every feature, every builtin, and every operator with working examples.  
+For CLI commands (`fuji run`, `fuji build`, …) see **[commands.md](commands.md)**.
 
 ---
 
-## 2. Comments and program shape
+## 1. Running your code
+
+You write `.fuji` files and use the `fuji` command:
+
+| What you want | Command |
+|---------------|---------|
+| Run a file | `fuji run main.fuji` |
+| Build a binary to keep | `fuji build main.fuji -o mygame.exe` |
+| Check for mistakes (no build) | `fuji check main.fuji` |
+| Auto-format your code | `fuji fmt main.fuji` |
+| Rebuild whenever you save | `fuji watch main.fuji` |
+| Package everything to ship | `fuji bundle main.fuji -o dist/MyGame` |
+
+---
+
+## 2. Your first program
+
+Create `hello.fuji`:
 
 ```fuji
-// Line comment
-
-/* Block comment */
-
-print("hi");
+print("Hello, Fuji!");
 ```
 
-Statements end with **`;`**. Identifiers and keywords are **case-insensitive** (Fuji normalizes spelling).
+Run it:
+
+```
+fuji run hello.fuji
+```
+
+Output: `Hello, Fuji!`
+
+You can also wrap everything in `func main()`:
+
+```fuji
+func main() {
+    print("Hello from main!");
+}
+```
+
+Both styles work the same way.
 
 ---
 
-## 3. Values and literals
+## 3. Comments
 
-| Kind | Examples |
-|------|------------|
-| Number | `42`, `3.14`, `1e2`, `0xff`, `0b1010` |
-| String | `"hello\n"` with escapes |
-| Boolean | `true`, `false` |
-| Null | `null` |
-| Array | `[1, 2, ...a, 3]` — **`...expr`** spreads an array into the literal |
-| Object | `{ x: 1, y: 2 }` — keys are usually strings; **method shorthand** `draw() { … }` uses **`this`** |
+```fuji
+// This is a line comment.
 
-**Template strings** (backticks) embed expressions:
+/*
+   This is a block comment.
+   It can span multiple lines.
+*/
+```
+
+---
+
+## 4. Variables
+
+Use `let` to create a variable. Every statement ends with `;`.
 
 ```fuji
 let name = "Ada";
-print(`Hello, ${name}!`);
+let score = 0;
+let alive = true;
+let nothing = null;   // null means "no value"
+let later;            // also null until you assign it
 ```
 
----
-
-## 4. Variables and assignment
+Change a variable's value any time:
 
 ```fuji
-let x = 10;
-let y;        // starts as null
-x = x + 1;
-
-let { a, b } = point;   // object destructuring (binds fields a, b)
+score = score + 10;
+score += 10;   // same thing
+score++;       // add 1
+score--;       // subtract 1
 ```
 
-Compound assignments work: **`+=`**, **`-=`**, **`*=`**, etc.  
-Increment/decrement: **`++`** and **`--`** (prefix and postfix where grammar allows).
+> **Note:** `var` is not allowed in Fuji. Always use `let`.
+
+Keywords and names are **case-insensitive** — `Let`, `LET`, and `let` all work.
 
 ---
 
-## 5. Operators (what you can write)
+## 5. Types
 
-- **Arithmetic:** `+` `-` `*` `/` `%` `**` (power), unary `+` `-`
-- **Bitwise:** `&` `|` `^` `~` `<<` `>>` `>>>` and compound forms
-- **Compare:** `<` `<=` `>` `>=` `==` `!=` `===` `!==`
-- **Logic:** `&&` `||` `!`
-- **Nullish:** `a ?? b` — right side only when **`a`** is **`null`** (not for `0` or `""`)
-- **Optional chaining:** `obj?.field`, `obj?.[i]` — short-circuits to **`null`** if receiver is **`null`**
-- **Delete:** `delete obj.key;` removes an own property from a table object
+| Type | Example |
+|------|---------|
+| Number | `42`, `3.14`, `0xff`, `0b1010`, `1e3` |
+| String | `"hello"` |
+| Bool | `true` or `false` |
+| Null | `null` |
+| Array | `[1, 2, 3]` |
+| Object | `{ x: 1, y: 2 }` |
+| Function | `func(x) { return x; }` |
 
-Precedence is “normal JS-like”; when in doubt, use parentheses.
-
----
-
-## 6. Control flow
-
-All **`if`**, **`else`**, loops, and **`switch`** bodies use **braces** `{ … }` (no single-line braceless branches).
-
-| Construct | Meaning |
-|-----------|---------|
-| `if (cond) { … } else { … }` | Conditional |
-| `while (cond) { … }` | Loop |
-| `do { … } while (cond);` | Loop runs at least once |
-| `for (init; cond; step) { … }` | Classic C-style `for` |
-| `for (let k in arr) { … }` | Keys: array indices, object keys in order |
-| `for (let v of arr) { … }` | Values in order |
-| `for (let [k, v] of arr) { … }` | Pairs (arrays: index+element; tables: key+value) |
-| `switch (x) { case 1: … default: … }` | Switch; use **`break`** to exit a branch |
-| `return expr;` | From a function |
-| `break` / `continue` | Loops / `switch` |
-
-**Expression forms:**
+You can ask Fuji what type a value is:
 
 ```fuji
-let n = if (x > 0) { 1 } else { -1 };
-let label = switch (kind) { case 1 => "a" default => "z" };
+print(type(42));       // number
+print(type("hello"));  // string
+print(type(true));     // bool
+print(type(null));     // null
 ```
-
-**`defer`** — run a call when the enclosing **`func`** exits (LIFO if multiple defers).
 
 ---
 
-## 7. Functions and closures
+## 6. Operators
+
+```fuji
+// Arithmetic
+let a = 10 + 3;   // 13
+let b = 10 - 3;   // 7
+let c = 10 * 3;   // 30
+let d = 10 / 4;   // 2.5
+let e = 10 % 3;   // 1  (remainder)
+let f = 2 ** 8;   // 256 (power)
+
+// Comparison — result is true or false
+1 < 2      // true
+1 == 1     // true
+1 != 2     // true
+2 >= 2     // true
+
+// Logic
+true && false   // false
+true || false   // true
+!true           // false
+```
+
+**Nullish coalescing** — use a default when something is null:
+
+```fuji
+let saved = null;
+let score = saved ?? 0;   // 0, because saved is null
+```
+
+**Optional chaining** — safely read a property that might not exist:
+
+```fuji
+let player = null;
+let hp = player?.health;   // null, no crash
+```
+
+---
+
+## 7. Strings
+
+```fuji
+let s = "Hello, World!";
+
+print(s.toUpper());               // HELLO, WORLD!
+print(s.toLower());               // hello, world!
+print(s.includes("World"));       // true
+print(s.replace("World", "Fuji")); // Hello, Fuji!
+print(s.slice(0, 5));             // Hello
+
+let words = "one two three".split(" ");
+print(words[0]);   // one
+print(len(words)); // 3
+```
+
+**Template strings** — embed expressions directly into a string:
+
+```fuji
+let name = "player";
+let lives = 3;
+print(`${name} has ${lives} lives left`);
+// player has 3 lives left
+```
+
+---
+
+## 8. Arrays
+
+An array holds a list of values.
+
+```fuji
+let colors = ["red", "green", "blue"];
+
+print(colors[0]);    // red
+print(len(colors));  // 3
+
+colors[1] = "yellow";   // change a value
+colors.push("purple");  // add to end
+colors.pop();           // remove from end
+```
+
+Loop through an array:
+
+```fuji
+for (let color of colors) {
+    print(color);
+}
+```
+
+Useful array methods:
+
+```fuji
+let nums = [3, 1, 4, 1, 5];
+
+let big = nums.filter(func(n) { return n > 3; });
+print(big);   // [4, 5]
+
+let doubled = nums.map(func(n) { return n * 2; });
+print(doubled);   // [6, 2, 8, 2, 10]
+
+print(nums.sort().join(", "));   // 1, 1, 3, 4, 5
+```
+
+---
+
+## 9. Objects
+
+An object holds named values (like a record or dictionary).
+
+```fuji
+let player = {
+    name: "Ada",
+    health: 100,
+    x: 0,
+    y: 0
+};
+
+print(player.name);    // Ada
+print(player.health);  // 100
+
+player.health -= 10;   // change a value
+player.speed = 5;      // add a new field
+```
+
+**Methods** — functions inside an object can use `this` to refer to the object:
+
+```fuji
+let player = {
+    x: 0,
+    speed: 5,
+    moveRight() {
+        this.x += this.speed;
+    }
+};
+
+player.moveRight();
+print(player.x);   // 5
+```
+
+---
+
+## 10. Control flow
+
+All `if`, `while`, `for`, and `switch` bodies **must use `{ }` braces**.
+
+### `if` / `else`
+
+```fuji
+let score = 75;
+
+if (score >= 90) {
+    print("A grade");
+} else if (score >= 70) {
+    print("B grade");
+} else {
+    print("C grade");
+}
+```
+
+### `while` loop
+
+```fuji
+let i = 0;
+while (i < 5) {
+    print(i);
+    i += 1;
+}
+// prints 0, 1, 2, 3, 4
+```
+
+### `for` loop
+
+```fuji
+// Count up
+for (let i = 0; i < 5; i += 1) {
+    print(i);
+}
+
+// Loop over a range
+for (let i of 0..5) {
+    print(i);   // 0, 1, 2, 3, 4
+}
+
+// Loop over array values
+let fruits = ["apple", "banana", "cherry"];
+for (let fruit of fruits) {
+    print(fruit);
+}
+```
+
+### `switch`
+
+```fuji
+let day = "Monday";
+
+switch (day) {
+    case "Monday":
+        print("Start of the week");
+        break;
+    case "Friday":
+        print("End of the week");
+        break;
+    default:
+        print("Midweek");
+}
+```
+
+Use `break` to stop at the end of each case. Without `break`, it falls through to the next case.
+
+### `break` and `continue`
+
+```fuji
+for (let i of 0..10) {
+    if (i == 3) { continue; }   // skip 3
+    if (i == 7) { break; }      // stop at 7
+    print(i);
+}
+```
+
+---
+
+## 11. Functions
+
+```fuji
+func greet(name) {
+    print("Hello, " + name + "!");
+}
+
+greet("World");   // Hello, World!
+```
+
+**Return a value:**
 
 ```fuji
 func add(a, b) {
     return a + b;
 }
 
-let mul = func(a, b) { return a * b; };
+let result = add(3, 4);
+print(result);   // 7
+```
 
-func greet(name = "world") {
+**Default parameters:**
+
+```fuji
+func greet(name = "stranger") {
     print("Hello, " + name);
 }
+
+greet();         // Hello, stranger
+greet("Ada");    // Hello, Ada
 ```
 
-- **Rest:** `func sum(...xs) { … }` collects extra arguments into an array.
-- **Closures** capture outer `let` bindings.
-
-**`this`** — inside an object method, **`this`** is the receiver for **`obj.method()`** calls.
-
----
-
-## 8. Arrays and objects in practice
-
-**Length and indexing**
+**Rest parameters** — collect extra arguments into an array:
 
 ```fuji
-let a = [10, 20, 30];
-print(len(a));      // 3
-print(a[1]);        // 20
-a[1] = 99;
+func sum(...numbers) {
+    let total = 0;
+    for (let n of numbers) { total += n; }
+    return total;
+}
+
+print(sum(1, 2, 3, 4));   // 10
 ```
 
-**Growing arrays**
+**Closures** — a function that remembers values from where it was created:
 
 ```fuji
-let items = [];
-items.push(1);
-items.push(2);
-print(items.length());   // method style
-```
+func makeCounter() {
+    let n = 0;
+    return func() {
+        n += 1;
+        return n;
+    };
+}
 
-**Objects**
-
-```fuji
-let player = {
-    x: 0,
-    y: 0,
-    move(dx, dy) {
-        this.x = this.x + dx;
-        this.y = this.y + dy;
-    }
-};
-player.move(1, 2);
+let count = makeCounter();
+print(count());   // 1
+print(count());   // 2
+print(count());   // 3
 ```
 
 ---
 
-## 9. String and array methods (high level)
+## 12. Struct types
 
-Names are **case-insensitive** (e.g. **`toUpper`** / **`toupper`**).
-
-**Strings (examples):** `split`, `trim`, `toUpper`, `toLower`, `replace`, `replaceAll`, `indexOf`, `slice`, `startsWith`, `endsWith`, …
-
-**Arrays (examples):** `push`, `pop`, `concat`, `join`, `map`, `filter`, `reduce`, `find`, `slice`, `sort`, `reverse`, `indexOf`, `includes`, …
-
-**Ambiguous receivers:** some names (e.g. **`slice`**, **`indexOf`**, **`includes`**) work on both strings and arrays; Fuji picks based on the value type.
-
-For a **full method table**, see **[language.md](../language.md)** sections on string and array methods.
-
----
-
-## 10. Math: globals and `math.*`
-
-Scalar math exists as **globals** (`sin`, `cos`, `lerp`, `clamp`, `floor`, …).
-
-The compiler also provides a **`math`** object (unless you shadow it) so you can write:
+A struct is a named type with fixed fields. Easier to read than plain objects.
 
 ```fuji
-let y = math.floor(3.9);
-let z = math.lerp(0, 100, 0.5);
+struct Point {
+    x,
+    y
+}
+
+let p = Point { x: 10, y: 20 };
+print(p.x);   // 10
+
+p.y = 99;
+print(p.y);   // 99
 ```
 
-Use **[language.md](../language.md)** for the full list of math-related globals and namespace members.
+```fuji
+struct Bullet {
+    x,
+    y,
+    vx,
+    vy
+}
+
+func moveBullet(b) {
+    b.x += b.vx;
+    b.y += b.vy;
+}
+
+let b = Bullet { x: 0, y: 0, vx: 5, vy: -3 };
+moveBullet(b);
+print(b.x, b.y);   // 5 -3
+```
 
 ---
 
-## 11. Built-in library (what ships in `fuji`)
+## 13. Enum types
 
-These are **ordinary Fuji files** under the repo’s **`stdlib/`** folder. In your project, pull them in with **`#include`** (relative path) or **`@module`** resolution if your install ships **`stdlib`** next to **`fuji`**.
-
-Examples of modules you may use:
-
-| Module | Role |
-|--------|------|
-| `stdlib/math.fuji` | Re-exports / aliases around the `math` prelude |
-| `stdlib/vec2.fuji`, `stdlib/vec3.fuji` | Small vector helpers |
-| `stdlib/timer.fuji` | Timing helpers |
-| `stdlib/json.fuji`, `stdlib/io.fuji`, … | JSON, I/O, strings, arrays |
-
-Typical pattern:
+An enum gives names to a set of numbers. Great for game states, directions, etc.
 
 ```fuji
-#include "../stdlib/vec3.fuji"
+enum State {
+    Start,    // 0
+    Playing,  // 1
+    Paused,   // 2
+    GameOver  // 3
+}
 
-func main() {
-    let v = create(1, 2, 3);
-    print(length(v));
+let current = State.Playing;
+
+if (current == State.Playing) {
+    print("Game is running!");
 }
 ```
 
-Adjust the **`#include`** path so it resolves from your file’s directory.
+Use them in `switch` statements for clean logic:
+
+```fuji
+switch (current) {
+    case State.Start:
+        print("Press SPACE to begin");
+        break;
+    case State.Playing:
+        print("Playing...");
+        break;
+    case State.Paused:
+        print("Paused");
+        break;
+    case State.GameOver:
+        print("Game Over!");
+        break;
+}
+```
 
 ---
 
-## 12. Modules: `#include`, `@`, and `import()`
+## 14. Math
 
-| Mechanism | Use |
-|-----------|-----|
-| **`#include "path.fuji"`** | Textual include; good for local libraries and stdlib snippets |
-| **`import("@math")`** / `@array` | Resolved via **`FUJI_PATH`**, install **`stdlib`**, or project layout |
-| **`import("relative.fuji")`** | Expression import (see **[language.md](../language.md)** and tests for edge cases) |
+The `math` object (or global functions) gives you everything you need:
 
-For C/C++ libraries, use **`fuji wrap`** and **`FUJI_NATIVE_SOURCES`** — **[wrappers.md](wrappers.md)**.
+```fuji
+print(math.floor(3.9));          // 3
+print(math.ceil(3.1));           // 4
+print(math.round(3.5));          // 4
+print(math.abs(-5));             // 5
+print(math.sqrt(16));            // 4
+print(math.min(3, 7));           // 3
+print(math.max(3, 7));           // 7
+print(math.clamp(150, 0, 100));  // 100
 
----
+// Lerp: smooth value between two points
+let pos = math.lerp(0, 100, 0.25);   // 25
 
-## 13. Built-in functions you call every day
+// Distance between two points
+let d = math.distance(0, 0, 3, 4);   // 5
 
-Groupings (names are case-insensitive when called):
-
-- **Output / debug:** `print`, `trace`, `assert`, `panic`
-- **Values:** `len`, `type`, `typeof`, `number`, `string`, `bool`, `parseJSON`, `toJSON`
-- **Files:** `readFile`, `writeFile`, `appendFile`, `fileExists`, `deleteFile`
-- **Time / random:** `time`, `clock`, `sleep`, `random`, `randomInt`, …
-- **GC (games):** `gc`, `gcCollect`, `gcDisable`, `gcEnable`, `gcFrameStep`, `gcStats`, …
-
-The authoritative alphabetical list is in **[language.md](../language.md)** under native builtins.
-
----
-
-## 14. FFI hint (advanced)
-
-You can mark native symbols with a special comment (see **[language.md](../language.md)** “Native FFI hint”). Most games use **`fuji wrap`** instead.
+// Trig (angles in radians)
+let angle = math.atan2(1, 0);   // π/2
+print(math.degrees(angle));     // 90
+```
 
 ---
 
-## 15. Where to read next
+## 15. Useful builtins
 
-| Document | Use it for |
-|----------|------------|
-| **[language.md](../language.md)** (repo root) | Every keyword, operator, builtin, method — single long catalog |
-| **[language.md](language.md)** (this folder) | Formal syntax + semantics reference |
-| **[docs/commands.md](commands.md)** | Every `fuji` CLI command |
-| **[docs/wrappers.md](wrappers.md)** | Headers → `.fuji` + `wrapper.c` |
-| **[docs/distribution.md](distribution.md)** | Shipping bundles and extras |
-| **`tests/*.fuji`** | Small runnable examples when behavior is unclear |
+```fuji
+// Output
+print("hello", 42, true);         // space-separated
+let s = format("x={} y={}", x, y); // build a string
 
-If two docs disagree, **`fuji check`** and **`fuji run`** on a tiny program are the final word.
+// Assertions (crash with message if false)
+assert(lives > 0, "player is dead");
+
+// File I/O
+let text = readFile("level.txt");
+writeFile("save.dat", data);
+if (fileExists("save.dat")) { /* ... */ }
+
+// Random numbers
+randomSeed(42);
+let roll = randomInt(1, 7);    // 1-6 inclusive
+let chance = random();         // 0.0 to 1.0
+
+// JSON
+let obj = parseJSON("{\"hp\": 100}");
+let str = toJSON({ hp: 100, name: "Ada" });
+```
+
+---
+
+## 16. Game loop pattern
+
+Here is a minimal game loop using Raylib (Fuji's built-in graphics library):
+
+```fuji
+#include "../wrappers/raylib_shim/raylib.fuji"
+
+let screenW = 800;
+let screenH = 600;
+let x = 400;
+let y = 300;
+let speed = 4;
+
+InitWindow(screenW, screenH, "My Game");
+SetTargetFPS(60);
+
+while (!WindowShouldClose()) {
+    // Update
+    if (IsKeyDown(263)) { x -= speed; }   // left arrow
+    if (IsKeyDown(262)) { x += speed; }   // right arrow
+    if (IsKeyDown(265)) { y -= speed; }   // up arrow
+    if (IsKeyDown(264)) { y += speed; }   // down arrow
+
+    // Draw
+    BeginDrawing();
+    ClearBackground(0x181818FF);
+    DrawCircle(x, y, 20, 0xFF4444FF);
+    EndDrawing();
+}
+
+CloseWindow();
+```
+
+Run it with:
+
+```
+fuji run mygame.fuji
+```
+
+---
+
+## 17. Splitting code across files
+
+Use `#include` to pull in another `.fuji` file:
+
+```fuji
+// main.fuji
+#include "player.fuji"
+#include "enemies.fuji"
+
+func main() {
+    // player.fuji and enemies.fuji code is available here
+}
+```
+
+The included file is merged in as if you typed it directly. Paths are relative to the file doing the including.
+
+---
+
+## 18. `defer` — cleanup made easy
+
+`defer` schedules a call to run when the function exits. Multiple defers run in **reverse order** (last in, first out):
+
+```fuji
+func loadLevel(path) {
+    let f = openFile(path);
+    defer closeFile(f);   // always runs, even if we return early
+
+    if (!f) { return; }   // closeFile still runs here
+
+    // ... process file ...
+}
+```
+
+---
+
+## 19. Where to go next
+
+| Document | What it covers |
+|----------|----------------|
+| **[../language.md](../language.md)** | Complete reference — every feature, every builtin, with examples |
+| **[language.md](language.md)** | Compact syntax cheat sheet |
+| **[commands.md](commands.md)** | All `fuji` CLI commands |
+| **[wrappers.md](wrappers.md)** | Using C/C++ libraries from Fuji |
+| **`tests/*.fuji`** | Small runnable examples for every feature |
+| **`examples/games/`** | Complete game examples including brick breaker |
+
+When something behaves unexpectedly, run `fuji check yourfile.fuji` — it checks your code without compiling and gives clear error messages.

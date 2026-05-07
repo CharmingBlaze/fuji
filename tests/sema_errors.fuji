@@ -1,12 +1,12 @@
-// Intentionally invalid — `fuji check` / sema should report several issues (used by CI).
 let dup = 1;
+
 let dup = 2;
 
-func needsThree(a, b, c) {
+func needsthree(a, b, c) {
     return a;
 }
 
-needsThree(1);
+needsthree(1);
 
 func body() {
     aa;

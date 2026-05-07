@@ -1,18 +1,14 @@
-enum Dir {
-    Up,
-    Down,
-    Left,
-    Right
-}
+enum dir { up, down, left, right }
 
-let u = Dir.Up;
-let r = Dir.Right;
+let u = dir.up;
+
+let r = dir.right;
 
 assert(u == 0, "enum Up");
 assert(r == 3, "enum Right");
 
 switch (u) {
-    case Dir.Up:
+    case dir.up:
         print("case up");
     default:
         print("default arm");

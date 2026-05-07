@@ -1,5 +1,7 @@
 assert(+(2 * 3) == 6, "unary plus on folded literal product");
 assert(+42 == 42, "unary plus literal");
+
 let x = 7;
+
 assert(+x == 7, "unary plus identity on variable");
 print("PASS: unary plus");

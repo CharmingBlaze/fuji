@@ -1,4 +1,4 @@
-func readDone(t) {
+func readdone(t) {
     if (t.done) {
         return 0;
     }
@@ -6,7 +6,8 @@ func readDone(t) {
 }
 
 let o = { done: false };
-print(readDone(o));
+
+print(readdone(o));
 o.done = true;
-print(readDone(o));
+print(readdone(o));
 print("PASS gc_shadow_branch");
