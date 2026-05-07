@@ -78,7 +78,7 @@ Set the generated C glue and native link flags before building:
 ```powershell
 $env:FUJI_NATIVE_SOURCES = '..\wrappers\mylib\wrapper.c ..\native\mylib.c'
 $env:FUJI_LINKFLAGS = '-I..\native -L..\native\build -lmylib'
-.\kuji.exe build .\app.fuji -o .\app.exe
+.\fuji.exe build .\app.fuji -o .\app.exe
 ```
 
 For Raylib on Windows with the current local source tree:
@@ -86,7 +86,7 @@ For Raylib on Windows with the current local source tree:
 ```powershell
 $env:FUJI_NATIVE_SOURCES = '..\wrappers\raylib_min\raylib_bridge.c'
 $env:FUJI_LINKFLAGS = '-I..\temp_raylib\src -L..\temp_raylib\src -lraylib -lopengl32 -lgdi32 -lwinmm'
-.\kuji.exe build .\raylib_brick_breaker.fuji -o .\raylib_brick_breaker.exe
+.\fuji.exe build .\raylib_brick_breaker.fuji -o .\raylib_brick_breaker.exe
 ```
 
 ## 5. Bundle an application or game for distribution
@@ -94,14 +94,14 @@ $env:FUJI_LINKFLAGS = '-I..\temp_raylib\src -L..\temp_raylib\src -lraylib -lopen
 Use `fuji bundle` to create a clean folder that contains the executable, launcher, and metadata:
 
 ```powershell
-.\kuji.exe bundle .\game.fuji -o .\dist\game
+.\fuji.exe bundle .\game.fuji -o .\dist\game
 ```
 
 Bundle extra files such as assets, DLLs, licenses, or config files:
 
 ```powershell
 $env:FUJI_BUNDLE_FILES = '.\raylib.dll .\LICENSE.txt .\assets\logo.png'
-.\kuji.exe bundle .\game.fuji -o .\dist\game
+.\fuji.exe bundle .\game.fuji -o .\dist\game
 ```
 
 The output folder contains:
@@ -136,27 +136,39 @@ Users can either include `mylib.fuji` directly or set:
 $env:FUJI_WRAPPERS = 'C:\path\to\mylib-wrapper'
 ```
 
-## 7. Ship a complete Fuji toolchain folder
+## 7. Official Releases: Windows, Linux, macOS SDK zips
 
-For distributing Fuji itself, build the CLI and include the docs and wrappers:
+GitHub **Releases** (tags `v*`) attach **offline SDK archives** built by CI for **every mainstream OS**:
+
+| OS | Artifact |
+|----|----------|
+| **Windows** x64 | `fuji-<tag>-sdk-windows-amd64.zip` |
+| **Linux** x64 | `fuji-<tag>-sdk-linux-amd64.zip` |
+| **Linux** ARM64 | `fuji-<tag>-sdk-linux-arm64.zip` |
+| **macOS** Intel | `fuji-<tag>-sdk-darwin-amd64.zip` |
+| **macOS** Apple Silicon | `fuji-<tag>-sdk-darwin-arm64.zip` |
+
+Each zip unpacks to a single folder containing **`fuji`** (or **`fuji.exe`**), **`fujiwrap`**, **`stdlib/`**, **`docs/`**, **`examples/`**, **`language.md`**, **`README.md`**, and **`SDK_README.txt`**. Keep **`stdlib/`** next to the compiler so `@` imports resolve with no extra download.
+
+Maintainers reproduce the archives by pushing a version tag; the workflow is **[`.github/workflows/release.yml`](.github/workflows/release.yml)** and **`scripts/package-release-sdk.sh`**.
+
+### Manual “toolchain folder” layout (maintainers)
+
+If you build from source locally, mirror the same layout next to **`fuji`**:
 
 ```powershell
 go build -o fuji.exe .\cmd\fuji
 go build -o fujiwrap.exe .\cmd\wrapgen
 ```
 
-Suggested release folder:
-
 ```text
-fuji-release/
-  fuji.exe
+install-root/
+  fuji.exe           # or `fuji` on Linux/macOS
   fujiwrap.exe
+  stdlib/
+  docs/
+  language.md
   README.md
-  RELEASE.md
-  DISTRIBUTION_GUIDE.md
-  FUJI_PROGRAMMER_REFERENCE.md
-  WRAPPERS.md
-  wrappers/
   examples/
 ```
 

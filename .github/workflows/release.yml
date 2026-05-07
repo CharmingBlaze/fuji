@@ -208,8 +208,11 @@ jobs:
       - name: Build fuji — arm64
         run: GOARCH=arm64 go build -trimpath -tags release -ldflags="-s -w" -o fuji-darwin-arm64 ./cmd/fuji
 
-      - name: Build fujiwrap
+      - name: Build fujiwrap — arm64 (host)
         run: go build -trimpath -ldflags="-s -w" -o fujiwrap-darwin-arm64 ./cmd/wrapgen
+
+      - name: Build fujiwrap — amd64 (cross)
+        run: GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o fujiwrap-darwin-amd64 ./cmd/wrapgen
 
       - name: Test
         run: |
@@ -225,6 +228,7 @@ jobs:
           path: |
             fuji-darwin-amd64
             fuji-darwin-arm64
+            fujiwrap-darwin-amd64
             fujiwrap-darwin-arm64
 
   publish:
@@ -233,9 +237,20 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Install zip
+        run: sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Package offline SDK zip (per platform)
+        run: |
+          chmod +x scripts/package-release-sdk.sh
+          bash scripts/package-release-sdk.sh "${{ github.ref_name }}" artifacts sdk-zips
+          ls -la sdk-zips
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -250,19 +265,34 @@ jobs:
             artifacts/linux-arm64/fujiwrap-linux-arm64
             artifacts/macos/fuji-darwin-amd64
             artifacts/macos/fuji-darwin-arm64
+            artifacts/macos/fujiwrap-darwin-amd64
             artifacts/macos/fujiwrap-darwin-arm64
+            sdk-zips/*.zip
           body: |
             ## Fuji Programming Language
 
-            Download the binary for your platform.
-            Release binaries embed **Clang**, **libfuji_runtime.a**, and on Windows **lld** so native builds need no separate LLVM install.
+            ### Offline SDK zips (**recommended**)
+
+            **Windows**, **Linux** (x64 + ARM64), and **macOS** (Intel + Apple Silicon): one zip per CPU OS pair. Each **`fuji-*-sdk-*.zip`** is self-contained:
+
+            | Archive | Contents |
+            |---------|----------|
+            | **`fuji-${{ github.ref_name }}-sdk-windows-amd64.zip`** | `fuji.exe`, `fujiwrap.exe`, `stdlib/`, `docs/`, `examples/`, `language.md`, `README.md`, `SDK_README.txt` |
+            | **`fuji-${{ github.ref_name }}-sdk-linux-amd64.zip`** | same layout (POSIX binaries) |
+            | **`fuji-${{ github.ref_name }}-sdk-linux-arm64.zip`** | same layout |
+            | **`fuji-${{ github.ref_name }}-sdk-darwin-amd64.zip`** | Intel macOS |
+            | **`fuji-${{ github.ref_name }}-sdk-darwin-arm64.zip`** | Apple Silicon |
+
+            Extract anywhere; keep **`stdlib/`** next to **`fuji`**. Embedded **Clang** + runtime ship **inside** the `fuji` binary — **no LLVM install** for compiling Fuji programs. Wrapping/linking external C libs still uses your SDKs (see `docs/wrappers.md` in the zip).
+
+            ### Loose binaries only
 
             | Platform | Compiler | Wrapper Tool |
             |----------|----------|--------------|
             | Windows 64-bit | fuji-windows-amd64.exe | fujiwrap-windows-amd64.exe |
             | Linux 64-bit | fuji-linux-amd64 | fujiwrap-linux-amd64 |
             | Linux ARM64 | fuji-linux-arm64 | fujiwrap-linux-arm64 |
-            | macOS Intel | fuji-darwin-amd64 | — |
+            | macOS Intel | fuji-darwin-amd64 | fujiwrap-darwin-amd64 |
             | macOS Apple Silicon | fuji-darwin-arm64 | fujiwrap-darwin-arm64 |
 
             ### Windows

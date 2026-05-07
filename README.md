@@ -20,6 +20,22 @@ The **[language.md](language.md)** page is the compact catalog of syntax, operat
 
 **Recommended:** download a **release build** from **[GitHub Releases](https://github.com/CharmingBlaze/fuji/releases)** (tags **`v*`**). Those binaries embed **Clang**, **`libfuji_runtime.a`**, and on Windows **lld**, so you can **`fuji build`** / **`fuji run`** without installing LLVM yourself.
 
+### Offline SDK zip (Windows, Linux, macOS)
+
+Each GitHub **Release** publishes self-contained archives — **no Go install, no extra LLVM download** for compiling Fuji:
+
+| OS | Download (pattern) | What’s inside |
+|----|--------------------|---------------|
+| **Windows** (x64) | **`fuji-vX.Y.Z-sdk-windows-amd64.zip`** | `fuji.exe`, `fujiwrap.exe`, `stdlib/`, `docs/`, `examples/`, `language.md`, `README.md` |
+| **Linux** (x64) | **`fuji-vX.Y.Z-sdk-linux-amd64.zip`** | `fuji`, `fujiwrap`, plus the same folders |
+| **Linux** (ARM64) | **`fuji-vX.Y.Z-sdk-linux-arm64.zip`** | same |
+| **macOS** Intel | **`fuji-vX.Y.Z-sdk-darwin-amd64.zip`** | same |
+| **macOS** Apple Silicon | **`fuji-vX.Y.Z-sdk-darwin-arm64.zip`** | same |
+
+Unpack one folder anywhere and run **`fuji`** from that folder so **`stdlib/`** sits next to the executable.
+
+### Loose binaries only
+
 | Platform | Compiler binary | Typical download name |
 |----------|-----------------|-------------------------|
 | Windows (x64) | `fuji` | **`fuji-windows-amd64.exe`** |
@@ -40,7 +56,7 @@ On **Linux / macOS**, mark the file executable after download: `chmod +x fuji-li
 
 ## Get the C header wrapper (`fujiwrap`)
 
-**`fujiwrap`** turns C/C++ headers into **`.fuji`** bindings plus a **`wrapper.c`** you link with **`FUJI_NATIVE_SOURCES`**. It ships **next to `fuji`** on the same **[Releases](https://github.com/CharmingBlaze/fuji/releases)** page when published for your platform (for example **`fujiwrap-windows-amd64.exe`**, **`fujiwrap-linux-amd64`**, **`fujiwrap-darwin-arm64`**).
+**`fujiwrap`** turns C/C++ headers into **`.fuji`** bindings plus a **`wrapper.c`** you link with **`FUJI_NATIVE_SOURCES`**. It ships **inside each SDK zip** and as a loose binary on **[Releases](https://github.com/CharmingBlaze/fuji/releases)** (for example **`fujiwrap-windows-amd64.exe`**, **`fujiwrap-linux-amd64`**, **`fujiwrap-darwin-amd64`**, **`fujiwrap-darwin-arm64`**).
 
 Run **`fuji wrap …`** from the CLI: **`fuji`** looks for **`fujiwrap`** beside itself, then **`wrapgen`**, then **`kujiwrap`**, then **`PATH`**.
 
