@@ -1,420 +1,693 @@
-# Fuji — complete language catalog
+# Fuji — full language reference (how to use everything)
 
-This page is the practical, user-facing catalog of Fuji language features and builtins.
+This document is the **complete user-facing language reference**: what you can write, with **runnable-style examples** beside each feature. For CLI usage (`fuji run`, `fuji build`, …), see **`docs/commands.md`**. For a gentler walkthrough, see **`docs/using-the-language.md`**. For C/C++ interop, see **`docs/wrappers.md`**.
 
-Use it as the "what can I write?" reference, then pair it with:
+**Run a fragment:** save as `main.fuji`, then `fuji run main.fuji` (or define **`func main()`** as below). When examples show only declarations, wrap them in **`func main() { … }`** if your runner expects an entrypoint.
 
-- `docs/using-the-language.md` for a full beginner-oriented language + usage guide
-- `docs/guides/getting-started.md` for setup + first project flow
-- `docs/user_guide.md` for walkthroughs and examples
-- `docs/wrappers.md` for C/C++ integration with `fujiwrap`
+Identifiers and keywords are **case-insensitive** (normalized internally). Builtin names are **case-insensitive** at call sites.
+
+If anything here disagrees with the compiler, trust **`fuji check`**, **`fuji run`**, and the sources **`internal/parser`**, **`internal/lexer/token.go`**, and **`internal/codegen/builtin_register.go`**.
 
 ---
 
 ## Table of contents
 
-1. [Program structure](#1-program-structure)  
-2. [Comments and whitespace](#2-comments-and-whitespace)  
-3. [Identifiers and case](#3-identifiers-and-case)  
-4. [Literals](#4-literals)  
-5. [Keywords](#5-keywords)  
-6. [Operators and punctuation](#6-operators-and-punctuation)  
-7. [Types (logical)](#7-types-logical)  
-8. [Declarations](#8-declarations)  
-9. [Statements](#9-statements)  
-10. [Expressions](#10-expressions)  
-11. [Functions](#11-functions)  
-12. [Objects and arrays](#12-objects-and-arrays)  
-13. [Modules and includes](#13-modules-and-includes)  
-14. [Native builtins (global calls)](#14-native-builtins-global-calls)  
-15. [Truthy / falsy](#15-truthy--falsy)  
-16. [Precedence (summary)](#16-precedence-summary)  
-17. [String methods](#17-string-methods)  
-18. [Array methods](#18-array-methods)  
-19. [Templates, math namespace, pattern matching, and operators](#19-templates-math-namespace-pattern-matching-and-operators)  
+1. [Program structure](#1-program-structure)
+2. [Comments and statements](#2-comments-and-statements)
+3. [Identifiers and reserved words](#3-identifiers-and-reserved-words)
+4. [Literals](#4-literals)
+5. [Variables and destructuring](#5-variables-and-destructuring)
+6. [Operators](#6-operators)
+7. [Control flow statements](#7-control-flow-statements)
+8. [Expression forms (`if`, `switch`, chaining)](#8-expression-forms-if-switch-chaining)
+9. [Functions and `this`](#9-functions-and-this)
+10. [Struct types](#10-struct-types)
+11. [Enum types](#11-enum-types)
+12. [Objects, arrays, and iteration](#12-objects-arrays-and-iteration)
+13. [`#include` and `import`](#13-include-and-import)
+14. [Native FFI hint](#14-native-ffi-hint)
+15. [Global builtins](#15-global-builtins)
+16. [String methods](#16-string-methods)
+17. [Array methods](#17-array-methods)
+18. [The `math` object](#18-the-math-object)
+19. [Truthy and precedence](#19-truthy-and-precedence)
+20. [Keyword index](#20-keyword-index)
+21. [Canonical builtin names](#21-canonical-builtin-names)
 
 ---
 
 ## 1. Program structure
 
-- A **program** is a sequence of **declarations** and **statements** at top level (`parser.Parse`).
-- **`func main()`** is the usual entry point for **`fuji run`** / **`fuji build`** when present (entry resolution is case-insensitive for **`main`**).
-- Statements at top level are allowed (expression statements, control flow, etc.) depending on loader rules.
+A program is a sequence of top-level declarations and statements. The usual entry for **`fuji run`** / **`fuji build`** is **`func main()`** (name **`main`** is matched case-insensitively). Top-level expression statements are also allowed (script style).
+
+```fuji
+func main() {
+    print("hello");
+}
+```
+
+```fuji
+// script style: statements at top level
+print("hi");
+```
 
 ---
 
-## 2. Comments and whitespace
+## 2. Comments and statements
 
-| Form | Syntax |
-|------|--------|
-| Line comment | `// …` |
-| Block comment | `/* … */` |
+```fuji
+// line comment to end of line
 
-Whitespace separates tokens; **semicolons `;` terminate statements** (required between statements).
+/*
+   block comment
+*/
+
+let x = 1;
+print(x);
+```
+
+Every statement ends with **`;`**. Whitespace separates tokens.
 
 ---
 
-## 3. Identifiers and case
+## 3. Identifiers and reserved words
 
-- **Reserved words** and **ASCII identifiers** are matched **case-insensitively**; the AST stores normalized spellings (typically lowercase).
-- **`this`** is a keyword.
-- **`var`** is **reserved** — use **`let`** instead.
+Use **`let`** for variables. **`var`** is reserved and rejected — use **`let`** instead. **`this`** is a keyword (object methods).
+
+```fuji
+let PlayerScore = 100;   // same as playerscore after normalization
+let _tmp = 0;
+```
 
 ---
 
 ## 4. Literals
 
-| Kind | Examples / notes |
-|------|------------------|
-| Number | Decimal (`42`, `3.14`), scientific (`1e2`), **hex** (`0xff`), **binary** (`0b1010`). |
-| String | `"..."` with escapes (`\n`, `\t`, `\u{...}`, etc.). |
-| Boolean | `true`, `false`. |
-| Null | `null`. |
-| Array | `[e1, e2, …]` — elements may use **spread** **`...expr`** to splice another array’s elements (see [§12](#12-objects-and-arrays)). |
-| Object | `{ key: expr, … }` — supports **computed keys** **`[expr]: value`** where grammar allows; **method shorthand** **`name() { … }`** with **`this`**. |
-| Template string | `` `text ${ expr } more` `` — backtick literals with **`${ … }`** holes; expressions are evaluated and coerced like normal concatenation. |
+```fuji
+let n = 42;
+let pi = 3.14;
+let sci = 1e2;
+let hex = 0xff;
+let bits = 0b1010;
+
+let s = "hello\n\t\"quoted\"";
+let u = "pi: \u{03c0}";
+
+let flag = true;
+let empty = null;
+
+let arr = [1, 2, 3];
+let spread = [0, ...arr, 4];
+
+let obj = {
+    x: 1,
+    y: 2,
+    greet() {
+        print("hi from this");
+        print(this.x);
+    }
+};
+
+let tpl = `count = ${ len(arr) }`;
+```
+
+Arrays: **`...expr`** inside **`[ ... ]`** splices another **array** into the literal. Objects support **shorthand methods** with **`this`**. Template strings use backticks and **`${ expr }`**.
 
 ---
 
-## 5. Keywords
-
-From **`internal/lexer/token.go`** (spelling shown lowercase; any case accepted):
-
-`break`, `case`, `continue`, `default`, `delete`, `do`, `else`, `false`, `for`, `func`, `if`, `import`, `in`, `let`, `null`, `of`, `return`, `switch`, `this`, `true`, `typeof`, `while`, `var` (reserved error).
-
-Directive-style tokens:
-
-- **`#include`** — include path string.
-
----
-
-## 6. Operators and punctuation
-
-**Arithmetic / bitwise**
-
-`+` `-` `*` `/` `%` `**` (power), unary `+` `-`,  
-`&` `|` `^` `~` `<<` `>>` `>>>`  
-
-**Comparison**
-
-`<` `<=` `>` `>=` `==` `!=` `===` `!==`
-
-**Logical**
-
-`&&` `||` `!`
-
-**Nullish**
-
-`??` — nullish coalescing: yields the right operand only when the left is **`null`** (not for other falsy values).
-
-**Optional chaining**
-
-`?.` — member (`obj?.prop`) or computed (`obj?.[expr]`); if the receiver is **`null`**, the whole expression is **`null`** without evaluating the property/index.
-
-**Assignment**
-
-`=` `+=` `-=` `*=` `/=` `%=` `&=` `|=` `^=` `<<=` `>>=`
-
-**Increment**
-
-`++` `--` (prefix and postfix where grammar permits)
-
-**Other punctuation**
-
-`( ) { } [ ] , ; . : ?`  
-`=>` — switch/if **expression** arms, lambda-style branches  
-`..` — range expressions  
-`...` — **rest** parameters in function headers (**`...name`**) **and** **spread** inside array literals (**`[...a, b]`**).
-
-**Unary**
-
-`+` `-` `!` — numeric sign (**`+`** is a no-op on the emitted operand except when an integer-only literal subtree is constant-folded) and boolean **`!`**.  
-`typeof` — unary operator (**`typeof x`**, same spelling as JS); behaviour matches the **`type(...)`** builtin (type name string).
-
----
-
-## 7. Types (logical)
-
-Dynamic types at runtime; LLVM uses NaN-boxed **`i64`** for tagged values.
-
-| Kind | Notes |
-|------|--------|
-| Number | IEEE-754 double in C runtime. |
-| String | Byte-oriented UTF-8 storage. |
-| Bool | |
-| Null | |
-| Array | Dense vector with `len`. |
-| Object / table | String-like keys + values; **`len(obj)`** is **entry count**. |
-| Function | Named or **`func(...) { … }`** expressions; closures supported. |
-
----
-
-## 8. Declarations
+## 5. Variables and destructuring
 
 ```fuji
-let name = expr;
-let name;              // null
+let a = 1;
+let b;          // null
 
-let { x, y } = point; // object destructuring: binds fields `x` and `y` from an object expression
+a = a + 1;
+a += 2;
 
-func name(params) {
-    statements
+let point = { x: 10, y: 20 };
+let { x, y } = point;
+```
+
+Object destructuring binds properties by name from the right-hand value.
+
+---
+
+## 6. Operators
+
+**Arithmetic:** `+` `-` `*` `/` `%` `**` (power), unary `+` `-`.
+
+**Bitwise:** `&` `|` `^` `~` `<<` `>>` `>>>` and compounds `&=` `|=` `^=` `<<=` `>>=`.
+
+**Compare:** `<` `<=` `>` `>=` `==` `!=` `===` `!==`.
+
+**Logic:** `&&` `||` `!`.
+
+**Assignment:** `=` `+=` `-=` `*=` `/=` `%=` and the bitwise compounds above. Also **`??=`** (nullish assign) where the grammar allows.
+
+**Increment:** `++` `--` prefix and postfix where permitted.
+
+**Nullish coalescing:** **`a ?? b`** — **`b`** is used only when **`a`** is **`null`** (not when **`a`** is **`0`** or **`""`**).
+
+**Optional chaining:** **`obj?.field`**, **`obj?.[index]`** — if the receiver is **`null`**, the result is **`null`** without touching the property.
+
+**`typeof`:** unary **`typeof x`** — same kind of answer as **`type(x)`** (string name of the type).
+
+```fuji
+let n = null;
+let x = n ?? 10;
+
+let o = null;
+let v = o?.x;
+
+let t = typeof 3;
+```
+
+**Range (for iteration):** **`low..high`** in contexts like **`for (let i of lo..hi)`**.
+
+**Spread / rest:** **`...name`** in function parameters; **`...arr`** in array literals (see §4, §9).
+
+---
+
+## 7. Control flow statements
+
+Braces are **required** on **`if`**, **`else`**, loops, and **`switch`** bodies (no single-line braceless branches).
+
+**`if` / `else`**
+
+```fuji
+if (x > 0) {
+    print("positive");
+} else {
+    print("non-positive");
+}
+```
+
+**`while` / `do`–`while`**
+
+```fuji
+while (n > 0) {
+    n = n - 1;
 }
 
-#include "relative.fuji"
+do {
+    n = n + 1;
+} while (n < 3);
 ```
 
-**Native FFI hint** (special `//` comment parsed by **`parser`**):
+**`for` (C-style)**
 
 ```fuji
-// fuji: extern bindingName symbol_name [arity]
-```
-
-Used with **`let`** / **`func`** declarations that follow (see **`parser_stmt.go`**).
-
----
-
-## 9. Statements
-
-All **`if`**, **`else`**, loops, and **`switch`** bodies require **`{ … }`** braces (no braceless single-statement branches).
-
-| Statement | Forms |
-|-----------|--------|
-| Expression statement | `expr;` |
-| Block | `{ … }` |
-| **`if`** | `if (cond) stmt [else stmt]` — **`if (…) { … } else { … }`** |
-| **`switch`** | `switch (subject) { case value: stmts … default: stmts }` — lowering **chains cases** and **falls through** between **`case`** bodies unless **`break`** ends a branch early (see **`emitSwitchStmt`**). |
-| **`while`** | `while (cond) stmt` |
-| **`do`** **`while`** | `do stmt while (cond);` |
-| **`for` (C-style)** | `for ([let binds [, …]] ; cond ; incr [, …]) stmt` — init may be empty (`for (;;)`) ; **`let`** bindings may repeat with commas ; increments are comma-separated expressions. |
-| **`for`** **`in`** | `for (let key in iterable) stmt` — **keys**: arrays yield **numeric indices** as values ; tables yield keys in **slot order**. |
-| **`for`** **`of`** | `for (let x of iterable) stmt` — **values** in slot order. |
-| **`for`** **`of`** destructuring | `for (let [k, v] of iterable) stmt` — arrays: **`k`** numeric index, **`v`** element ; tables: insertion-order **key** / **value** pairs (`fuji_forof_*` runtime). |
-| **`return`** | `return;` / `return expr;` |
-| **`break`** / **`continue`** | Loop / switch (**`switch`**:** **`break`** exits **`switch`** where emitted). |
-| **`delete`** | **`delete target;`** where **`target`** is a property access (**`obj.field`** or **`obj["key"]`** — dot form parses as bracket access). Removes an **own** key from a table object via **`fuji_object_remove`**. Prefer non-optional access here. |
-
----
-
-## 10. Expressions
-
-- **Assignment** (`=` and compounds), **logical** (`&&` `||`), **binary**, **unary** (including **`typeof expr`**), **postfix** (`++` `--` calls indexing).
-- **Nullish coalescing** **`left ?? right`** — see [§6](#6-operators-and-punctuation).
-- **Optional chaining** on **`?.`** member/index reads — see [§6](#6-operators-and-punctuation).
-- **Call** `f(a,b)` — builtins resolve **case-insensitively**.
-- **Member** `obj.field`
-- **Index** `obj[key]` — arrays, strings, tables.
-- **`import`** expression — **`import("path")`** (see tests / loader).
-- **Array / object / tuple literals**, **range** **`from..to`** where the grammar defines **`RangeExpr`**.
-- **`if`** **expression**: `let x = if (c) { a } else { b };`
-- **`switch`** **expression**: `switch (x) { case 1 => "a" default => "z" }`
-
----
-
-## 11. Functions
-
-```fuji
-func f(a, b = defaultExpr, ...rest) {
-    return expr;
+for (let i = 0; i < 5; i += 1) {
+    print(i);
 }
 
-let g = func(x) { return x + 1; };
+for (;;) {
+    break;
+}
 ```
 
-- **Default parameters** (literal defaults where supported).
-- **Rest parameter**: **`...name`** collects remaining arguments.
-- **Closures** capture **`let`** bindings (**LLVM** path + GC roots).
+**`for`–`in` (keys)**
+
+```fuji
+let obj = { a: 1, b: 2 };
+for (let k in obj) {
+    print(k);
+}
+```
+
+**`for`–`of` (values)**
+
+```fuji
+let arr = [10, 20];
+for (let v of arr) {
+    print(v);
+}
+```
+
+**`for`–`of` with range**
+
+```fuji
+let lo = 0;
+let hi = 3;
+for (let i of lo..hi) {
+    print(i);
+}
+```
+
+**`for`–`of` with pairs**
+
+```fuji
+let obj = { a: 1, b: 2 };
+for (let [k, v] of obj) {
+    print(k, v);
+}
+
+let xs = ["x", "y"];
+for (let [ik, iv] of xs) {
+    print(ik, iv);
+}
+```
+
+**`switch` (statement)** — cases fall through unless you **`break`**.
+
+```fuji
+switch (x) {
+    case 1:
+        print("one");
+        break;
+    case 2:
+        print("two");
+        break;
+    default:
+        print("other");
+}
+```
+
+**`return`**, **`break`**, **`continue`**
+
+```fuji
+func f() {
+    while (true) {
+        break;
+    }
+    return 0;
+}
+```
+
+**`defer`** — runs when the enclosing **`func`** exits, **last deferred runs first** (LIFO).
+
+```fuji
+func work() {
+    defer print("third");
+    defer print("second");
+    defer print("first");
+    print("body");
+}
+```
+
+**`delete`** — removes an **own** property from a table; target must be a property access (not optional chaining).
+
+```fuji
+let t = { a: 1, b: 2 };
+delete t.a;
+```
 
 ---
 
-## 12. Objects and arrays
+## 8. Expression forms (`if`, `switch`, chaining)
 
-- **Object literals**, **dot** / **bracket** access, **`this`** on **`obj.method()`**.
-- **Array literals**: **`[a, ...rest, b]`** — **`...expr`** concatenates **`expr`** into the literal using **`concat`** semantics; **`expr`** should be an **array** (other runtime kinds are unsupported for spread).
-- **Arrays**: **`push`**, **`pop`**, **`length`** as callable-style methods on values (see **`docs/language.md`** / tests).
-- **`len(x)`** — string length, array count, **object entry count**.
-- **Instance methods** on strings and arrays are spelled like JS (**`split`**, **`map`**, …) but identifiers are **case-insensitive**, so **`toUpper`** and **`toupper`** both resolve — see [§17](#17-string-methods) and [§18](#18-array-methods).
+**`if` expression**
 
-Iteration summary:
+```fuji
+let sign = if (x > 0) { 1 } else { -1 };
+```
 
-| Loop | Arrays | Tables / objects |
-|------|--------|-------------------|
-| **`for (let k in x)`** | index keys (`0`… as numbers) | key per slot |
-| **`for (let v of x)`** | elements | values per slot |
-| **`for (let [k,v] of x)`** | index + element | key + value |
+**`switch` expression** — arms use **`=>`**
 
-Order is **runtime slot order** (insertion order for tables).
+```fuji
+let label = switch (kind) {
+    case 1 => "a"
+    default => "z"
+};
+```
+
+**Calls, members, index**
+
+```fuji
+let f = print;
+f("hi");
+
+let o = { x: 1 };
+let a = o.x;
+let b = o["x"];
+let c = arr[0];
+```
+
+**`import` as an expression** — **`import("path")`** (see loader / project layout; many projects prefer **`#include`** for local files).
 
 ---
 
-## 13. Modules and includes
+## 9. Functions and `this`
 
-| Feature | Role |
-|---------|------|
-| **`#include "path.fuji"`** | Textual include; merged into the loaded program bundle. |
-| **`import("path")`** | Expression module load (dynamic import has native limitations; prefer `#include` or static `@` imports for shipped games). |
+**Declaration and function value**
+
+```fuji
+func add(a, b) {
+    return a + b;
+}
+
+let mul = func(a, b) {
+    return a * b;
+};
+```
+
+**Default parameters and rest**
+
+```fuji
+func greet(name = "world") {
+    print("Hello, " + name);
+}
+
+func sum(...xs) {
+    let n = xs.length();
+    return n;
+}
+```
+
+**Closures** capture **`let`** bindings from outer scopes.
+
+**`this`** in a method shorthand is the receiver for **`obj.method()`** calls.
+
+```fuji
+let player = {
+    x: 0,
+    move(dx) {
+        this.x = this.x + dx;
+    }
+};
+player.move(1);
+```
 
 ---
 
-## 14. Native builtins (global calls)
+## 10. Struct types
 
-These builtins are always available in native programs (names here lowercase; source may use any case):
+Structs give **ordered fields** and **`TypeName { field: value, … }`** construction. Fields are readable and assignable like object properties.
 
-**Errors / control**
+```fuji
+struct Point {
+    x,
+    y
+}
 
-| Name | Role |
-|------|------|
-| `ok` | Result success (`argv` convention). |
-| `err` | Result failure. |
-| `panic` | Fatal error / stderr / trace / exit. |
-| `assert` | Assertion helper. |
+let p = Point { x: 3, y: 4 };
 
-**I/O / strings**
+assert(p.x == 3, "struct field x");
+assert(p.y == 4, "struct field y");
 
-| Name | Role |
-|------|------|
-| `print` | Print values (newline-terminated batch). |
-| `format` | Format string helper. |
-| `readFile`, `writeFile`, `appendFile`, `fileExists`, `deleteFile` | Filesystem (**Results** where applicable). |
-| `trace` | Debug trace. |
+p.y = 10;
+assert(p.y == 10, "struct field assign");
+```
 
-**Values**
+See also **`tests/struct_test.fuji`**.
 
-| Name | Role |
-|------|------|
-| `len` | Length / count. |
-| `type`, `typeof` | Type name string (**`typeof x`** unary is equivalent to **`type(x)`**). |
-| `number`, `string` | Coercion / parsing. |
-| `bool` | Bool coercion. |
-| `parseJSON`, `toJSON` | JSON helpers. |
+---
+
+## 11. Enum types
+
+Enums declare **named members**. Each member is a number **`0`**, **`1`**, **`2`**, … in source order. Use **`EnumName.Member`** anywhere a value is expected (including **`switch`** **`case`**).
+
+```fuji
+enum Dir {
+    Up,
+    Down,
+    Left,
+    Right
+}
+
+let u = Dir.Up;
+let r = Dir.Right;
+
+assert(u == 0, "enum Up");
+assert(r == 3, "enum Right");
+
+switch (u) {
+    case Dir.Up:
+        print("case up");
+    default:
+        print("default arm");
+}
+```
+
+See also **`tests/enum_test.fuji`**.
+
+---
+
+## 12. Objects, arrays, and iteration
+
+**Length and indexing**
+
+```fuji
+let a = [10, 20, 30];
+print(len(a));
+print(a[1]);
+a[1] = 99;
+```
+
+**Dynamic array ops** (methods; case-insensitive)
+
+```fuji
+let items = [];
+items.push(1);
+items.pop();
+print(items.length());
+```
+
+**`len`** applies to strings (length), arrays (element count), and plain objects (**entry count**).
+
+**Iteration** — see §7 (`for–in`, `for–of`, pairs, ranges).
+
+Higher-order **`map`**, **`filter`**, **`find`**, **`reduce`** on arrays are supported as methods (§17).
+
+---
+
+## 13. `#include` and `import`
+
+Textual inclusion merges another `.fuji` file into the program bundle:
+
+```fuji
+#include "lib/helpers.fuji"
+#include "../stdlib/vec3.fuji"
+```
+
+Paths are relative to the including file unless your tool resolves **`@`** modules (install / **`FUJI_PATH`**). Expression form **`import("path")`** exists for modular loading; shipped games often standardize on **`#include`** plus **`@`** resolution.
+
+---
+
+## 14. Native FFI hint
+
+A special comment declares a binding to a native symbol for the **`let`** / **`func`** declaration that follows:
+
+```fuji
+// fuji: extern my_sin sin 1
+
+let my_sin;   // arity and symbol wired per comment
+```
+
+Details follow the parser rules for **`NativeDirective`**.
+
+---
+
+## 15. Global builtins
+
+Grouped by role. Names are lowercase here; **`DeltaTime`**, **`readfile`**, etc. work the same.
+
+**Errors / results / control**
+
+```fuji
+let r = ok(value);
+let e = err("msg");
+panic("fatal");
+assert(x == 1, "expected one");
+```
+
+**Printing and formatting**
+
+```fuji
+print("a", 2, true);
+trace("debug");
+let s = format("n={}", 42);
+```
+
+**Lengths and types**
+
+```fuji
+let n = len(arr);
+print(type(x), typeof x);
+print(isNumber(x), isArray(x));
+```
+
+**Coercion and JSON**
+
+```fuji
+let x = number("3.14");
+let s = string(42);
+let b = bool(1);
+
+let parsed = parseJSON("{}");
+let out = toJSON(obj);
+```
+
+**Files**
+
+```fuji
+let text = readFile("in.txt");
+writeFile("out.txt", text);
+appendFile("log.txt", "\n");
+if (fileExists("x.bin")) {
+    deleteFile("x.bin");
+}
+```
 
 **Time**
 
-| Name | Role |
-|------|------|
-| `clock`, `time`, `timestamp`, `programTime`, `sleep` | Wall / program timing (`deltaTime` also registered). |
+```fuji
+let t = time();
+let c = clock();
+let ts = timestamp();
+let p = programTime();
+sleep(0);
+
+let dt = deltaTime();   // framedelta-style hook when wired
+```
 
 **Random**
 
-| Name | Role |
-|------|------|
-| `random`, `randomInt`, `randomChoice`, `randomSeed` | RNG helpers. |
+```fuji
+randomSeed(12345);
+let u = random();
+let i = randomInt(5);           // single arg = [0, max)
+let j = randomInt(0, 100);       // two args = [min, max)
+```
 
-**Math (scalar / argv)**  
+`randomChoice` is registered; check your runtime build for full array support.
 
-These remain **globals** for backward compatibility:  
-`abs`, `sqrt`, `lerp`, `clamp`, `distance`, `angleBetween`, `map`, `pi`, `e`,  
-`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`,  
-`pow`, `exp`, `log`, `log10`,  
-`floor`, `ceil`, `round`, `trunc`, `sign`, `min`, `max`,  
-`smoothstep`, `distanceSq`, `normalize`
+**Math as globals**
 
-The compiler **prepends** a prelude **`let math = { floor: floor, … };`** (names folded to lowercase **`math`**) when your entry file does not already declare **`math`**, so **`math.floor(x)`** works like a namespace.
+```fuji
+let y = sin(0);
+let z = clamp(x, 0, 1);
+let d = distance(0, 0, bx, by);
+let m = lerp(0, 100, 0.5);
+let hypotenuse = hypot(3, 4);
+let w = wrap(angle, low, high);
+```
 
-**Pattern-style substring check**
+**Substring helper (not full regex)**
 
-| Name | Role |
-|------|------|
-| `matches` | **`matches(haystack, pattern)`** — both operands coerced to strings; returns whether **`pattern`** occurs as a **substring** (implemented with **`strstr`**, not full regex). |
+```fuji
+if (matches(body, needle)) {
+    print("found");
+}
+```
 
+**Garbage collection (native / games)**
 
-**Type predicates**
+```fuji
+gc();
+gcCollect();
+gcDisable();
+gcEnable();
+gcFrameStep(budgetMicrosOrSimilar);
+let st = gcStats();
+```
 
-`isNumber`, `isString`, `isBool`, `isNull`, `isArray`, `isObject`, `isFunction`
-
-**GC**
-
-| Name | Role |
-|------|------|
-| `gc` | **`fuji_gc_collect`** |
-| `gcCollect` | Same as **`gc`** (**`fuji_gc_collect`**) |
-| `gcDisable` | **`fuji_gc_disable`** — pause allocator-triggered collections |
-| `gcEnable` | **`fuji_gc_enable`** — resume |
-| `gcFrameStep` | Budgeted incremental step |
-
-If a symbol appears only in low-level runtime headers and not in this list, it is not part of the supported Fuji language surface yet.
-
----
-
-## 15. Truthy / falsy
-
-Runtime **`FUJI_is_truthy`** (conceptually): **`false`**, **`null`**, **`0`**, **`""`** are falsy ; most other values truthy.
+Exact runtime shapes for **`gcStats`** and **`ok`/`err`** follow the argv / native ABI.
 
 ---
 
-## 16. Precedence (summary)
+## 16. String methods
 
-Highest → lowest (approximate): **call, member, index** → unary (`+`, `-`, `!`, `typeof`, …) → `* / %` → **`+` `-` (binary)** → comparisons → **`==` `!=` `===` `!==`** → **`&&`** → **`||`** → **`??`** → assignment.
+Call as **`receiver.method(...)`**. Names are **case-insensitive** (`toUpper` / `toupper`).
 
-Exact rules follow JavaScript-like precedence; use parentheses when unsure.
+| Method | Example shape |
+|--------|----------------|
+| **`split(delimiter)`** | `"a,b".split(",")` — empty delim → one char per segment |
+| **`trim()`** | `"  hi  ".trim()` |
+| **`toUpper()`** / **`toLower()`** | `"Ab".toUpper()` |
+| **`replace(a, b)`** | single replacement |
+| **`replaceAll(a, b)`** | replace every occurrence |
+| **`indexOf(needle)`** | index or **`−1`** |
+| **`includes(needle)`** | substring test |
+| **`slice(start, end)`** | half-open range |
+| **`startsWith`**, **`endsWith`** | prefix / suffix |
 
----
+```fuji
+let s = "  Hello ";
+print(s.trim().toLower());
+print(s.includes("ell"));
+```
 
-## 17. String methods
-
-Called as **`receiver.method(...)`** (names **case-insensitive**). Implemented via **`fuji_string_*`** argv helpers unless noted.
-
-| Method | Arguments | Notes |
-|--------|-----------|--------|
-| **`split`** | `(delimiter)` | Empty delimiter splits into single-character strings. |
-| **`trim`** | `()` | |
-| **`toUpper`** / **`toupper`** | `()` | |
-| **`toLower`** / **`tolower`** | `()` | |
-| **`replace`** | `(search, replacement)` | Single replace (runtime semantics). |
-| **`replaceAll`** | `(search, replacement)` | |
-| **`indexOf`** | `(needle)` | Index or **`-1`**; also defined on arrays (disambiguated at codegen). |
-| **`includes`** | `(needle)` | Substring / element test (arrays vs strings disambiguated at codegen). |
-| **`slice`** | `(start, end)` | Half-open range; **string** vs **array** receiver disambiguated at codegen. |
-| **`startsWith`** | `(prefix)` | |
-| **`endsWith`** | `(suffix)` | |
+**`slice`**, **`indexOf`**, **`includes`** are **overloaded** with arrays—the compiler picks based on receiver type.
 
 ---
 
-## 18. Array methods
+## 17. Array methods
 
-| Method | Arguments | Notes |
-|--------|-----------|--------|
-| **`concat`** | `(…values)` | Variadic **`concat`**. |
-| **`join`** | `(separator)` | **`fuji_array_join`**. |
-| **`map`** | `(callback)` | Callback **`(element)`**; new array. |
-| **`filter`** | `(callback)` | Truthy predicate **`(element)`**. |
-| **`reduce`** | `(callback)` or **`(callback, initial)`** | Callback **`(accumulator, element)`**; without **`initial`**, first element seeds the accumulator (empty array yields **`null`** without **`initial`**). |
-| **`find`** | `(callback)` | First element satisfying predicate, else **`null`**. |
-| **`slice`** | `(start, end)` | Copy range (half-open). |
-| **`sort`** | `()` | In-place sort (runtime). |
-| **`reverse`** | `()` | In-place reverse. |
-| **`indexOf`** | `(item)` | |
-| **`includes`** | `(item)` | |
+| Method | Notes |
+|--------|--------|
+| **`concat(...vals)`** | new array appended |
+| **`push(x)`**, **`pop()`** | mutate tail |
+| **`length()`** | like **`len(arr)`** |
+| **`join(sep)`** | string |
+| **`map(cb)`**, **`filter(cb)`**, **`find(cb)`**, **`reduce(cb [, initial])`** | callback forms per runtime |
+| **`slice(start, end)`** | copy range |
+| **`sort()`**, **`reverse()`** | in place |
+| **`indexOf(item)`**, **`includes(item)`** | search |
 
-Higher-order methods (**`map`**, **`filter`**, **`find`**, **`reduce`**) are lowered in **`internal/codegen/methods.go`** (LLVM loops + indirect calls).
+```fuji
+let a = [1, 2, 3];
+let b = a.map(func(x) { return x * 2; });
+
+let doubled = [];
+for (let item of a) {
+    doubled.push(item * 2);
+}
+```
+
+Higher-order methods are lowered to LLVM loops with indirect calls in the native compiler.
 
 ---
 
-## 19. Templates, math namespace, pattern matching, and operators
+## 18. The `math` object
 
-Summary of surface syntax beyond classic Fuji:
+If you do not shadow the name **`math`**, the compiler injects **`let math = { … };`** so namespace calls work (**`Math`** normalizes to **`math`**):
 
-| Feature | Syntax / notes |
-|---------|----------------|
-| Template literals | `` `Hello, ${ name }!` `` |
-| **`math`** namespace | Prelude **`math`** object (**§14**) shadows **`Math`** spelling because identifiers fold to lowercase. |
-| **Substring “regex”** | Global **`matches(haystack, pattern)`** — literal substring match, not a regex engine (**§14**). |
-| **`typeof`** | Unary **`typeof value`** — same idea as **`type(value)`**. |
-| **`delete`** | **`delete obj.key;`** (**§9**). |
-| Spread | **`[...a, item]`** (**§12**). |
-| Destructuring | **`let { x, y } = expr;`** (**§8**). |
-| Optional chaining | **`obj?.prop`**, **`obj?.[i]`** (**§6**, **§10**). |
-| Nullish coalescing | **`a ?? b`** — only substitutes when **`a`** is **`null`** (**§6**, **§10**). |
+```fuji
+let x = math.floor(3.9);
+let y = math.lerp(0, 100, 0.5);
+let z = math.sqrt(2);
+```
+
+Many members route through **`math.*`** argv fast paths (**`floor`**, **`sin`**, **`lerp`**, **`hypot`**, **`wrap`**, …). Others are duplicated onto **`math`** from globals by the prelude (e.g. **`sqrt`**, **`abs`**, **`pi`**, **`e`**, **`random`**—see **`internal/parser/prelude.go`**). Anything not on the **`math`** value remains available as a **global** call (for example **`distance(...)`**, **`smoothstep(...)`**).
+
+---
+
+## 19. Truthy and precedence
+
+**Truthy / falsy (conceptually):** **`false`**, **`null`**, **`0`**, **`""`** are falsy for conditions; most other values are truthy.
+
+**Precedence (high → low, approximate):** call, member, index → unary (`+`, `-`, `!`, `typeof`) → `* / %` → `+ -` → comparisons → **`==`** family → **`&&`** → **`||`** → **`??`** → assignment. Use parentheses when in doubt.
+
+---
+
+## 20. Keyword index
+
+Spelling lowercase; any case accepted. **`var`** is reserved (**use `let`**).
+
+```
+break case continue default defer delete do else enum false for func if import in
+let null of return struct switch this true typeof while
+```
+
+Directive: **`#include "..."`**.
+
+---
+
+## 21. Canonical builtin names
+
+Registered in **`builtin_register.go`** (and **`builtin_globals.go`** for the resolver). Alphabetical:
+
+`abs`, `acos`, `appendFile`, `approach`, `asin`, `assert`, `atan`, `atan2`, `bool`, `ceil`, `clamp`, `clock`, `cos`, `deltaTime`, `deleteFile`, `distance`, `distanceSq`, `e`, `err`, `exp`, `fileExists`, `floor`, `format`, `fmod`, `gc`, `gcCollect`, `gcDisable`, `gcEnable`, `gcFrameStep`, `gcStats`, `hypot`, `isArray`, `isBool`, `isFunction`, `isNull`, `isNumber`, `isObject`, `isString`, `len`, `lerp`, `log`, `log10`, `map`, `matches`, `max`, `min`, `normalize`, `number`, `ok`, `panic`, `parseJSON`, `pi`, `pow`, `print`, `programTime`, `random`, `randomChoice`, `randomInt`, `randomSeed`, `readFile`, `round`, `sign`, `sin`, `sleep`, `smoothdamp`, `smoothstep`, `sqrt`, `string`, `tan`, `timestamp`, `time`, `toJSON`, `trace`, `trunc`, `type`, `typeof`, `wrap`, `writeFile`
 
 ---
 
 ## See also
 
-- **[docs/user_guide.md](docs/user_guide.md)** — narrative guide.  
-- **[docs/language/syntax.md](docs/language/syntax.md)** — syntax cheat sheet.  
-- **[docs/reference.md](docs/reference.md)** — stdlib / API-oriented notes if present.  
-- **`tests/*.fuji`** — executable examples.
-
----
-
-*Generated as a consolidated catalog; when docs disagree with **`internal/parser`** or **`builtin_register.go`**, trust the implementation.*
+| Where | Purpose |
+|-------|---------|
+| **`docs/commands.md`** | CLI: `run`, `build`, `fmt`, … |
+| **`docs/using-the-language.md`** | Beginner-oriented narrative |
+| **`docs/wrappers.md`** | **`fuji wrap`** |
+| **`docs/language/syntax.md`** | Compact syntax sheet |
+| **`tests/*.fuji`** | Executable behavior examples |
