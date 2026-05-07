@@ -47,7 +47,7 @@ jobs:
         run: go build -trimpath -tags release -ldflags="-s -w" -o fuji-windows-amd64.exe ./cmd/fuji
 
       - name: Build fujiwrap.exe
-        run: go build -trimpath -ldflags="-s -w" -o fujiwrap-windows-amd64.exe ./cmd/wrapgen
+        run: go build -trimpath -tags release -ldflags="-s -w" -o fujiwrap-windows-amd64.exe ./cmd/wrapgen
 
       - name: Test
         run: |
@@ -97,7 +97,7 @@ jobs:
         run: go build -trimpath -tags release -ldflags="-s -w" -o fuji-linux-amd64 ./cmd/fuji
 
       - name: Build fujiwrap
-        run: go build -trimpath -ldflags="-s -w" -o fujiwrap-linux-amd64 ./cmd/wrapgen
+        run: go build -trimpath -tags release -ldflags="-s -w" -o fujiwrap-linux-amd64 ./cmd/wrapgen
 
       - name: Test
         run: |
@@ -147,7 +147,7 @@ jobs:
         run: GOARCH=arm64 go build -trimpath -tags release -ldflags="-s -w" -o fuji-linux-arm64 ./cmd/fuji
 
       - name: Build fujiwrap
-        run: go build -trimpath -ldflags="-s -w" -o fujiwrap-linux-arm64 ./cmd/wrapgen
+        run: go build -trimpath -tags release -ldflags="-s -w" -o fujiwrap-linux-arm64 ./cmd/wrapgen
 
       - name: Test
         run: |
@@ -214,10 +214,10 @@ jobs:
         run: GOARCH=arm64 go build -trimpath -tags release -ldflags="-s -w" -o fuji-darwin-arm64 ./cmd/fuji
 
       - name: Build fujiwrap — arm64 (host)
-        run: go build -trimpath -ldflags="-s -w" -o fujiwrap-darwin-arm64 ./cmd/wrapgen
+        run: go build -trimpath -tags release -ldflags="-s -w" -o fujiwrap-darwin-arm64 ./cmd/wrapgen
 
       - name: Build fujiwrap — amd64 (cross)
-        run: GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o fujiwrap-darwin-amd64 ./cmd/wrapgen
+        run: GOOS=darwin GOARCH=amd64 go build -trimpath -tags release -ldflags="-s -w" -o fujiwrap-darwin-amd64 ./cmd/wrapgen
 
       - name: Test
         run: |

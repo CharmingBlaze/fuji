@@ -1,10 +1,13 @@
 package fujihome
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	fujembed "fuji/internal/embed"
 )
 
 // Resolution order for Clang (and similarly LLC):
@@ -21,6 +24,11 @@ func ClangWithSource() (path, source string) {
 	}
 	if cc := strings.TrimSpace(os.Getenv("CC")); cc != "" {
 		return cc, "CC"
+	}
+	if p, err := fujembed.ClangPath(); err == nil {
+		return p, "embedded"
+	} else if err != nil && !errors.Is(err, fujembed.ErrDevelopmentBuild) {
+		// Keep falling back so local/dev toolchains still work if embedded extraction is unavailable.
 	}
 	dir, err := InstallDir()
 	if err == nil {
@@ -41,6 +49,11 @@ func ClangWithSource() (path, source string) {
 func LLCWithSource() (path, source string) {
 	if s := strings.TrimSpace(os.Getenv("FUJI_LLC")); s != "" {
 		return s, "FUJI_LLC"
+	}
+	if p, err := fujembed.LLCPath(); err == nil {
+		return p, "embedded"
+	} else if err != nil && !errors.Is(err, fujembed.ErrDevelopmentBuild) {
+		// Keep falling back so local/dev toolchains still work if embedded extraction is unavailable.
 	}
 	dir, err := InstallDir()
 	if err == nil {

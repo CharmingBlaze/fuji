@@ -58,6 +58,8 @@ On **Linux / macOS**, mark the file executable after download: `chmod +x fuji-li
 
 **`fujiwrap`** turns C/C++ headers into **`.fuji`** bindings plus a **`wrapper.c`** you link with **`FUJI_NATIVE_SOURCES`**. It ships **inside each SDK zip** and as a loose binary on **[Releases](https://github.com/CharmingBlaze/fuji/releases)** (for example **`fujiwrap-windows-amd64.exe`**, **`fujiwrap-linux-amd64`**, **`fujiwrap-darwin-amd64`**, **`fujiwrap-darwin-arm64`**).
 
+Release `fujiwrap` binaries resolve embedded LLVM tools from the same SDK, so wrapper generation works without installing LLVM separately.
+
 Run **`fuji wrap …`** from the CLI: **`fuji`** looks for **`fujiwrap`** beside itself, then **`wrapgen`**, then **`kujiwrap`**, then **`PATH`**.
 
 ```bash
