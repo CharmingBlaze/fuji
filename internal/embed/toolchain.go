@@ -69,9 +69,9 @@ func platformKey() string {
 func platformFiles() []string {
 	switch runtime.GOOS {
 	case "windows":
-		return []string{"clang.exe", "lld.exe", "libfuji_runtime.a"}
+		return []string{"clang.exe", "llc.exe", "lld.exe", "libfuji_runtime.a"}
 	default:
-		return []string{"clang", "libfuji_runtime.a"}
+		return []string{"clang", "llc", "libfuji_runtime.a"}
 	}
 }
 
@@ -84,6 +84,19 @@ func ClangPath() (string, error) {
 	name := "clang"
 	if runtime.GOOS == "windows" {
 		name = "clang.exe"
+	}
+	return filepath.Join(dir, name), nil
+}
+
+// LLCPath returns the path to the embedded llc binary.
+func LLCPath() (string, error) {
+	dir, err := Extract()
+	if err != nil {
+		return "", err
+	}
+	name := "llc"
+	if runtime.GOOS == "windows" {
+		name = "llc.exe"
 	}
 	return filepath.Join(dir, name), nil
 }

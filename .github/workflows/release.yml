@@ -39,6 +39,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force internal\embed\windows\amd64 | Out-Null
           Copy-Item "C:\Program Files\LLVM\bin\clang.exe" internal\embed\windows\amd64\
+          Copy-Item "C:\Program Files\LLVM\bin\llc.exe" internal\embed\windows\amd64\
           Copy-Item "C:\Program Files\LLVM\bin\lld.exe" internal\embed\windows\amd64\
           Copy-Item runtime\libfuji_runtime.a             internal\embed\windows\amd64\
 
@@ -89,6 +90,7 @@ jobs:
         run: |
           mkdir -p internal/embed/linux/amd64
           cp "$(which clang-18)"         internal/embed/linux/amd64/clang
+          cp "$(which llc-18)"           internal/embed/linux/amd64/llc
           cp runtime/libfuji_runtime.a internal/embed/linux/amd64/
 
       - name: Build fuji
@@ -138,6 +140,7 @@ jobs:
         run: |
           mkdir -p internal/embed/linux/arm64
           cp "$(which clang-18)"         internal/embed/linux/arm64/clang
+          cp "$(which llc-18)"           internal/embed/linux/arm64/llc
           cp runtime/libfuji_runtime.a internal/embed/linux/arm64/
 
       - name: Build fuji
@@ -199,6 +202,8 @@ jobs:
           mkdir -p internal/embed/darwin/arm64
           cp "$(which clang)"                       internal/embed/darwin/amd64/clang
           cp "$(which clang)"                       internal/embed/darwin/arm64/clang
+          cp "$(which llc)"                         internal/embed/darwin/amd64/llc
+          cp "$(which llc)"                         internal/embed/darwin/arm64/llc
           cp runtime/libfuji_runtime_amd64.a      internal/embed/darwin/amd64/libfuji_runtime.a
           cp runtime/libfuji_runtime_arm64.a      internal/embed/darwin/arm64/libfuji_runtime.a
 
@@ -283,7 +288,7 @@ jobs:
             | **`fuji-${{ github.ref_name }}-sdk-darwin-amd64.zip`** | Intel macOS |
             | **`fuji-${{ github.ref_name }}-sdk-darwin-arm64.zip`** | Apple Silicon |
 
-            Extract anywhere; keep **`stdlib/`** next to **`fuji`**. Embedded **Clang** + runtime ship **inside** the `fuji` binary — **no LLVM install** for compiling Fuji programs. Wrapping/linking external C libs still uses your SDKs (see `docs/wrappers.md` in the zip).
+            Extract anywhere; keep **`stdlib/`** next to **`fuji`**. Embedded **Clang + llc + runtime** (and Windows `lld`) ship **inside** the `fuji` binary — **no LLVM install** for compiling Fuji programs. Wrapping/linking external C libs still uses your SDKs (see `docs/wrappers.md` in the zip).
 
             ### Loose binaries only
 

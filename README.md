@@ -18,7 +18,7 @@ The **[language.md](language.md)** page is the compact catalog of syntax, operat
 
 ## Get the compiler (`fuji`)
 
-**Recommended:** download a **release build** from **[GitHub Releases](https://github.com/CharmingBlaze/fuji/releases)** (tags **`v*`**). Those binaries embed **Clang**, **`libfuji_runtime.a`**, and on Windows **lld**, so you can **`fuji build`** / **`fuji run`** without installing LLVM yourself.
+**Recommended:** download a **release build** from **[GitHub Releases](https://github.com/CharmingBlaze/fuji/releases)** (tags **`v*`**). Those binaries embed **Clang**, **llc**, **`libfuji_runtime.a`**, and on Windows **lld**, so you can **`fuji build`** / **`fuji run`** without installing LLVM yourself.
 
 ### Offline SDK zip (Windows, Linux, macOS)
 

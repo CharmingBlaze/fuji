@@ -31,12 +31,16 @@ func setupEmbeddedClangToolchain() (*Toolchain, error) {
 	if err != nil {
 		return nil, errors.Join(ErrIncompleteEmbeddedToolchain, err)
 	}
+	llc, err := fujembed.LLCPath()
+	if err != nil {
+		return nil, errors.Join(ErrIncompleteEmbeddedToolchain, err)
+	}
 	lib, err := fujembed.RuntimeLibPath()
 	if err != nil {
 		return nil, errors.Join(ErrIncompleteEmbeddedToolchain, err)
 	}
 	tc := &Toolchain{
-		LLC:        "",
+		LLC:        llc,
 		LLD:        "",
 		Clang:      clang,
 		RuntimeLib: lib,

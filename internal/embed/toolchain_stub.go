@@ -10,6 +10,10 @@ func ClangPath() (string, error) {
 	return "", ErrDevelopmentBuild
 }
 
+func LLCPath() (string, error) {
+	return "", ErrDevelopmentBuild
+}
+
 func RuntimeLibPath() (string, error) {
 	return "", ErrDevelopmentBuild
 }
