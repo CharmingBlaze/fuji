@@ -20,16 +20,20 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-18 llvm-18 build-essential
+          sudo apt-get install -y clang llvm build-essential
 
       - name: Build C runtime
         run: |
+          CC_BIN="$(command -v clang-18 || command -v clang || command -v gcc)"
+          AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar || command -v ar)"
+          echo "Using CC: $CC_BIN"
+          echo "Using AR: $AR_BIN"
           mkdir -p runtime/obj
-          clang-18 -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj/value.o
-          clang-18 -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj/object.o
-          clang-18 -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -o runtime/obj/gc.o
-          clang-18 -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj/fuji_runtime.o
-          llvm-ar-18 rcs runtime/libfuji_runtime.a runtime/obj/value.o runtime/obj/object.o runtime/obj/gc.o runtime/obj/fuji_runtime.o
+          "$CC_BIN" -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj/value.o
+          "$CC_BIN" -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj/object.o
+          "$CC_BIN" -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -o runtime/obj/gc.o
+          "$CC_BIN" -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj/fuji_runtime.o
+          "$AR_BIN" rcs runtime/libfuji_runtime.a runtime/obj/value.o runtime/obj/object.o runtime/obj/gc.o runtime/obj/fuji_runtime.o
 
       - name: Go vet
         run: go vet ./...

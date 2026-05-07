@@ -93,7 +93,7 @@ Wrapper tool
 ------------
   ./fuji wrap --help          (same as ./fujiwrap … when both sit here)
 
-Embedded toolchain (release builds): Clang + runtime are bundled inside $(printf '%s' "$fj_out") — no separate LLVM download for Fuji itself.
+Embedded toolchain (release builds): Clang + llc + runtime are bundled inside $(printf '%s' "$fj_out") — no separate LLVM download for Fuji itself.
 Linking third-party native libs still uses your own headers/libs (see docs/wrappers.md).
 
 EOF
