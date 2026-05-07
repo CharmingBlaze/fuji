@@ -1,6 +1,10 @@
 # Makefile for Fuji Runtime Library
 # Use a POSIX shell so `mkdir -p` / `rm -rf` work when GNU Make runs on Windows (cmd.exe does not).
+ifeq ($(OS),Windows_NT)
 SHELL := sh.exe
+else
+SHELL := sh
+endif
 .SHELLFLAGS := -ec
 
 CC = gcc
