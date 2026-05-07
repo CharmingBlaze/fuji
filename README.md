@@ -92,7 +92,9 @@ See **`fuji help`** for the full command list (`disasm`, `paths`, `doctor`, `bun
 | Document | Contents |
 |----------|----------|
 | [docs/guides/getting-started.md](docs/guides/getting-started.md) | Beginner onboarding (release binary path only) |
-| [language.md](language.md) | Keywords, operators, statements, builtins |
+| [docs/commands.md](docs/commands.md) | Every **`fuji`** CLI command with usage and examples |
+| [docs/using-the-language.md](docs/using-the-language.md) | Full language tutorial: how to write and use every major feature |
+| [language.md](language.md) | Keywords, operators, statements, builtins (exhaustive catalog) |
 | [docs/user_guide.md](docs/user_guide.md) | Longer guide to writing Fuji |
 | [docs/reference.md](docs/reference.md) | Stdlib and builtins |
 | [docs/language.md](docs/language.md) | Language specification |

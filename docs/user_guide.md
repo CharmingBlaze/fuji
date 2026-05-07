@@ -1,5 +1,8 @@
 # The Fuji Language Guide
 
+> **Start here for an accurate, native-only guide:** [using-the-language.md](using-the-language.md) and the exhaustive catalog [language.md](../language.md).  
+> This file is a long-form tutorial; some early sections still mention older VM-era names (`kuji`, `repl`) — treat **`fuji run`** / **`fuji build`** and the docs above as the source of truth.
+
 A complete, teachable reference for the Fuji programming language — from first
 principles through advanced features, standard library, and native compilation.
 

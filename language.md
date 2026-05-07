@@ -4,6 +4,7 @@ This page is the practical, user-facing catalog of Fuji language features and bu
 
 Use it as the "what can I write?" reference, then pair it with:
 
+- `docs/using-the-language.md` for a full beginner-oriented language + usage guide
 - `docs/guides/getting-started.md` for setup + first project flow
 - `docs/user_guide.md` for walkthroughs and examples
 - `docs/wrappers.md` for C/C++ integration with `fujiwrap`
@@ -250,14 +251,14 @@ Order is **runtime slot order** (insertion order for tables).
 
 | Feature | Role |
 |---------|------|
-| **`#include "path.fuji"`** | Textual include ; participates in **`parser` bundle** loading. |
-| **`import("path")`** | Expression module load (see **`parser`** / **`loader`**). |
+| **`#include "path.fuji"`** | Textual include; merged into the loaded program bundle. |
+| **`import("path")`** | Expression module load (dynamic import has native limitations; prefer `#include` or static `@` imports for shipped games). |
 
 ---
 
 ## 14. Native builtins (global calls)
 
-Registered in **`internal/codegen/builtin_register.go`** (names here lowercase; source may use any case):
+These builtins are always available in native programs (names here lowercase; source may use any case):
 
 **Errors / control**
 
@@ -308,7 +309,7 @@ These remain **globals** for backward compatibility:
 `floor`, `ceil`, `round`, `trunc`, `sign`, `min`, `max`,  
 `smoothstep`, `distanceSq`, `normalize`
 
-The compiler **prepends** a prelude **`let math = { floor: floor, … };`** (names folded to lowercase **`math`**) when your entry file does not already declare **`math`**, so **`math.floor(x)`** works like a namespace (see [`internal/parser/prelude.go`](internal/parser/prelude.go)).
+The compiler **prepends** a prelude **`let math = { floor: floor, … };`** (names folded to lowercase **`math`**) when your entry file does not already declare **`math`**, so **`math.floor(x)`** works like a namespace.
 
 **Pattern-style substring check**
 
@@ -331,7 +332,7 @@ The compiler **prepends** a prelude **`let math = { floor: floor, … };`** (nam
 | `gcEnable` | **`fuji_gc_enable`** — resume |
 | `gcFrameStep` | Budgeted incremental step |
 
-Symbols exist in **`runtime.go`** declarations without a Fuji **`registerBuiltinFuncs`** entry until wired (example: **`fuji_wall_time`**). Treat **`builtin_register.go`** as the **user-visible native surface**.
+If a symbol appears only in low-level runtime headers and not in this list, it is not part of the supported Fuji language surface yet.
 
 ---
 
@@ -345,7 +346,7 @@ Runtime **`FUJI_is_truthy`** (conceptually): **`false`**, **`null`**, **`0`**, *
 
 Highest → lowest (approximate): **call, member, index** → unary (`+`, `-`, `!`, `typeof`, …) → `* / %` → **`+` `-` (binary)** → comparisons → **`==` `!=` `===` `!==`** → **`&&`** → **`||`** → **`??`** → assignment.
 
-Exact rules: **`internal/parser/parser_expr.go`** (Pratt parsing).
+Exact rules follow JavaScript-like precedence; use parentheses when unsure.
 
 ---
 

@@ -208,20 +208,11 @@ COMMANDS
 OPTIONS
   -o <path>   Output executable (build) or output directory (bundle)
 
-BUILD FROM SOURCE (optional)
-  From the repo root with GNU Make; on Windows use mingw32-make when the default make is not GNU make:
-
-    make                # runtime/libfuji_runtime.a, bin/fuji, bin/fujiwrap, then go test
-    make runtime-lib    # only the static runtime library
-    make raylib-lib     # optional: build Raylib into third_party/raylib_static/stage/ (CMake + raylib/)
+MAINTAINER BUILD (not for end users)
+  Building Fuji from source is for contributors only. See CONTRIBUTING.md in the repository.
 
 C / C++ LIBRARIES (readable .fuji wrappers)
-  Parse C headers and emit .fuji bindings plus wrapper.c for the Fuji runtime (Value / fuji_*).
-  Library authors build fujiwrap once with Go (or use 'make fujiwrap'):
-
-    go build -o fujiwrap%s ./cmd/wrapgen
-
-  Generate bindings from headers:
+  Use the fujiwrap binary from Releases (or next to fuji). Generate bindings from headers:
 
     fuji wrap -name mylib -headers ./include/mylib.h -out ./wrappers/mylib
 
@@ -231,7 +222,7 @@ C / C++ LIBRARIES (readable .fuji wrappers)
     set FUJI_LINKFLAGS=-I.\include -L.\lib -lmylib
     fuji bundle game.fuji -o dist\mygame
 
-  See WRAPPERS.md and DISTRIBUTION_GUIDE.md.
+  See docs/wrappers.md and docs/distribution.md.
 
 ENVIRONMENT
   FUJI_CLANG / CC     Clang for native builds (optional if you ship llvm/ next to fuji; see below)
@@ -278,8 +269,8 @@ func runWrapgen(args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
 		fmt.Println("fuji wrap — runs fujiwrap (header → .fuji + wrapper.c). Example:")
 		fmt.Println("  fuji wrap -name mylib -headers ./include/mylib.h -out ./wrappers/mylib")
-		fmt.Printf("\nBuild fujiwrap and place it next to fuji:\n  go build -o fujiwrap%s ./cmd/wrapgen\n", exeExt())
-		fmt.Printf("(legacy names wrapgen / kujiwrap are still discovered if present.)\n")
+		fmt.Println("\nInstall fujiwrap from the same GitHub Releases page as fuji, or place fujiwrap next to fuji.")
+		fmt.Println("(Legacy names wrapgen / kujiwrap are still discovered if present.)")
 		return nil
 	}
 	names := []string{
@@ -301,7 +292,7 @@ func runWrapgen(args []string) error {
 			return runPassthrough(p, args)
 		}
 	}
-	return fmt.Errorf("fujiwrap not found (looked next to fuji and on PATH).\nBuild once: go build -o fujiwrap%s ./cmd/wrapgen\n(legacy binary name wrapgen also works.)", exeExt())
+	return fmt.Errorf("fujiwrap not found (looked next to fuji and on PATH).\nDownload fujiwrap from GitHub Releases (same page as fuji), or add it next to this executable.\n(legacy binary name wrapgen also works.)")
 }
 
 func runPassthrough(path string, args []string) error {

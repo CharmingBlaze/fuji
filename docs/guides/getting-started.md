@@ -56,6 +56,8 @@ fuji watch game.fuji
 fuji bundle game.fuji -o dist/MyGame
 ```
 
+For **every** command, flags, and copy-paste examples, see **[docs/commands.md](../commands.md)** (or run **`fuji help`**).
+
 ---
 
 ## 4) Using the wrapper tool (`fujiwrap`)
@@ -78,6 +80,7 @@ Full details: `docs/wrappers.md`.
 
 ## 5) Learn the whole language
 
+- `docs/using-the-language.md` — **start here**: how to use the language end-to-end (syntax, types, control flow, modules, builtins, stdlib)
 - `language.md` — complete language catalog (operators, statements, builtins, methods)
 - `docs/user_guide.md` — practical beginner/intermediate walkthrough
 - `docs/reference.md` — builtins and runtime-facing APIs
