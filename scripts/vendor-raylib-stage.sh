@@ -121,6 +121,21 @@ EOF
 
 for slug in windows-amd64 linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
   write_stage "$slug"
+  stage="$OUT_BASE/${slug}/third_party/raylib_static/stage"
+  case "$slug" in
+    windows-amd64)
+      [[ -f "$stage/include/raylib.h" ]] || { echo "missing raylib.h for $slug" >&2; exit 1; }
+      [[ -f "$stage/lib/libraylib.a" ]] || { echo "missing libraylib.a for $slug" >&2; exit 1; }
+      [[ -f "$stage/lib/raylib.dll" ]] || { echo "missing raylib.dll for $slug" >&2; exit 1; }
+      ;;
+    linux-amd64|darwin-amd64|darwin-arm64)
+      [[ -f "$stage/include/raylib.h" ]] || { echo "missing raylib.h for $slug" >&2; exit 1; }
+      [[ -f "$stage/lib/libraylib.a" ]] || { echo "missing libraylib.a for $slug" >&2; exit 1; }
+      ;;
+    linux-arm64)
+      [[ -f "$stage/README-Fuji.txt" ]] || { echo "missing README-Fuji.txt for $slug" >&2; exit 1; }
+      ;;
+  esac
   echo "ok: $slug -> $OUT_BASE/$slug/third_party/raylib_static/stage"
 done
 

@@ -27,6 +27,34 @@ require_file() {
   fi
 }
 
+require_raylib_stage() {
+  local slug="$1"
+  local stage_dir="$2"
+  if [[ ! -d "$stage_dir" ]]; then
+    echo "package-release-sdk: missing raylib stage for ${slug}: $stage_dir" >&2
+    echo "run scripts/vendor-raylib-stage.sh and set RAYLIB_VENDOR_ROOT before packaging" >&2
+    exit 1
+  fi
+  case "$slug" in
+    windows-amd64)
+      require_file "$stage_dir/include/raylib.h"
+      require_file "$stage_dir/lib/libraylib.a"
+      require_file "$stage_dir/lib/raylib.dll"
+      ;;
+    linux-amd64|darwin-amd64|darwin-arm64)
+      require_file "$stage_dir/include/raylib.h"
+      require_file "$stage_dir/lib/libraylib.a"
+      ;;
+    linux-arm64)
+      require_file "$stage_dir/README-Fuji.txt"
+      ;;
+    *)
+      echo "package-release-sdk: unknown slug in raylib stage check: $slug" >&2
+      exit 1
+      ;;
+  esac
+}
+
 zip_sdk() {
   local slug="$1"          # windows-amd64
   local fj_src="$2"        # source path to compiler binary
@@ -68,11 +96,14 @@ zip_sdk() {
   if [[ -z "$rv_root" ]] && [[ -d "$REPO_ROOT/.raylib-vendor" ]]; then
     rv_root="$REPO_ROOT/.raylib-vendor"
   fi
-  if [[ -n "$rv_root" ]] && [[ -d "$rv_root/$slug/third_party/raylib_static/stage" ]]; then
-    mkdir -p "$stage/$root_name/third_party/raylib_static"
-    cp -a "$rv_root/$slug/third_party/raylib_static/stage" \
-      "$stage/$root_name/third_party/raylib_static/stage"
+  local raylib_stage="$rv_root/$slug/third_party/raylib_static/stage"
+  if [[ -z "$rv_root" ]]; then
+    echo "package-release-sdk: RAYLIB_VENDOR_ROOT is not set and .raylib-vendor is missing; refusing to build incomplete SDKs" >&2
+    exit 1
   fi
+  require_raylib_stage "$slug" "$raylib_stage"
+  mkdir -p "$stage/$root_name/third_party/raylib_static"
+  cp -a "$raylib_stage" "$stage/$root_name/third_party/raylib_static/stage"
 
   # Small runnable corpus (optional; helps offline users).
   if [[ -d "$REPO_ROOT/examples" ]]; then
