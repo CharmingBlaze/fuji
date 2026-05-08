@@ -130,7 +130,7 @@ Default output directory is **`dist`** if you omit **`-o`**.
 fuji bundle game.fuji -o dist/MyGame
 ```
 
-Copy extra files (DLLs, assets) with the **`FUJI_BUNDLE_FILES`** environment variable (space-separated paths). See **`fuji help`** for the exact format on your OS.
+Copy extra files and directories (DLLs, assets folders) with **`FUJI_BUNDLE_FILES`**. Use your OS path-list separator (`;` on Windows, `:` on Linux/macOS), or quote paths that contain spaces.
 
 ---
 
@@ -198,7 +198,7 @@ fuji --help
 | **`FUJI_WRAPPERS`** | Pre-built wrapper **`.fuji`** trees |
 | **`FUJI_NATIVE_SOURCES`** | C/C++ sources linked into your app (e.g. **`wrapper.c`**) |
 | **`FUJI_LINKFLAGS`** | Extra linker flags (**`-l`**, **`-L`**, frameworks, …) |
-| **`FUJI_BUNDLE_FILES`** | Extra files copied into **`fuji bundle`** output |
+| **`FUJI_BUNDLE_FILES`** | Extra files or directories copied into **`fuji bundle`** output |
 
 See **`fuji help`** for the complete list and notes.
  Essential Commands for Game/App Development

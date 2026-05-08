@@ -163,7 +163,9 @@ void free_object(Obj* obj) {
                 gc_free(table->values, (size_t)table->capacity * sizeof(Value));
             }
             if (table->hashes != NULL) {
-                gc_free(table->hashes, (size_t)table->capacity * sizeof(uint32_t));
+                // hashes is allocated with calloc (not gc_alloc), so release it with raw free
+                // to avoid corrupting GC bytes_allocated accounting.
+                free(table->hashes);
             }
             gc_free(table, sizeof(ObjTable));
             break;

@@ -234,7 +234,7 @@ ENVIRONMENT
   FUJI_LINKFLAGS      Extra linker flags (-lraylib, -L..., frameworks, etc.)
   FUJI_RAYLIB_STAGE   Override path to third_party/.../stage (include/ + lib/) for vendored raylib
   FUJI_USE_VENDORED_RAYLIB  If third_party/raylib_static/stage exists (cwd or next to fuji), prepends -I and links libraylib.a; set 0/false to skip
-  FUJI_BUNDLE_FILES   Extra files copied into the bundle (DLLs, assets)
+  FUJI_BUNDLE_FILES   Extra files/dirs copied into the bundle (path-list or quoted paths with spaces)
   FUJI_SKIP_TOOLCHAIN_EXTRACT  If set, never unpack the embedded toolchain archive (dev/CI)
   FUJI_DEBUG_IR       If set, writes .FUJI_build/main.ll in addition to piping IR to clang
 
@@ -355,114 +355,6 @@ func buildFileOpts(path string, output string, opts nativebuild.BuildOptions) er
 		return err
 	}
 	return nativebuild.BuildWithOptions(bundle, output, filepath.Base(path), func(s string) { fmt.Print(s) }, opts)
-}
-
-func bundleFile(path string, outputDir string) error {
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return err
-	}
-	appName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	exeName := appName
-	if runtime.GOOS == "windows" {
-		exeName += ".exe"
-	}
-
-	fmt.Printf("Bundling %s -> %s/\n\n", filepath.Base(path), outputDir)
-
-	exePath := filepath.Join(outputDir, exeName)
-	if err := buildFileOpts(path, exePath, nativebuild.BuildOptions{}); err != nil {
-		return err
-	}
-	if err := writeBundleLauncher(outputDir, exeName); err != nil {
-		return err
-	}
-	if err := writeBundleReadme(outputDir, appName, exeName); err != nil {
-		return err
-	}
-	if err := writeBundleInfo(outputDir, path); err != nil {
-		return err
-	}
-	if err := copyBundleExtraFiles(outputDir); err != nil {
-		return err
-	}
-
-	fmt.Println()
-	fmt.Printf("  Bundle ready: %s\n", outputDir)
-	fmt.Printf("  Share the whole folder - friends only run %s (or the launcher script).\n", exeName)
-	fmt.Printf("  No Go, Python, or C++ needed on their machine.\n")
-	return nil
-}
-
-func writeBundleLauncher(outputDir, exeName string) error {
-	if runtime.GOOS == "windows" {
-		content := fmt.Sprintf("@echo off\r\n\"%%~dp0%s\" %%*\r\n", exeName)
-		return os.WriteFile(filepath.Join(outputDir, "run.bat"), []byte(content), 0644)
-	}
-	content := fmt.Sprintf("#!/bin/sh\nDIR=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\"\n\"$DIR/%s\" \"$@\"\n", exeName)
-	return os.WriteFile(filepath.Join(outputDir, "run.sh"), []byte(content), 0755)
-}
-
-func writeBundleReadme(outputDir, appName, exeName string) error {
-	launcher := "run.bat"
-	if runtime.GOOS != "windows" {
-		launcher = "run.sh"
-	}
-	lines := []string{
-		"# " + appName,
-		"",
-		"Thanks for trying this app. It was built with **Fuji** - you do not need to install Go, Python, or a C++ compiler.",
-		"",
-		"## Run",
-		"",
-		"- **Windows:** double-click `" + launcher + "` or run `" + exeName + "`.",
-		"- **macOS / Linux:** in a terminal: `./" + launcher + "` or `./" + exeName + "`",
-		"",
-		"Keep any DLLs, `.dylib`s, or `assets` folder **in the same folder** as the executable when you move or zip this directory.",
-		"",
-		"## Files",
-		"",
-		"| File | What it is |",
-		"|------|------------|",
-		"| `" + exeName + "` | Your application. |",
-		"| `" + launcher + "` | Optional double-click launcher. |",
-		"| `README.md` | This file. |",
-		"| `bundle-info.txt` | Build notes for developers. |",
-		"",
-	}
-	return os.WriteFile(filepath.Join(outputDir, "README.md"), []byte(strings.Join(lines, "\n")), 0644)
-}
-
-func writeBundleInfo(outputDir, sourcePath string) error {
-	lines := []string{
-		"# Fuji bundle metadata",
-		"source=" + sourcePath,
-		"native_sources=" + os.Getenv("FUJI_NATIVE_SOURCES"),
-		"linkflags=" + os.Getenv("FUJI_LINKFLAGS"),
-		"FUJI_version=" + version,
-	}
-	return os.WriteFile(filepath.Join(outputDir, "bundle-info.txt"), []byte(strings.Join(lines, "\n")+"\n"), 0644)
-}
-
-func copyBundleExtraFiles(outputDir string) error {
-	for _, item := range strings.Fields(os.Getenv("FUJI_BUNDLE_FILES")) {
-		dst := filepath.Join(outputDir, filepath.Base(item))
-		if err := copyFile(item, dst); err != nil {
-			return fmt.Errorf("copy bundle file %s: %w", item, err)
-		}
-		fmt.Printf("  copied: %s\n", dst)
-	}
-	return nil
-}
-
-func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0644)
 }
 
 // printResolvedPaths prints install-relative toolchain and stdlib resolution for

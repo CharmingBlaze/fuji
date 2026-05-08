@@ -16,6 +16,7 @@ import (
 // Entries are invalidated when Stat mtime differs. Overlay sources are never cached.
 type parseCacheEntry struct {
 	modTimeNanos int64
+	sizeBytes    int64
 	prog         *Program
 }
 
@@ -109,7 +110,7 @@ func loadModule(path string, bundle *ProgramBundle, visited map[string]bool, ove
 			parseCacheMu.Unlock()
 
 			fi, statErr := os.Stat(path)
-			if statErr == nil && cached && e.modTimeNanos == fi.ModTime().UnixNano() {
+			if statErr == nil && cached && e.modTimeNanos == fi.ModTime().UnixNano() && e.sizeBytes == fi.Size() {
 				bundle.Modules[path] = e.prog
 				return loadModuleImports(path, e.prog, bundle, visited, overlays)
 			}
@@ -131,7 +132,11 @@ func loadModule(path string, bundle *ProgramBundle, visited map[string]bool, ove
 	if !hasOverlayEntry {
 		if fi, err := os.Stat(path); err == nil {
 			parseCacheMu.Lock()
-			parseCache[path] = parseCacheEntry{modTimeNanos: fi.ModTime().UnixNano(), prog: prog}
+			parseCache[path] = parseCacheEntry{
+				modTimeNanos: fi.ModTime().UnixNano(),
+				sizeBytes:    fi.Size(),
+				prog:         prog,
+			}
 			parseCacheMu.Unlock()
 		}
 	}
@@ -148,6 +153,19 @@ func findImports(node Node, imports *[]string) {
 	case *IncludeDecl:
 		rel := strings.Trim(n.Path.Lexeme, `"'`)
 		*imports = append(*imports, rel)
+	case *FuncDecl:
+		for _, p := range n.Params {
+			if p.Default != nil {
+				findImports(p.Default, imports)
+			}
+		}
+		if n.Body != nil {
+			findImports(n.Body, imports)
+		}
+	case *StructDecl:
+		// no nested expressions
+	case *EnumDecl:
+		// no nested expressions
 	case *LetDecl:
 		if n.Init != nil {
 			findImports(n.Init, imports)
@@ -156,11 +174,227 @@ func findImports(node Node, imports *[]string) {
 		*imports = append(*imports, strings.Trim(n.Path.Lexeme, "\""))
 	case *ExpressionStmt:
 		findImports(n.Expr, imports)
+	case *ReturnStmt:
+		if n.Value != nil {
+			findImports(n.Value, imports)
+		}
+	case *DeferStmt:
+		if n.Expr != nil {
+			findImports(n.Expr, imports)
+		}
 	case *BlockStmt:
 		for _, s := range n.Declarations {
 			findImports(s, imports)
 		}
-		// ... add other nodes as needed, or use a general walker.
+	case *IfStmt:
+		if n.Condition != nil {
+			findImports(n.Condition, imports)
+		}
+		if n.Then != nil {
+			findImports(n.Then, imports)
+		}
+		if n.Else != nil {
+			findImports(n.Else, imports)
+		}
+	case *WhileStmt:
+		if n.Condition != nil {
+			findImports(n.Condition, imports)
+		}
+		if n.Body != nil {
+			findImports(n.Body, imports)
+		}
+	case *PrefixExpr:
+		if n.Right != nil {
+			findImports(n.Right, imports)
+		}
+	case *InfixExpr:
+		if n.Left != nil {
+			findImports(n.Left, imports)
+		}
+		if n.Right != nil {
+			findImports(n.Right, imports)
+		}
+	case *CallExpr:
+		if n.Function != nil {
+			findImports(n.Function, imports)
+		}
+		for _, a := range n.Arguments {
+			findImports(a, imports)
+		}
+	case *AssignExpr:
+		if n.Left != nil {
+			findImports(n.Left, imports)
+		}
+		if n.Value != nil {
+			findImports(n.Value, imports)
+		}
+	case *LogicalExpr:
+		if n.Left != nil {
+			findImports(n.Left, imports)
+		}
+		if n.Right != nil {
+			findImports(n.Right, imports)
+		}
+	case *ThisExpr:
+		// leaf
+	case *GroupingExpr:
+		if n.Expr != nil {
+			findImports(n.Expr, imports)
+		}
+	case *UpdateExpr:
+		if n.Operand != nil {
+			findImports(n.Operand, imports)
+		}
+	case *RangeExpr:
+		if n.From != nil {
+			findImports(n.From, imports)
+		}
+		if n.To != nil {
+			findImports(n.To, imports)
+		}
+	case *TemplateExpr:
+		for _, p := range n.Parts {
+			findImports(p, imports)
+		}
+	case *SpreadExpr:
+		if n.Expr != nil {
+			findImports(n.Expr, imports)
+		}
+	case *TupleExpr:
+		for _, e := range n.Elements {
+			findImports(e, imports)
+		}
+	case *IfExpr:
+		if n.Condition != nil {
+			findImports(n.Condition, imports)
+		}
+		if n.Then != nil {
+			findImports(n.Then, imports)
+		}
+		if n.Else != nil {
+			findImports(n.Else, imports)
+		}
+	case *SwitchExpr:
+		if n.Subject != nil {
+			findImports(n.Subject, imports)
+		}
+		for _, c := range n.Cases {
+			if c.Value != nil {
+				findImports(c.Value, imports)
+			}
+			if c.Body != nil {
+				findImports(c.Body, imports)
+			}
+		}
+		if n.Default != nil {
+			findImports(n.Default, imports)
+		}
+	case *SliceExpr:
+		if n.Object != nil {
+			findImports(n.Object, imports)
+		}
+		if n.Start != nil {
+			findImports(n.Start, imports)
+		}
+		if n.End != nil {
+			findImports(n.End, imports)
+		}
+	case *TernaryExpr:
+		if n.Condition != nil {
+			findImports(n.Condition, imports)
+		}
+		if n.Then != nil {
+			findImports(n.Then, imports)
+		}
+		if n.Else != nil {
+			findImports(n.Else, imports)
+		}
+	case *ArrayExpr:
+		for _, e := range n.Elements {
+			findImports(e, imports)
+		}
+	case *ObjectExpr:
+		for _, e := range n.Values {
+			findImports(e, imports)
+		}
+		for _, e := range n.ComputedKeys {
+			findImports(e, imports)
+		}
+	case *FuncExpr:
+		for _, p := range n.Params {
+			if p.Default != nil {
+				findImports(p.Default, imports)
+			}
+		}
+		if n.Body != nil {
+			findImports(n.Body, imports)
+		}
+	case *IndexExpr:
+		if n.Object != nil {
+			findImports(n.Object, imports)
+		}
+		if n.Index != nil {
+			findImports(n.Index, imports)
+		}
+	case *ForStmt:
+		for _, init := range n.Inits {
+			findImports(init, imports)
+		}
+		if n.Condition != nil {
+			findImports(n.Condition, imports)
+		}
+		for _, inc := range n.Increments {
+			findImports(inc, imports)
+		}
+		if n.Body != nil {
+			findImports(n.Body, imports)
+		}
+	case *ForInStmt:
+		if n.Iterable != nil {
+			findImports(n.Iterable, imports)
+		}
+		if n.Body != nil {
+			findImports(n.Body, imports)
+		}
+	case *BreakStmt:
+		// leaf
+	case *ContinueStmt:
+		// leaf
+	case *DeleteStmt:
+		if n.Target != nil {
+			findImports(n.Target, imports)
+		}
+	case *SwitchStmt:
+		if n.Subject != nil {
+			findImports(n.Subject, imports)
+		}
+		for _, c := range n.Cases {
+			if c.Value != nil {
+				findImports(c.Value, imports)
+			}
+			for _, d := range c.Body {
+				findImports(d, imports)
+			}
+		}
+		for _, d := range n.Default {
+			findImports(d, imports)
+		}
+	case *DoWhileStmt:
+		if n.Body != nil {
+			findImports(n.Body, imports)
+		}
+		if n.Condition != nil {
+			findImports(n.Condition, imports)
+		}
+	case *ForOfStmt:
+		if n.Iterable != nil {
+			findImports(n.Iterable, imports)
+		}
+		if n.Body != nil {
+			findImports(n.Body, imports)
+		}
+	case *IdentifierExpr, *LiteralExpr:
+		// leaf nodes
 	}
 }
 

@@ -97,11 +97,17 @@ Use `fuji bundle` to create a clean folder that contains the executable, launche
 .\fuji.exe bundle .\game.fuji -o .\dist\game
 ```
 
-Bundle extra files such as assets, DLLs, licenses, or config files:
+Bundle extra files or directories such as assets, DLLs, licenses, or config files:
 
 ```powershell
-$env:FUJI_BUNDLE_FILES = '.\raylib.dll .\LICENSE.txt .\assets\logo.png'
+# Windows path-list style (;)
+$env:FUJI_BUNDLE_FILES = '.\raylib.dll;.\LICENSE.txt;.\assets'
 .\fuji.exe bundle .\game.fuji -o .\dist\game
+```
+
+```bash
+# Linux/macOS path-list style (:)
+FUJI_BUNDLE_FILES="./libfoo.so:./assets:./LICENSE.txt" fuji bundle game.fuji -o dist/game
 ```
 
 The output folder contains:
@@ -112,7 +118,7 @@ The output folder contains:
 | `run.bat` | Windows launcher. |
 | `README.md` | User-facing run instructions. |
 | `bundle-info.txt` | Build metadata and native link settings. |
-| Extra files | Any files listed in `FUJI_BUNDLE_FILES`. |
+| Extra files | Any files or directories listed in `FUJI_BUNDLE_FILES`. |
 
 ## 6. Ship a wrapper package
 
