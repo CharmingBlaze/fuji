@@ -15,13 +15,13 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
 
       - name: Install LLVM
-        run: choco install llvm --version=18.1.8 -y
+        run: choco install llvm -y
 
       - name: Add LLVM to PATH
         run: echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
@@ -67,30 +67,34 @@ jobs:
   linux-amd64:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
 
       - name: Install LLVM
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-18 llvm-18
+          sudo apt-get install -y clang llvm
 
       - name: Build C runtime
         run: |
+          CLANG_BIN="$(command -v clang-18 || command -v clang)"
+          LLVM_AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar)"
           mkdir -p runtime/obj_linux
-          clang-18 -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/value.o
-          clang-18 -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/object.o
-          clang-18 -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/gc.o
-          clang-18 -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/fuji_runtime.o
-          llvm-ar-18 rcs runtime/libfuji_runtime.a runtime/obj_linux/*.o
+          "$CLANG_BIN" -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/value.o
+          "$CLANG_BIN" -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/object.o
+          "$CLANG_BIN" -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/gc.o
+          "$CLANG_BIN" -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/fuji_runtime.o
+          "$LLVM_AR_BIN" rcs runtime/libfuji_runtime.a runtime/obj_linux/*.o
 
       - name: Populate embed/linux/amd64
         run: |
+          CLANG_BIN="$(command -v clang-18 || command -v clang)"
+          LLC_BIN="$(command -v llc-18 || command -v llc)"
           mkdir -p internal/embed/linux/amd64
-          cp "$(which clang-18)"         internal/embed/linux/amd64/clang
-          cp "$(which llc-18)"           internal/embed/linux/amd64/llc
+          cp "$CLANG_BIN"                internal/embed/linux/amd64/clang
+          cp "$LLC_BIN"                  internal/embed/linux/amd64/llc
           cp runtime/libfuji_runtime.a internal/embed/linux/amd64/
 
       - name: Build fuji
@@ -117,30 +121,34 @@ jobs:
   linux-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
 
       - name: Install LLVM
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-18 llvm-18
+          sudo apt-get install -y clang llvm
 
       - name: Build C runtime
         run: |
+          CLANG_BIN="$(command -v clang-18 || command -v clang)"
+          LLVM_AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar)"
           mkdir -p runtime/obj_linux_arm64
-          clang-18 -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/value.o
-          clang-18 -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/object.o
-          clang-18 -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/gc.o
-          clang-18 -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/fuji_runtime.o
-          llvm-ar-18 rcs runtime/libfuji_runtime.a runtime/obj_linux_arm64/*.o
+          "$CLANG_BIN" -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/value.o
+          "$CLANG_BIN" -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/object.o
+          "$CLANG_BIN" -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/gc.o
+          "$CLANG_BIN" -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/fuji_runtime.o
+          "$LLVM_AR_BIN" rcs runtime/libfuji_runtime.a runtime/obj_linux_arm64/*.o
 
       - name: Populate embed/linux/arm64
         run: |
+          CLANG_BIN="$(command -v clang-18 || command -v clang)"
+          LLC_BIN="$(command -v llc-18 || command -v llc)"
           mkdir -p internal/embed/linux/arm64
-          cp "$(which clang-18)"         internal/embed/linux/arm64/clang
-          cp "$(which llc-18)"           internal/embed/linux/arm64/llc
+          cp "$CLANG_BIN"                internal/embed/linux/arm64/clang
+          cp "$LLC_BIN"                  internal/embed/linux/arm64/llc
           cp runtime/libfuji_runtime.a internal/embed/linux/arm64/
 
       - name: Build fuji
@@ -168,8 +176,8 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
 
@@ -180,20 +188,24 @@ jobs:
 
       - name: Build C runtime — amd64
         run: |
+          CLANG_BIN="$(xcrun --sdk macosx --find clang)"
+          SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           mkdir -p runtime/obj_macos_amd64
-          clang -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -target x86_64-apple-macos11 -o runtime/obj_macos_amd64/value.o
-          clang -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -target x86_64-apple-macos11 -o runtime/obj_macos_amd64/object.o
-          clang -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -target x86_64-apple-macos11 -o runtime/obj_macos_amd64/gc.o
-          clang -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -target x86_64-apple-macos11 -o runtime/obj_macos_amd64/fuji_runtime.o
+          "$CLANG_BIN" -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -isysroot "$SDKROOT" -arch x86_64 -o runtime/obj_macos_amd64/value.o
+          "$CLANG_BIN" -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -isysroot "$SDKROOT" -arch x86_64 -o runtime/obj_macos_amd64/object.o
+          "$CLANG_BIN" -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -isysroot "$SDKROOT" -arch x86_64 -o runtime/obj_macos_amd64/gc.o
+          "$CLANG_BIN" -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -isysroot "$SDKROOT" -arch x86_64 -o runtime/obj_macos_amd64/fuji_runtime.o
           llvm-ar rcs runtime/libfuji_runtime_amd64.a runtime/obj_macos_amd64/*.o
 
       - name: Build C runtime — arm64
         run: |
+          CLANG_BIN="$(xcrun --sdk macosx --find clang)"
+          SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           mkdir -p runtime/obj_macos_arm64
-          clang -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -target arm64-apple-macos11 -o runtime/obj_macos_arm64/value.o
-          clang -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -target arm64-apple-macos11 -o runtime/obj_macos_arm64/object.o
-          clang -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -target arm64-apple-macos11 -o runtime/obj_macos_arm64/gc.o
-          clang -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -target arm64-apple-macos11 -o runtime/obj_macos_arm64/fuji_runtime.o
+          "$CLANG_BIN" -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -isysroot "$SDKROOT" -arch arm64 -o runtime/obj_macos_arm64/value.o
+          "$CLANG_BIN" -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -isysroot "$SDKROOT" -arch arm64 -o runtime/obj_macos_arm64/object.o
+          "$CLANG_BIN" -c runtime/src/gc.c           -O2 -std=c11 -Iruntime/src -isysroot "$SDKROOT" -arch arm64 -o runtime/obj_macos_arm64/gc.o
+          "$CLANG_BIN" -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -isysroot "$SDKROOT" -arch arm64 -o runtime/obj_macos_arm64/fuji_runtime.o
           llvm-ar rcs runtime/libfuji_runtime_arm64.a runtime/obj_macos_arm64/*.o
 
       - name: Populate embed/darwin
@@ -242,9 +254,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
 
