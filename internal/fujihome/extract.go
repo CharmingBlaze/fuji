@@ -23,8 +23,7 @@ const toolchainLockName = ".fuji_toolchain_extract.lock"
 // processes do not write toolchain/bin/clang(.exe) concurrently—important on Windows
 // where readers can see partially written PE files.
 func EnsureEnvironment(log func(string)) error {
-	if strings.TrimSpace(os.Getenv("FUJI_SKIP_TOOLCHAIN_EXTRACT")) != "" ||
-		strings.TrimSpace(os.Getenv("FUJI_SKIP_TOOLCHAIN_EXTRACT")) != "" {
+	if strings.TrimSpace(os.Getenv("FUJI_SKIP_TOOLCHAIN_EXTRACT")) != "" {
 		return nil
 	}
 	data := bundledToolchainTarGz
@@ -53,7 +52,12 @@ func EnsureEnvironment(log func(string)) error {
 		}
 		return extractTarGz(data, install)
 	}); err != nil {
-		return err
+		return fmt.Errorf(
+			"bundled toolchain extract failed (install dir may be read-only or disk full): %w\n"+
+				"Hint: move fuji/fujiwrap to a normal writable folder with stdlib/ beside them, "+
+				"or set FUJI_CLANG to an existing Clang and FUJI_SKIP_TOOLCHAIN_EXTRACT=1 if you intentionally skip unpack",
+			err,
+		)
 	}
 	if log != nil {
 		log("Toolchain ready.\n")
@@ -191,5 +195,8 @@ func withToolchainLock(install string, fn func() error) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("timeout waiting for toolchain lock %s", lockPath)
+	return fmt.Errorf(
+		"timeout waiting for toolchain lock %s (another fuji/fujiwrap may be extracting; retry in a moment)",
+		lockPath,
+	)
 }

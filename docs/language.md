@@ -1,5 +1,7 @@
 # Fuji — Syntax Reference
 
+> **Full specification** — for a compact single-page reference, see [`language.md`](../language.md) in the root.
+
 This is the **compact syntax reference** for Fuji. For full explanations with examples, see the root **`language.md`**. For a step-by-step beginner guide, see **`using-the-language.md`**.
 
 > The compiler sources are the ground truth: **`internal/lexer/token.go`**, **`internal/parser/`**, **`internal/codegen/builtin_register.go`**.

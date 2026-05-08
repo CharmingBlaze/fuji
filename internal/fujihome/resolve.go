@@ -13,9 +13,13 @@ import (
 // Resolution order for Clang (and similarly LLC):
 //  1. FUJI_CLANG / FUJI_LLC — explicit override (CI, custom SDKs)
 //  2. CC (Clang only) — common third-party convention; treated like an explicit override
-//  3. Bundled next to the executable: toolchain/bin then llvm/bin (single portable layout)
-//  4. PATH lookup
-//  5. Bare name ("clang" / "llc") so exec errors are obvious if nothing resolves
+//  3. Bundled next to the executable: toolchain/bin then llvm/bin (after first-run extract)
+//  4. Embedded release binaries (temp dir; internal/embed) when the install tree is not present yet
+//  5. PATH lookup
+//  6. Bare name ("clang" / "llc") so exec errors are obvious if nothing resolves
+//
+// Preferring (3) before (4) keeps fujiwrap’s Clang AST step on the full unpacked toolchain next to
+// fuji / fujiwrap so release users do not need a host LLVM installation.
 
 // ClangWithSource returns the same executable as [Clang] and a short label for diagnostics.
 func ClangWithSource() (path, source string) {
@@ -25,11 +29,6 @@ func ClangWithSource() (path, source string) {
 	if cc := strings.TrimSpace(os.Getenv("CC")); cc != "" {
 		return cc, "CC"
 	}
-	if p, err := fujembed.ClangPath(); err == nil {
-		return p, "embedded"
-	} else if err != nil && !errors.Is(err, fujembed.ErrDevelopmentBuild) {
-		// Keep falling back so local/dev toolchains still work if embedded extraction is unavailable.
-	}
 	dir, err := InstallDir()
 	if err == nil {
 		for _, rel := range BundledClangRelPaths {
@@ -38,6 +37,11 @@ func ClangWithSource() (path, source string) {
 				return p, "bundled"
 			}
 		}
+	}
+	if p, err := fujembed.ClangPath(); err == nil {
+		return p, "embedded"
+	} else if err != nil && !errors.Is(err, fujembed.ErrDevelopmentBuild) {
+		// Keep falling back so local/dev toolchains still work if embedded extraction is unavailable.
 	}
 	if p, err := exec.LookPath("clang"); err == nil {
 		return p, "PATH"
@@ -50,11 +54,6 @@ func LLCWithSource() (path, source string) {
 	if s := strings.TrimSpace(os.Getenv("FUJI_LLC")); s != "" {
 		return s, "FUJI_LLC"
 	}
-	if p, err := fujembed.LLCPath(); err == nil {
-		return p, "embedded"
-	} else if err != nil && !errors.Is(err, fujembed.ErrDevelopmentBuild) {
-		// Keep falling back so local/dev toolchains still work if embedded extraction is unavailable.
-	}
 	dir, err := InstallDir()
 	if err == nil {
 		for _, rel := range BundledLLCRelPaths {
@@ -63,6 +62,11 @@ func LLCWithSource() (path, source string) {
 				return p, "bundled"
 			}
 		}
+	}
+	if p, err := fujembed.LLCPath(); err == nil {
+		return p, "embedded"
+	} else if err != nil && !errors.Is(err, fujembed.ErrDevelopmentBuild) {
+		// Keep falling back so local/dev toolchains still work if embedded extraction is unavailable.
 	}
 	if p, err := exec.LookPath("llc"); err == nil {
 		return p, "PATH"

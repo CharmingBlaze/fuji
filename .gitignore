@@ -1,75 +1,31 @@
-# Binaries
+# Build output
+*.o
+*.a
+*.ll
 *.exe
-*.dll
-*.so
-*.dylib
-kuji
-kuji.exe
-output
-output.exe
+/bin/
+/dist/
+/.FUJI_build/
+
+# Release artifacts
+raylib_win.zip
+*.zip
+!dist-template/**
 
 # Go
-/bin/
-/build/
-coverage.out
-coverage.html
-*.test
-profile.out
+/vendor/
 
-# Kuji build artifacts
-.fuji_build/
-.FUJI_build/
-dist/
-
-# Local scratch / CI temp dirs
-.make_wrapgen_check/
-.wg_err/
-.wg_fix_test/
-_ci_ray_test/
-_wg_compile_test/
-_wrapgen_test_out/
-
-# CI / local wrapgen scratch
-wrappers/raylib_ci_generated/
-.ci_fuji
-_golden_tmp/
-_golden_tmp2/
-_raylib_pinned.h
-
-# Large local SDK checkouts (clone separately; see IMPLEMENTATION_STATUS.md)
-temp_raylib/
-
-# Vendored Raylib CMake outputs (use make -C third_party/raylib_static)
-third_party/raylib_static/cmake-build/
-third_party/raylib_static/cmake-build-shared/
-third_party/raylib_static/stage/
-third_party/raylib_static/stage-shared/
-
-# OS / editor
-.DS_Store
-Thumbs.db
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
-.idea/
 
-# Windsurf IDE workspace rules (optional; keep local only)
-.windsurf/
+# macOS
+.DS_Store
 
-# Logs
-*.log
+# Windows
+Thumbs.db
 
-# Runtime object files (build with make -C runtime)
-runtime/src/*.o
-runtime/obj_win/
-
-# Release-only embedded artifacts (see internal/embed/README.md)
-internal/embed/**/*.exe
-internal/embed/**/clang
-internal/embed/**/lld.exe
-internal/embed/**/libfuji_runtime.a
-
-# Legacy bundled layout (unused by current release workflow)
-internal/fujihome/bundled/**/*.exe
-internal/fujihome/bundled/**/llc
-internal/fujihome/bundled/**/lld
-internal/fujihome/bundled/**/libfuji_runtime.a
+# Test output
+/test_output/

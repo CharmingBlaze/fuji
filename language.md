@@ -1,5 +1,7 @@
 # Fuji Language Reference
 
+> **Quick reference** — this is the compact single-page catalog. For the full tutorial walkthrough, see [`docs/using-the-language.md`](docs/using-the-language.md).
+
 Fuji is a small, fast language for making games and applications. It feels like JavaScript but compiles to a native binary — no VM, no interpreter. This page covers **everything you can write** with working examples next to each feature.
 
 > **New to Fuji?** Start with **`docs/using-the-language.md`** for a gentle walkthrough, then come back here as a reference.  

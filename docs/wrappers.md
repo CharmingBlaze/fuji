@@ -55,9 +55,12 @@ Your distribution can be:
 
 ## 4. Raylib specifically
 
-1. Ship `wrappers/raylib/` (or similar) containing the generated **`raylib.fuji`** (or `raylib/index.fuji`).  
-2. In the app: `import "raylib"` (or the path you documented).  
-3. Build: set **`FUJI_WRAPPERS`** to the parent of `raylib/` and **`FUJI_LINKFLAGS`** so clang finds **libraylib** and required frameworks/libs on that OS.
+Official SDK zips ship **`wrappers/raylib/`** (full `.fuji` + `wrapper.c` + Markdown/HTML) and **raylib 5.0 prebuilds** under **`third_party/raylib_static/stage/`** (headers + `libraylib.a` + Windows `raylib.dll`). The compiler picks up that tree automatically when linking (see **`FUJI_USE_VENDORED_RAYLIB`** and **`FUJI_RAYLIB_STAGE`** in `fuji -help`).
+
+1. In source: `#include "raylib/raylib.fuji"` (resolved against **`wrappers/`** next to **`fuji`** — see [guides/raylib.md](guides/raylib.md)).  
+2. Set **`FUJI_NATIVE_SOURCES`** to **`wrappers/raylib/wrapper.c`**.  
+3. On Windows, copy **`raylib.dll`** next to the `.exe` when using a dynamic link or bundle it with **`FUJI_BUNDLE_FILES`**.  
+4. If you do not use the vendored stage (e.g. Linux ARM64 without an upstream binary), set **`FUJI_LINKFLAGS`** to your system `-I` / `-L` / `-lraylib` (and frameworks on macOS).
 
 Until every symbol is lowered automatically, some declarations may still need to match whatever ABI your wrapper emits (same as any FFI layer).
 

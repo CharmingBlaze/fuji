@@ -182,11 +182,14 @@ func findClangOnPathOrAbsolute(candidates []string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf(
-		"clang not found.\n" +
-			"Install LLVM or use a Fuji release binary.\n" +
-			"  Windows: choco install llvm\n" +
-			"  macOS:   brew install llvm\n" +
-			"  Linux:   apt-get install clang",
+		"clang not found for native builds.\n\n"+
+			"If you use a GitHub release of fuji/fujiwrap: keep the executable in the SDK folder "+
+			"(stdlib/ and toolchain/ beside it), run from a writable directory, and do not set "+
+			"FUJI_SKIP_TOOLCHAIN_EXTRACT unless you also set FUJI_CLANG to a full Clang.\n\n"+
+			"If you build Fuji from source without -tags release, install a system Clang:\n"+
+			"  Windows: choco install llvm   (or set FUJI_CLANG)\n"+
+			"  macOS:   brew install llvm\n"+
+			"  Linux:   apt-get install clang (or clang-18)",
 	)
 }
 

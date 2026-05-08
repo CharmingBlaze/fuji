@@ -232,7 +232,8 @@ ENVIRONMENT
   FUJI_WRAPPERS       Pre-built .fuji libraries (path list; overrides FUJI_PATH)
   FUJI_NATIVE_SOURCES C/C++ sources linked into your app (e.g. wrapper.c)
   FUJI_LINKFLAGS      Extra linker flags (-lraylib, -L..., frameworks, etc.)
-  FUJI_USE_VENDORED_RAYLIB  If third_party/raylib_static/stage exists (after make raylib-lib), fuji prepends -I and links libraylib.a automatically; set 0/false to skip
+  FUJI_RAYLIB_STAGE   Override path to third_party/.../stage (include/ + lib/) for vendored raylib
+  FUJI_USE_VENDORED_RAYLIB  If third_party/raylib_static/stage exists (cwd or next to fuji), prepends -I and links libraylib.a; set 0/false to skip
   FUJI_BUNDLE_FILES   Extra files copied into the bundle (DLLs, assets)
   FUJI_SKIP_TOOLCHAIN_EXTRACT  If set, never unpack the embedded toolchain archive (dev/CI)
   FUJI_DEBUG_IR       If set, writes .FUJI_build/main.ll in addition to piping IR to clang

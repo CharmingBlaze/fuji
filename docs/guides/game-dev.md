@@ -1,118 +1,109 @@
-# Game development with Fuji and Raylib
+# Game Development with Fuji
 
-Fuji compiles to native code via LLVM. External C libraries like Raylib connect through generated wrapper glue. This guide shows the full path from Raylib source to a running game.
+This is a quick-start overview. For a complete, beginner-friendly guide to Raylib functions, colors, key codes, and a full working game, see **[raylib.md](raylib.md)**.
 
 ---
 
-## 1. Get Raylib
+## The 3 things you need
 
-Download or build Raylib. On Windows with MSYS2/MinGW:
+1. **A `.fuji` source file** — your game code
+2. **The wrapper** — `wrappers/raylib_shim/raylib.fuji` (already in the repo)
+3. **The C bridge** — `wrappers/raylib_min/raylib_bridge.c` (already in the repo)
+
+---
+
+## Quickstart
+
+**Set the bridge once per terminal session:**
 
 ```powershell
-# Or build from source (place in temp_raylib/ at project root)
-# https://github.com/raysan5/raylib/releases
+# Windows
+$env:FUJI_NATIVE_SOURCES = "wrappers\raylib_min\raylib_bridge.c"
+```
+```bash
+# Linux / macOS
+export FUJI_NATIVE_SOURCES=wrappers/raylib_min/raylib_bridge.c
 ```
 
-You need `libraylib.a` (or `.lib`) and the `raylib.h` header.
-
----
-
-## 2. Generate the Fuji wrapper
-
-```powershell
-.\bin\fujiwrap.exe `
-  -name raylib `
-  -headers .\path\to\raylib.h `
-  -out .\wrappers\raylib
-```
-
-This produces:
-
-```
-wrappers/raylib/
-  raylib.fuji       <- Fuji declarations
-  wrapper.c         <- C ABI glue
-  README.md
-  api_reference.md
-  examples.md
-```
-
----
-
-## 3. Write your game
+**Write your game (`game.fuji`):**
 
 ```fuji
-#include "wrappers/raylib/raylib.fuji"
+#include "wrappers/raylib_shim/raylib.fuji"
 
-let WIDTH = 800;
-let HEIGHT = 600;
+func main() {
+    InitWindow(800, 600, "My Game");
+    SetTargetFPS(60);
 
-InitWindow(WIDTH, HEIGHT, "My Game");
-SetTargetFPS(60);
+    while (!WindowShouldClose()) {
+        BeginDrawing();
+        ClearBackground(0x181818FF);
+        DrawText("Hello, Fuji!", 300, 280, 30, 0xFFFFFFFF);
+        EndDrawing();
+    }
 
-while (!WindowShouldClose()) {
-    BeginDrawing();
-    ClearBackground(20, 20, 20, 255);
-    DrawText("Hello, Fuji!", 320, 280, 20, 255, 255, 255, 255);
-    EndDrawing();
+    CloseWindow();
 }
-
-CloseWindow();
 ```
 
----
+**Run it:**
 
-## 4. Build the native executable
+```
+fuji run game.fuji
+```
 
-Set environment variables so `fuji build` can find the wrapper glue and Raylib:
+**Build a binary:**
+
+```
+fuji build game.fuji -o game.exe
+```
+
+**Ship it:**
 
 ```powershell
-$env:FUJI_NATIVE_SOURCES = '.\wrappers\raylib\wrapper.c'
-$env:FUJI_LINKFLAGS = '-I.\path\to\raylib\src -L.\path\to\raylib\src -lraylib -lopengl32 -lgdi32 -lwinmm'
-.\kuji.exe build .\game.fuji -o .\game.exe
+$env:FUJI_BUNDLE_FILES = "raylib.dll"
+fuji bundle game.fuji -o dist\mygame
 ```
 
 ---
 
-## 5. Bundle for distribution
+## Game loop structure
 
-```powershell
-$env:FUJI_NATIVE_SOURCES = '.\wrappers\raylib\wrapper.c'
-$env:FUJI_LINKFLAGS = '-I.\path\to\raylib\src -L.\path\to\raylib\src -lraylib -lopengl32 -lgdi32 -lwinmm'
-$env:FUJI_BUNDLE_FILES = '.\raylib.dll'
-.\kuji.exe bundle .\game.fuji -o .\dist\mygame
+Every Fuji + Raylib game follows the same pattern:
+
+```fuji
+#include "wrappers/raylib_shim/raylib.fuji"
+
+func main() {
+    // 1. Initialize
+    InitWindow(800, 600, "Game");
+    SetTargetFPS(60);
+
+    // 2. Game loop
+    while (!WindowShouldClose()) {
+
+        // 3. Update (input, physics, logic)
+        // ...
+
+        // 4. Draw
+        BeginDrawing();
+        ClearBackground(0x000000FF);
+        // ... draw calls ...
+        EndDrawing();
+    }
+
+    // 5. Cleanup
+    CloseWindow();
+}
 ```
-
-The `dist\mygame` folder contains everything a player needs.
 
 ---
 
-## Example: Raylib brick breaker
+## Where to go next
 
-The canonical example is at `examples/games/raylib_brick_breaker.fuji`. Build it:
-
-```powershell
-$env:FUJI_NATIVE_SOURCES = '.\wrappers\raylib_min\raylib_bridge.c'
-$env:FUJI_LINKFLAGS = '-I.\temp_raylib\src -L.\temp_raylib\src -lraylib -lopengl32 -lgdi32 -lwinmm'
-.\kuji.exe bundle .\examples\games\raylib_brick_breaker.fuji -o .\dist\brick_breaker
-```
-
----
-
-## Raylib wrapper ABI notes
-
-Each Raylib function is wrapped by a C function with the Fuji native ABI:
-
-```c
-FujiValue FUJI_wrap_raylib_InitWindow(int argCount, FujiValue* args);
-```
-
-The `.fuji` file maps Fuji names to these symbols via `// fuji:extern` directives. The LLVM emitter produces direct native calls — no interpreter overhead.
-
----
-
-## Performance notes
-
-- Fuji compiles to LLVM IR; Clang generates fully optimized native code.
-- The game loop runs at native speed with no GC pauses in the hot path.
-- Value boxing/unboxing (NaN-boxing) is the main overhead; it is within 10% of hand-written C for typical game loops.
+| Document | What it covers |
+|----------|----------------|
+| **[raylib.md](raylib.md)** | All functions, colors, key codes, complete Pong game example |
+| **`examples/games/brick_breaker.fuji`** | Full brick breaker game you can run and study |
+| **[../wrappers.md](../wrappers.md)** | How the wrapper system works, extending it with more C functions |
+| **[../commands.md](../commands.md)** | All `fuji` CLI commands |
+| **[../../language.md](../../language.md)** | Full language reference |

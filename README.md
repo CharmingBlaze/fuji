@@ -1,134 +1,117 @@
 # Fuji
 
-![Fuji Logo](assets/fuji-logo.png)
+Fuji is a **simple C and JavaScript-like language** for making games and applications.
 
-**Fuji** is a **JavaScript-style** language that compiles **`.fuji`** programs to **native executables** (LLVM). You write familiar syntax—objects, functions, control flow—and ship a **single binary** (plus any assets you bundle). Players do **not** install a separate Fuji runtime.
-
-The **[language.md](language.md)** page is the compact catalog of syntax, operators, builtins, and stdlib surface.
+Write familiar syntax — C-style control flow, JavaScript-style objects and closures — and compile to a **single native binary**. No VM. No interpreter. Players run your binary without installing anything.
 
 ---
 
-## Start here (important)
+## If you want to make games or apps with Fuji
 
-- Use the prebuilt **release binaries** from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases).
-- Do **not** compile Fuji from source for normal usage. This repo includes maintainer/developer internals and is not the beginner install path.
-- If your goal is to make games/apps with Fuji, use `fuji` + `fujiwrap` binaries and the guides below.
+**Do not compile this repository from source.** It will not work without a specific Go + LLVM toolchain setup that is only for maintainers.
+
+Download a **release binary** from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases) instead. The release binary is self-contained — it embeds everything it needs (Clang, llc, the runtime library). You do not need to install LLVM, Go, or anything else.
+
+Then read:
+- [`language.md`](language.md) — everything you can write in Fuji, with examples
+- [`docs/guides/getting-started.md`](docs/guides/getting-started.md) — your first program
+- [`docs/commands.md`](docs/commands.md) — every `fuji` CLI command
+- [`docs/using-the-language.md`](docs/using-the-language.md) — full language tutorial
 
 ---
 
-## Get the compiler (`fuji`)
+## What the language looks like
 
-**Recommended:** download a **release build** from **[GitHub Releases](https://github.com/CharmingBlaze/fuji/releases)** (tags **`v*`**). Those binaries embed **Clang**, **llc**, **`libfuji_runtime.a`**, and on Windows **lld**, so you can **`fuji build`** / **`fuji run`** without installing LLVM yourself.
+```c
+struct Player {
+    x, y, speed, health
+}
 
-### Offline SDK zip (Windows, Linux, macOS)
+enum State {
+    Idle, Running, Dead
+}
 
-Each GitHub **Release** publishes self-contained archives — **no Go install, no extra LLVM download** for compiling Fuji:
+func update(player, dt) {
+    player.x = player.x + player.speed * dt;
+    if (player.health <= 0) {
+        return State.Dead;
+    }
+    return State.Running;
+}
 
-| OS | Download (pattern) | What’s inside |
-|----|--------------------|---------------|
-| **Windows** (x64) | **`fuji-vX.Y.Z-sdk-windows-amd64.zip`** | `fuji.exe`, `fujiwrap.exe`, `stdlib/`, `docs/`, `examples/`, `language.md`, `README.md` |
-| **Linux** (x64) | **`fuji-vX.Y.Z-sdk-linux-amd64.zip`** | `fuji`, `fujiwrap`, plus the same folders |
-| **Linux** (ARM64) | **`fuji-vX.Y.Z-sdk-linux-arm64.zip`** | same |
-| **macOS** Intel | **`fuji-vX.Y.Z-sdk-darwin-amd64.zip`** | same |
-| **macOS** Apple Silicon | **`fuji-vX.Y.Z-sdk-darwin-arm64.zip`** | same |
-
-Unpack one folder anywhere and run **`fuji`** from that folder so **`stdlib/`** sits next to the executable.
-
-### Loose binaries only
-
-| Platform | Compiler binary | Typical download name |
-|----------|-----------------|-------------------------|
-| Windows (x64) | `fuji` | **`fuji-windows-amd64.exe`** |
-| Linux (x64) | `fuji` | **`fuji-linux-amd64`** |
-| Linux (ARM64) | `fuji` | **`fuji-linux-arm64`** |
-| macOS Intel | `fuji` | **`fuji-darwin-amd64`** |
-| macOS Apple Silicon | `fuji` | **`fuji-darwin-arm64`** |
-
-Put the binary on your **`PATH`**, or run it by full path. Then:
-
-```bash
-fuji version
+let p = Player { x: 0, y: 0, speed: 200, health: 100 };
+let state = update(p, 0.016);
+print(state);
 ```
 
-On **Linux / macOS**, mark the file executable after download: `chmod +x fuji-linux-amd64` (example).
-
 ---
 
-## Get the C header wrapper (`fujiwrap`)
-
-**`fujiwrap`** turns C/C++ headers into **`.fuji`** bindings plus a **`wrapper.c`** you link with **`FUJI_NATIVE_SOURCES`**. It ships **inside each SDK zip** and as a loose binary on **[Releases](https://github.com/CharmingBlaze/fuji/releases)** (for example **`fujiwrap-windows-amd64.exe`**, **`fujiwrap-linux-amd64`**, **`fujiwrap-darwin-amd64`**, **`fujiwrap-darwin-arm64`**).
-
-Release `fujiwrap` binaries resolve embedded LLVM tools from the same SDK, so wrapper generation works without installing LLVM separately.
-
-Run **`fuji wrap …`** from the CLI: **`fuji`** looks for **`fujiwrap`** beside itself, then **`wrapgen`**, then **`kujiwrap`**, then **`PATH`**.
+## Quick start (after downloading the release binary)
 
 ```bash
-fuji wrap --help
-```
+# Run a program directly
+fuji run mygame.fuji
 
-Full workflow: **[docs/wrappers.md](docs/wrappers.md)** and **`fuji help`** (environment variables **`FUJI_NATIVE_SOURCES`**, **`FUJI_LINKFLAGS`**, **`FUJI_BUNDLE_FILES`**, etc.).
+# Compile to a binary
+fuji build mygame.fuji -o mygame
 
----
-
-## Use `fuji` on your project
-
-From a directory that contains your entry **`.fuji`** file (and any **`#include`** / **`@module`** dependencies the loader can resolve):
-
-```bash
-# Run (builds a temp exe, runs it, deletes it)
-fuji run examples/hello.fuji
-
-# Same pipeline, optional flags
-fuji run --no-opt path/to/big_program.fuji
-
-# Native executable you keep
-fuji build mygame.fuji -o mygame.exe
-
-# Debug symbols + unoptimized (easier stepping in a debugger)
-fuji build --debug mygame.fuji -o mygame_debug.exe
-
-# Rebuild + rerun when .fuji files change under the entry file’s folder
-fuji watch src/main.fuji
-
-# Folder you zip or ship (exe + README + extras)
-fuji bundle mygame.fuji -o dist/MyGame
-
-# Check syntax/semantics only (no LLVM)
+# Check for errors without compiling
 fuji check mygame.fuji
 
-# Canonical formatting
+# Format your code
 fuji fmt mygame.fuji
-fuji fmt --check .
+
+# Watch for changes and rebuild automatically
+fuji watch mygame.fuji
+
+# Bundle for distribution (binary + assets)
+fuji bundle mygame.fuji -o dist/MyGame
 ```
 
-See **`fuji help`** for the full command list (`disasm`, `paths`, `doctor`, `bundle`, …).
+---
+
+## SDK downloads
+
+Each release includes self-contained SDK zips — no LLVM install required:
+
+| Platform | Download |
+|---|---|
+| Windows (x64) | `fuji-vX.Y.Z-sdk-windows-amd64.zip` |
+| Linux (x64) | `fuji-vX.Y.Z-sdk-linux-amd64.zip` |
+| Linux (ARM64) | `fuji-vX.Y.Z-sdk-linux-arm64.zip` |
+| macOS Intel | `fuji-vX.Y.Z-sdk-darwin-amd64.zip` |
+| macOS Apple Silicon | `fuji-vX.Y.Z-sdk-darwin-arm64.zip` |
+
+Unpack into any folder and run `fuji` from that folder so `stdlib/` sits next to the executable.
 
 ---
 
-## Documentation (using Fuji only)
+## Documentation
 
-| Document | Contents |
-|----------|----------|
-| [docs/guides/getting-started.md](docs/guides/getting-started.md) | Beginner onboarding (release binary path only) |
-| [docs/commands.md](docs/commands.md) | Every **`fuji`** CLI command with usage and examples |
-| [docs/using-the-language.md](docs/using-the-language.md) | Full language tutorial: how to write and use every major feature |
-| [language.md](language.md) | Keywords, operators, statements, builtins (exhaustive catalog) |
-| [docs/user_guide.md](docs/user_guide.md) | Longer guide to writing Fuji |
-| [docs/reference.md](docs/reference.md) | Stdlib and builtins |
-| [docs/language.md](docs/language.md) | Language specification |
-| [docs/distribution.md](docs/distribution.md) | Shipping games and bundles |
-| [docs/wrappers.md](docs/wrappers.md) | C/C++ FFI, **`fujiwrap`**, Raylib-style workflows |
-| [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md) | Maintainer roadmap (language, GC, tooling) — **not** required to *use* Fuji |
+| File | Contents |
+|---|---|
+| [`language.md`](language.md) | Compact reference — all syntax, operators, builtins |
+| [`docs/guides/getting-started.md`](docs/guides/getting-started.md) | First steps |
+| [`docs/using-the-language.md`](docs/using-the-language.md) | Full language tutorial |
+| [`docs/commands.md`](docs/commands.md) | Every CLI command |
+| [`docs/reference.md`](docs/reference.md) | Stdlib and builtins reference |
+| [`docs/distribution.md`](docs/distribution.md) | Shipping games and apps |
+| [`docs/wrappers.md`](docs/wrappers.md) | Wrapping C libraries with `fujiwrap` |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed in each version |
 
 ---
 
-## Optional examples
+## For maintainers and contributors
 
-- **`examples/`** — small programs and games (**[examples/games/README.md](examples/games/README.md)**).
-- **Brick Breaker (Windows, Raylib path):** `powershell -ExecutionPolicy Bypass -File .\scripts\play-brick-breaker.ps1` (from a full checkout with scripts).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to build the compiler from source, run tests, and contribute changes.
+
+The build requires Go 1.22+, Clang, llc, and a C toolchain. See [`docs/handoff.md`](docs/handoff.md) for the internal architecture.
+
+**Do not tell users to build from source.** Release binaries are the correct install path.
 
 ---
 
-## Changelog
+## Examples
 
-**[CHANGELOG.md](CHANGELOG.md)** lists shipped features and fixes by version.
+- [`examples/`](examples/) — sample programs and games
+- Run Brick Breaker on Windows: `powershell -ExecutionPolicy Bypass -File scripts/play-brick-breaker.ps1`

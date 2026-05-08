@@ -251,7 +251,14 @@ jobs:
       - name: Install zip
         run: sudo apt-get update && sudo apt-get install -y zip
 
+      - name: Vendor raylib 5.0 (per platform) for SDK zips
+        run: |
+          chmod +x scripts/vendor-raylib-stage.sh
+          bash scripts/vendor-raylib-stage.sh "${GITHUB_WORKSPACE}/.raylib-vendor"
+
       - name: Package offline SDK zip (per platform)
+        env:
+          RAYLIB_VENDOR_ROOT: ${{ github.workspace }}/.raylib-vendor
         run: |
           chmod +x scripts/package-release-sdk.sh
           bash scripts/package-release-sdk.sh "${{ github.ref_name }}" artifacts sdk-zips
@@ -282,9 +289,9 @@ jobs:
 
             | Archive | Contents |
             |---------|----------|
-            | **`fuji-${{ github.ref_name }}-sdk-windows-amd64.zip`** | `fuji.exe`, `fujiwrap.exe`, `stdlib/`, `docs/`, `examples/`, `language.md`, `README.md`, `SDK_README.txt` |
+            | **`fuji-${{ github.ref_name }}-sdk-windows-amd64.zip`** | `fuji.exe`, `fujiwrap.exe`, `stdlib/`, `docs/`, root `*.md`, **full `wrappers/` (raylib + glue)**, **`third_party/raylib_static/stage`** (headers, `libraylib.a`, `raylib.dll`), `examples/`, `SDK_README.txt` |
             | **`fuji-${{ github.ref_name }}-sdk-linux-amd64.zip`** | same layout (POSIX binaries) |
-            | **`fuji-${{ github.ref_name }}-sdk-linux-arm64.zip`** | same layout |
+            | **`fuji-${{ github.ref_name }}-sdk-linux-arm64.zip`** | same toolchain + docs + wrappers; **no upstream raylib ARM64 prebuild** — see `third_party/raylib_static/stage/README-Fuji.txt` and install system raylib or build from source |
             | **`fuji-${{ github.ref_name }}-sdk-darwin-amd64.zip`** | Intel macOS |
             | **`fuji-${{ github.ref_name }}-sdk-darwin-arm64.zip`** | Apple Silicon |
 

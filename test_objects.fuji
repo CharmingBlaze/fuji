@@ -1,6 +1,0 @@
-func main() {
-    let obj = { name: "Kuji", greet: func(msg) {
-        print(msg + ", I am " + this.name);
-    } };
-    obj.greet("Hello");
-}

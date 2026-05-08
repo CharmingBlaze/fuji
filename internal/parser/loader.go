@@ -236,9 +236,53 @@ func ResolveImportPath(importerPath, relPath string) (string, error) {
 		return "", fmt.Errorf("could not resolve @ module %s", relPath)
 	}
 
-	dir := filepath.Dir(importerPath)
-	abs := filepath.Join(dir, relPath)
-	return filepath.Abs(abs)
+	return resolvePlainIncludePath(importerPath, relPath)
+}
+
+func resolvePlainIncludePath(importerPath, relPath string) (string, error) {
+	if filepath.IsAbs(relPath) {
+		return filepath.Clean(relPath), nil
+	}
+
+	tryFile := func(p string) (string, bool) {
+		fi, err := os.Stat(p)
+		if err != nil || fi.IsDir() {
+			return "", false
+		}
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return "", false
+		}
+		return abs, true
+	}
+
+	if p, ok := tryFile(filepath.Join(filepath.Dir(importerPath), relPath)); ok {
+		return p, nil
+	}
+
+	for _, r := range pathListEnv("FUJI_PATH") {
+		r = strings.TrimSpace(r)
+		if r == "" {
+			continue
+		}
+		if p, ok := tryFile(filepath.Join(r, relPath)); ok {
+			return p, nil
+		}
+	}
+
+	if inst, err := fujihome.InstallDir(); err == nil {
+		for _, base := range []string{
+			filepath.Join(inst, "wrappers"),
+			filepath.Join(inst, "stdlib"),
+			inst,
+		} {
+			if p, ok := tryFile(filepath.Join(base, relPath)); ok {
+				return p, nil
+			}
+		}
+	}
+
+	return filepath.Abs(filepath.Join(filepath.Dir(importerPath), relPath))
 }
 
 func BundleEntryPath(bundle *ProgramBundle) (string, error) {

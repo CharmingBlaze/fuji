@@ -148,7 +148,7 @@ GitHub **Releases** (tags `v*`) attach **offline SDK archives** built by CI for 
 | **macOS** Intel | `fuji-<tag>-sdk-darwin-amd64.zip` |
 | **macOS** Apple Silicon | `fuji-<tag>-sdk-darwin-arm64.zip` |
 
-Each zip unpacks to a single folder containing **`fuji`** (or **`fuji.exe`**), **`fujiwrap`**, **`stdlib/`**, **`docs/`**, **`examples/`**, **`language.md`**, **`README.md`**, and **`SDK_README.txt`**. Keep **`stdlib/`** next to the compiler so `@` imports resolve with no extra download.
+Each zip unpacks to a single folder containing **`fuji`** (or **`fuji.exe`**), **`fujiwrap`**, **`stdlib/`**, the full **`docs/`** tree, **every repo-root `*.md`**, **`wrappers/`** (including the **full raylib** binding + `wrapper.c` + reference docs), **`third_party/raylib_static/stage/`** with **raylib 5.0** headers and libraries (and **`raylib.dll`** on Windows; Linux ARM64 may ship a **README** instead of prebuilt libs — see that file), **`examples/`**, and **`SDK_README.txt`**. Keep **`stdlib/`** next to the compiler so `@` imports resolve with no extra download. Raylib workflow: [guides/raylib.md](guides/raylib.md).
 
 Maintainers reproduce the archives by pushing a version tag; the workflow is **[`.github/workflows/release.yml`](.github/workflows/release.yml)** and **`scripts/package-release-sdk.sh`**.
 
@@ -167,8 +167,8 @@ install-root/
   fujiwrap.exe
   stdlib/
   docs/
-  language.md
-  README.md
+  *.md               # all repo-root markdown
+  wrappers/
   examples/
 ```
 

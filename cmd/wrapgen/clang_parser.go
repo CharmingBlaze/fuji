@@ -40,7 +40,7 @@ func (cp *ClangParser) ParseWithClang(headers []string) (*API, error) {
 		extractLog = func(s string) { fmt.Print(s) }
 	}
 	if err := fujihome.EnsureEnvironment(extractLog); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fujiwrap needs the same bundled Clang as fuji: %w", err)
 	}
 
 	api := &API{

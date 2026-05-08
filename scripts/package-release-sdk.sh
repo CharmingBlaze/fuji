@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build self-contained Fuji SDK archives for GitHub Releases.
-# Requires: unzip's companion `zip`, bash, repo checkout at stdlib/, docs/, language.md, README.md.
+# Requires: unzip's companion `zip`, bash, repo checkout at stdlib/, docs/, repo-root *.md docs.
 #
 # Usage: package-release-sdk.sh <VERSION> <ARTIFACTS_DIR> [OUT_DIR]
 # Example (from repo root): bash scripts/package-release-sdk.sh "$GITHUB_REF_NAME" artifacts ./sdk-zips
@@ -22,7 +22,7 @@ cd "$REPO_ROOT"
 require_file() {
   local f="$1"
   if [[ ! -f "$f" ]]; then
-    echo "missing required file: $f" >&2
+    echo "package-release-sdk: missing required file (check release artifacts and paths): $f" >&2
     exit 1
   fi
 }
@@ -49,11 +49,30 @@ zip_sdk() {
   cp -a "$REPO_ROOT/stdlib" "$stage/$root_name/stdlib"
   cp -a "$REPO_ROOT/docs" "$stage/$root_name/docs"
 
-  for f in language.md README.md; do
-    if [[ -f "$REPO_ROOT/$f" ]]; then
-      cp -a "$REPO_ROOT/$f" "$stage/$root_name/"
-    fi
+  # All top-level documentation markdown (CHANGELOG, CONTRIBUTING, language.md, …).
+  shopt -s nullglob
+  local md
+  for md in "$REPO_ROOT"/*.md; do
+    cp -a "$md" "$stage/$root_name/"
   done
+  shopt -u nullglob
+
+  # Wrapper corpus + markdown (e.g. raylib README, api_reference) not duplicated under docs/.
+  if [[ -d "$REPO_ROOT/wrappers" ]]; then
+    cp -a "$REPO_ROOT/wrappers" "$stage/$root_name/wrappers"
+  fi
+
+  # Official raylib 5.0 prebuilts (see scripts/vendor-raylib-stage.sh). RAYLIB_VENDOR_ROOT defaults
+  # to REPO_ROOT/.raylib-vendor when that directory exists; CI sets it explicitly.
+  local rv_root="${RAYLIB_VENDOR_ROOT:-}"
+  if [[ -z "$rv_root" ]] && [[ -d "$REPO_ROOT/.raylib-vendor" ]]; then
+    rv_root="$REPO_ROOT/.raylib-vendor"
+  fi
+  if [[ -n "$rv_root" ]] && [[ -d "$rv_root/$slug/third_party/raylib_static/stage" ]]; then
+    mkdir -p "$stage/$root_name/third_party/raylib_static"
+    cp -a "$rv_root/$slug/third_party/raylib_static/stage" \
+      "$stage/$root_name/third_party/raylib_static/stage"
+  fi
 
   # Small runnable corpus (optional; helps offline users).
   if [[ -d "$REPO_ROOT/examples" ]]; then
@@ -72,9 +91,10 @@ Layout
   $(printf '%s' "$fj_out")     — Fuji compiler (${slug})
   $(printf '%s' "$fw_out")     — fujiwrap (C header → .fuji + wrapper.c)
   stdlib/         — shipped .fuji modules (@ imports, #includes)
-  docs/           — guides (commands, wrappers, distribution, …)
-  language.md     — language reference (repo root copy)
-  README.md       — project overview & links
+  docs/           — full documentation tree (guides, commands, language notes, …)
+  *.md (root)     — all repo-root markdown (language ref, README, CHANGELOG, …)
+  wrappers/       — full raylib wrapper (raylib.fuji + wrapper.c + docs/HTML)
+  third_party/raylib_static/stage/ — raylib 5.0 headers + libs (+ raylib.dll on Windows) when vendored
 
 Use
 ---
@@ -92,9 +112,14 @@ Use
 Wrapper tool
 ------------
   ./fuji wrap --help          (same as ./fujiwrap … when both sit here)
+  fujiwrap uses the same bundled C toolchain as fuji after unpack — no system LLVM/Clang required.
 
 Embedded toolchain (release builds): Clang + llc + runtime are bundled inside $(printf '%s' "$fj_out") — no separate LLVM download for Fuji itself.
-Linking third-party native libs still uses your own headers/libs (see docs/wrappers.md).
+Raylib games: see docs/guides/raylib.md — vendored static lib is used automatically when
+third_party/raylib_static/stage exists next to this SDK (or set FUJI_RAYLIB_STAGE).
+Copy raylib.dll next to your .exe on Windows when using the dynamic build from lib/.
+
+Other native libs: see docs/wrappers.md.
 
 EOF
 
@@ -113,7 +138,7 @@ EOF
 require_dir() {
   local d="$1"
   if [[ ! -d "$d" ]]; then
-    echo "missing required directory: $d" >&2
+    echo "package-release-sdk: missing required directory (repo checkout incomplete?): $d" >&2
     exit 1
   fi
 }

@@ -1,5 +1,11 @@
 # Contributing to Fuji
 
+## ⚠️ This is for contributors only
+
+If you want to **use** Fuji to make games or applications, **do not build from source**. Download a release binary from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases) instead. The release binary is self-contained and does not require any of the toolchain described in this document.
+
+Building from source requires Go 1.22+, Clang + llc on PATH, and a C toolchain. The embedded-toolchain release build (`-tags release`) additionally requires having the LLVM binaries available to embed. This is a non-trivial setup that is only worth doing if you are modifying the compiler itself.
+
 ## Build
 
 From the repo root (Go **1.22+**):
