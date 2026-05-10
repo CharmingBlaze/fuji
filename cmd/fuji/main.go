@@ -74,7 +74,7 @@ func parseRunCommandArgs(args []string) (src string, noOpt bool, err error) {
 }
 
 // version is set by release builds, e.g. -ldflags "-X main.version=1.0.0"
-var version = "0.3.0-dev"
+var version = "0.3.0"
 
 func main() {
 	args := os.Args[1:]
@@ -186,21 +186,24 @@ func printHelp() {
 Fuji compiles .fuji programs to native apps. Your players only need the bundle folder
 (executable + assets). They do not need Go, Python, or C++ toolchains.
 
+Release builds from GitHub embed the native compiler (Clang, llc, linker bits, runtime lib).
+End users install only **fuji** and **fujiwrap** (and ship **stdlib/** with them). They do **not** install Go, LLVM, or any other compiler for normal **build / run / wrap**.
+
 USAGE
   fuji <command> [arguments]
 
 COMMANDS
-  run     [--no-opt] <file.fuji>   Compile with LLVM and run (same pipeline as build; --no-opt eases flaky Clang IR opt)
+  run     [--no-opt] <file.fuji>   Compile to a native binary and run (same pipeline as build; --no-opt eases flaky IR opt)
   native  [--no-opt] <file.fuji>   Same as run (backward-compatible alias)
   watch   [--no-opt] <file.fuji>   Rebuild + rerun on .fuji file changes under the entry directory
-  check   <file.fuji>              Parse, resolve imports, run sema (no LLVM); prints OK if valid
+  check   <file.fuji>              Parse, resolve imports, run sema (no codegen); prints OK if valid
   fmt     [--check] <files...>     Canonical spacing (4 spaces); ./... walks .fuji files (--check exits 1 if diffs)
   disasm  <file.fuji>              Print LLVM IR for the program (after sema + codegen)
-  build   [--no-opt] [--debug] <file.fuji> [-o <exe>]   Native executable (needs llc + Clang; --debug emits symbols and implies --no-opt)
+  build   [--no-opt] [--debug] <file.fuji> [-o <exe>]   Native executable (release build bundles tools; --debug emits symbols and implies --no-opt)
   bundle  <file.fuji> [-o <dir>]   Build + tidy folder to share or sell
   wrap    ...args...                   Forward to fujiwrap (C header → .fuji + wrapper.c); see below
   paths                            Machine-readable toolchain paths (CI / scripts)
-  doctor                           Human-readable health check (clang, llc, lld, stdlib, install writable)
+  doctor                           Human-readable health check (toolchain, stdlib, install writable)
 
   help                             This screen
   version                          Version and platform
@@ -225,8 +228,8 @@ C / C++ LIBRARIES (readable .fuji wrappers)
   See docs/wrappers.md and docs/distribution.md.
 
 ENVIRONMENT
-  FUJI_CLANG / CC     Clang for native builds (optional if you ship llvm/ next to fuji; see below)
-  FUJI_LLC            llc for optional llc+link path (defaults to bundled llvm/bin/llc)
+  FUJI_CLANG / CC     Override Clang path (only when not using the embedded release toolchain; contributors / custom SDKs)
+  FUJI_LLC            Override llc path (same; release builds embed llc)
   FUJI_USE_LLD        1 to force -fuse-ld=lld; 0 to disable even if bundled ld.lld exists
   FUJI_PATH           Extra @module search dirs (path list, same separator as PATH)
   FUJI_WRAPPERS       Pre-built .fuji libraries (path list; overrides FUJI_PATH)
@@ -235,21 +238,17 @@ ENVIRONMENT
   FUJI_RAYLIB_STAGE   Override path to third_party/.../stage (include/ + lib/) for vendored raylib
   FUJI_USE_VENDORED_RAYLIB  If third_party/raylib_static/stage exists (cwd or next to fuji), prepends -I and links libraylib.a; set 0/false to skip
   FUJI_BUNDLE_FILES   Extra files/dirs copied into the bundle (path-list or quoted paths with spaces)
-  FUJI_SKIP_TOOLCHAIN_EXTRACT  If set, never unpack the embedded toolchain archive (dev/CI)
+  FUJI_SKIP_TOOLCHAIN_EXTRACT  If set, skip unpacking the embedded compiler (then set FUJI_CLANG or use a dev build)
   FUJI_DEBUG_IR       If set, writes .FUJI_build/main.ll in addition to piping IR to clang
 
 SINGLE-EXE / EMBEDDED TOOLCHAIN
-  Release builds embed a gzip tarball (see internal/fujihome/embeddata/). On first fuji build
-  On first fuji build or fujiwrap run, if the archive lists a real toolchain/bin/clang, it is extracted next to the
-  executable. Portable lib/clang/*/include headers can live in that tree; clang is invoked with
-  matching -isystem flags. Replace embeddata/bundled_toolchain.tar.gz before go build to ship LLVM.
+  Release builds embed Clang, llc, the linker, and the Fuji runtime archive inside the executable.
+  On first fuji build or fujiwrap use, they are unpacked to a writable cache — no LLVM install on the machine.
 
 ZERO-SETUP DISTRIBUTION (same folder as fuji.exe / fuji)
-  Put optional trees next to the compiler so users need no separate installs:
-    llvm/bin/clang(.exe)   OR   toolchain/bin/clang(.exe)   — used for fuji build and fujiwrap
-    stdlib/*.fuji         — @ imports (e.g. @array) resolve here automatically
-    wrappers/             — optional generated bindings (same @ resolution rules)
-  FUJI_CLANG / FUJI_PATH are only needed when you do not ship these folders or an embedded bundle.
+  Ship stdlib (and optional wrappers/) next to the release binary so @ imports resolve with no extra install.
+  You do not need a separate llvm/ folder when using a proper release build (embedded toolchain).
+  FUJI_CLANG / FUJI_PATH are only for overriding defaults (e.g. contributor builds without embed).
 
 EXAMPLES
   fuji run tests\hello.fuji
@@ -271,6 +270,7 @@ func runWrapgen(args []string) error {
 		fmt.Println("fuji wrap — runs fujiwrap (header → .fuji + wrapper.c). Example:")
 		fmt.Println("  fuji wrap -name mylib -headers ./include/mylib.h -out ./wrappers/mylib")
 		fmt.Println("\nInstall fujiwrap from the same GitHub Releases page as fuji, or place fujiwrap next to fuji.")
+		fmt.Println("Release fujiwrap embeds the same Clang as fuji — no separate LLVM install for header parsing.")
 		fmt.Println("(Legacy names wrapgen / kujiwrap are still discovered if present.)")
 		return nil
 	}

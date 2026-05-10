@@ -1,16 +1,19 @@
-# scripts/build-release.ps1
-# Builds a local release binary for testing.
+﻿# scripts/build-release.ps1
+# Builds a local release `fuji.exe` + offline SDK under dist\offline-release\bin\,
+# then a shippable zip dist\fuji-<version>-windows-amd64-offline.zip (omit with -NoZip).
 # Offline-only: this script never downloads dependencies.
 
 param(
     [string]$Platform = "windows",
     [string]$LLVMBin = "C:\Program Files\LLVM\bin",
     [string]$MinGWBin = "C:\ProgramData\mingw64\mingw64\bin",
-    [string]$OutputDir = "dist\offline-release"
+    [string]$OutputDir = "dist\offline-release",
+    [switch]$NoZip
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Set-Location $RepoRoot
 
 Write-Host "Building Fuji release binary for $Platform..."
 Write-Host "Mode: offline (no downloads)"
@@ -23,10 +26,31 @@ $clangExe = Join-Path $LLVMBin "clang.exe"
 $lldExe = Join-Path $LLVMBin "lld.exe"
 $clangDriver = Join-Path $RepoRoot "scripts\clang-gnu.cmd"
 $mingwArExe = Join-Path $MinGWBin "ar.exe"
-$llcExe = Join-Path $LLVMBin "llc.exe"
+
+$llcExe = $null
+foreach ($name in @("llc.exe", "llc-18.exe", "llc-14.exe")) {
+    $cand = Join-Path $LLVMBin $name
+    if (Test-Path $cand) { $llcExe = $cand; break }
+}
+if (!$llcExe) {
+    $onPath = (Get-Command "llc.exe" -ErrorAction SilentlyContinue).Source
+    if ($onPath) { $llcExe = $onPath }
+}
 
 if (!(Test-Path $clangExe)) { throw "Missing $clangExe" }
 if (!(Test-Path $lldExe)) { throw "Missing $lldExe" }
+if (!$llcExe -or !(Test-Path $llcExe)) {
+    throw @"
+Missing LLVM llc (LLVM IR -> object). Fuji release builds must embed llc.exe next to clang.
+Checked: $LLVMBin (and llc.exe on PATH).
+
+Some Windows LLVM packages omit llc. Install a full LLVM binary distribution, for example:
+  https://github.com/llvm/llvm-project/releases  (Pre-built binaries / Windows installer, all tools)
+or: choco install llvm -y
+
+Then re-run with -LLVMBin pointing at that LLVM's bin folder (e.g. 'C:\Program Files\LLVM\bin').
+"@
+}
 if (!(Test-Path $mingwArExe)) { throw "Missing $mingwArExe" }
 if (!(Test-Path $clangDriver)) { throw "Missing $clangDriver" }
 
@@ -58,44 +82,221 @@ Write-Host "Populating embed directory..."
 New-Item -ItemType Directory -Force internal\embed\windows\amd64 | Out-Null
 Copy-Item $clangExe internal\embed\windows\amd64\clang.exe
 Copy-Item $lldExe   internal\embed\windows\amd64\lld.exe
-if (Test-Path $llcExe) {
-    Copy-Item $llcExe internal\embed\windows\amd64\llc.exe
-}
+Copy-Item $llcExe   internal\embed\windows\amd64\llc.exe
 Copy-Item runtime\libfuji_runtime.a  internal\embed\windows\amd64\
 
 Write-Host "Building fuji.exe..."
 go build -trimpath -tags release -ldflags="-s -w -X main.version=$releaseVersion" -o fuji-release.exe .\cmd\fuji
 if ($LASTEXITCODE -ne 0) { throw "Failed building fuji-release.exe" }
 
-Write-Host "Building kujiwrap/fujiwrap..."
-go build -trimpath -ldflags="-s -w -X main.WrapgenVersion=$releaseVersion" -o fujiwrap.exe .\cmd\wrapgen
+Write-Host "Building kujiwrap/fujiwrap (embedded Clang like fuji ΓÇö no system compiler needed at runtime)..."
+go build -trimpath -tags release -ldflags="-s -w -X main.WrapgenVersion=$releaseVersion" -o fujiwrap.exe .\cmd\wrapgen
 if ($LASTEXITCODE -ne 0) { throw "Failed building fujiwrap.exe" }
 Copy-Item -Force .\fujiwrap.exe .\kujiwrap.exe
 
-Write-Host "Assembling offline distribution..."
-New-Item -ItemType Directory -Force $OutputDir | Out-Null
-Copy-Item -Force .\fuji-release.exe (Join-Path $OutputDir "fuji.exe")
-Copy-Item -Force .\fujiwrap.exe (Join-Path $OutputDir "fujiwrap.exe")
-Copy-Item -Force .\kujiwrap.exe (Join-Path $OutputDir "kujiwrap.exe")
-if (Test-Path .\stdlib)  { Copy-Item -Recurse -Force .\stdlib  (Join-Path $OutputDir "stdlib") }
-if (Test-Path .\wrappers){ Copy-Item -Recurse -Force .\wrappers (Join-Path $OutputDir "wrappers") }
-if (Test-Path .\runtime) { Copy-Item -Recurse -Force .\runtime  (Join-Path $OutputDir "runtime") }
+Write-Host "Assembling offline distribution (everything under bin\)..."
+$bundleParent = Join-Path $RepoRoot $OutputDir
+$BinDir = Join-Path $bundleParent "bin"
+
+# Remove stale layout (flat bundle or old bin\) so we never mix old and new trees.
+if (Test-Path $BinDir) {
+    Remove-Item -Recurse -Force $BinDir
+}
+foreach ($name in @("fuji.exe", "fujiwrap.exe", "kujiwrap.exe", "README_OFFLINE.txt")) {
+    $p = Join-Path $bundleParent $name
+    if (Test-Path $p) { Remove-Item -Force $p }
+}
+foreach ($d in @("stdlib", "wrappers", "runtime", "docs", "examples")) {
+    $p = Join-Path $bundleParent $d
+    if (Test-Path $p) { Remove-Item -Recurse -Force $p }
+}
+foreach ($md in Get-ChildItem -Path $bundleParent -Filter "*.md" -File -ErrorAction SilentlyContinue) {
+    Remove-Item -Force $md.FullName
+}
+
+New-Item -ItemType Directory -Force $BinDir | Out-Null
+
+Copy-Item -Force .\fuji-release.exe (Join-Path $BinDir "fuji.exe")
+Copy-Item -Force .\fujiwrap.exe (Join-Path $BinDir "fujiwrap.exe")
+Copy-Item -Force .\kujiwrap.exe (Join-Path $BinDir "kujiwrap.exe")
+
+if (Test-Path .\stdlib)   { Copy-Item -Recurse -Force .\stdlib   (Join-Path $BinDir "stdlib") }
+if (Test-Path .\wrappers) { Copy-Item -Recurse -Force .\wrappers  (Join-Path $BinDir "wrappers") }
+if (Test-Path .\docs)     { Copy-Item -Recurse -Force .\docs      (Join-Path $BinDir "docs") }
+if (Test-Path .\examples){ Copy-Item -Recurse -Force .\examples  (Join-Path $BinDir "examples") }
+
+# fuji build links with -I <cwd>/runtime/src ΓÇö cwd must contain this tree (see internal/nativebuild/build.go).
+$rtSrc = Join-Path $RepoRoot "runtime\src"
+if (Test-Path $rtSrc) {
+    $dstRt = Join-Path $BinDir "runtime\src"
+    New-Item -ItemType Directory -Force $dstRt | Out-Null
+    Copy-Item -Force (Join-Path $rtSrc "*") $dstRt
+} else {
+    throw "Missing runtime\src (required in the bundle for fuji build / fuji run)"
+}
+
+# MinGW-w64 runtime DLLs often needed next to game .exe when linking with the same GNU toolchain.
+foreach ($dll in @("libgcc_s_seh-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll")) {
+    $p = Join-Path $MinGWBin $dll
+    if (Test-Path $p) {
+        Copy-Item -Force $p (Join-Path $BinDir $dll)
+    }
+}
+
+$samplesDir = Join-Path $BinDir "samples"
+New-Item -ItemType Directory -Force $samplesDir | Out-Null
+$helloTest = Join-Path $RepoRoot "tests\hello.fuji"
+if (Test-Path $helloTest) {
+    Copy-Item -Force $helloTest (Join-Path $samplesDir "hello.fuji")
+}
+
+foreach ($md in Get-ChildItem -Path $RepoRoot -Filter "*.md" -File) {
+    Copy-Item -Force $md.FullName (Join-Path $BinDir $md.Name)
+}
+
+$raylibStageRel = Join-Path "third_party" "raylib_static\stage"
+$stageDst = Join-Path $BinDir $raylibStageRel
+$stageSrcCandidates = @(
+    (Join-Path $RepoRoot "third_party\raylib_static\stage"),
+    (Join-Path $RepoRoot "raylib_lib\raylib-5.0_win64_mingw-w64")
+)
+$stageSrc = $null
+foreach ($c in $stageSrcCandidates) {
+    $inc = Join-Path $c "include"
+    $libray = Join-Path $c "lib\libraylib.a"
+    if ((Test-Path $inc) -and (Test-Path $libray)) { $stageSrc = $c; break }
+}
+if (!$stageSrc) {
+    throw "Raylib 5.0 Windows stage not found. Expected include/ + lib/libraylib.a under third_party\raylib_static\stage or raylib_lib\raylib-5.0_win64_mingw-w64"
+}
+New-Item -ItemType Directory -Force $stageDst | Out-Null
+Copy-Item -Recurse -Force (Join-Path $stageSrc "include") (Join-Path $stageDst "include")
+Copy-Item -Recurse -Force (Join-Path $stageSrc "lib")     (Join-Path $stageDst "lib")
+foreach ($x in @("LICENSE", "CHANGELOG", "README.md")) {
+    $p = Join-Path $stageSrc $x
+    if (Test-Path $p) { Copy-Item -Force $p $stageDst }
+}
+
+$raylibDll = Join-Path $stageDst "lib\raylib.dll"
+if (Test-Path $raylibDll) {
+    Copy-Item -Force $raylibDll (Join-Path $BinDir "raylib.dll")
+} else {
+    Write-Warning "raylib.dll not found under stage lib\; Windows games may need the DLL next to the .exe"
+}
+
+# Upstream raylib 6.x C headers (unwrapped ΓÇö no Fuji wrapper); same files as stdlib/sys-include for fujiwrap / reference.
+$unwrapRoot = Join-Path $BinDir "third_party\raylib6_unwrapped"
+$unwrapInc = Join-Path $unwrapRoot "include"
+$sysInc = Join-Path $RepoRoot "stdlib\sys-include"
+New-Item -ItemType Directory -Force $unwrapInc | Out-Null
+if (Test-Path $sysInc) {
+    Get-ChildItem -Path $sysInc -Filter "*.h" -File | ForEach-Object {
+        Copy-Item -Force $_.FullName (Join-Path $unwrapInc $_.Name)
+    }
+}
+@"
+Upstream Raylib 6.x C headers (unwrapped)
+==========================================
+These are the same headers vendored in stdlib/sys-include/ (raylib 6 API, no Fuji bindings).
+
+Use with fujiwrap, for C reference, or custom FUJI_NATIVE_SOURCES builds, for example:
+  fujiwrap -name myraylib -headers .\third_party\raylib6_unwrapped\include\raylib.h ...
+
+Note: third_party/raylib_static/stage/ still ships the official raylib 5.0 Windows prebuild
+(libraylib.a, raylib.dll). Fuji auto-vendored linking targets that tree unless you override
+FUJI_RAYLIB_STAGE / FUJI_USE_VENDORED_RAYLIB. Mixing 6.0 headers with 5.0 libs can break; use
+matching raylib 6 binaries if you compile against these headers.
+"@ | Set-Content -Path (Join-Path $unwrapRoot "README.txt")
 
 @"
-Fuji offline bundle
--------------------
-This build is self-contained for fuji build/run usage.
-No installer or network download is required by the compiler.
-Included binaries:
-- fuji.exe
-- fujiwrap.exe
-- kujiwrap.exe (legacy compatibility name)
-"@ | Set-Content -Path (Join-Path $OutputDir "README_OFFLINE.txt")
+Fuji offline SDK (Windows)
+----------------------------
+No separate install: fuji.exe and fujiwrap.exe embed Clang, llc, lld, and the Fuji runtime library.
+You do not install LLVM, MinGW, Go, or Visual Studio on this PC to compile .fuji programs ΓÇö only **fuji.exe**, **fujiwrap.exe**, and this folder (stdlib next to them; write access for first-run unpack).
+
+All tools and libraries live in this folder (bin). Use it as your working directory or add it to PATH.
+
+Contents
+--------
+  fuji.exe, fujiwrap.exe, kujiwrap.exe  ΓÇö compiler and wrapper tool
+  raylib.dll                            ΓÇö copy next to your game .exe when linking dynamically
+  stdlib/, wrappers/, docs/, examples/   ΓÇö language + Raylib docs and samples
+  samples/hello.fuji                     ΓÇö tiny program to verify the toolchain after unzip
+  runtime/src/                          ΓÇö C headers for the native link step (run `fuji` with cwd = this bin folder)
+  libgcc_s_seh-1.dll, ΓÇª                  ΓÇö optional MinGW runtimes (when present on the build machine)
+  third_party/raylib_static/stage/      ΓÇö Raylib 5.0 headers + libraylib.a (+ lib\raylib.dll)
+  third_party/raylib6_unwrapped/       ΓÇö upstream Raylib 6.x C headers (include/) + README.txt
+  *.md                                  ΓÇö repo root guides (language.md, README, ΓÇª)
+
+Raylib: see docs/guides/raylib.md. Vendored stage is detected next to fuji.exe automatically.
+Unwrapped Raylib 6 headers: third_party/raylib6_unwrapped/include/ (see README there).
+
+If native compile fails, run: .\fuji.exe doctor
+"@ | Set-Content -Path (Join-Path $BinDir "README_OFFLINE.txt")
+
+@"
+Fuji Windows offline bundle
+No system compiler install required ΓÇö open **bin** and run **fuji.exe** (toolchain is embedded). See START_HERE.txt.
+"@ | Set-Content -Path (Join-Path $bundleParent "README.txt")
+
+@"
+Fuji ΓÇö ship / unzip / run
+==========================
+
+1) Unzip anywhere (a normal folder you can write to is best). **Install nothing else** ΓÇö not Go, not LLVM, not a C compiler. Only use **fuji.exe** and **fujiwrap.exe** from this SDK (with **stdlib/** beside them). First `fuji build` / `fuji run` may unpack embedded tools once.
+
+2) Open a terminal in the **bin** folder (this is your "project root" for builds):
+     cd bin
+
+3) Smoke test:
+     .\fuji.exe version
+     .\fuji.exe doctor
+
+4) Quick build test (from **bin**, no repo checkout needed):
+     .\fuji.exe build samples\hello.fuji -o hello.exe
+     .\hello.exe
+
+   Build another program (paths can be absolute, or relative to **bin**):
+     .\fuji.exe build ..\path\to\yourgame.fuji -o mygame.exe
+
+   For the Raylib shim demo, set native glue once per session, then run (see README_OFFLINE.txt and docs\guides\raylib.md):
+     `$env:FUJI_NATIVE_SOURCES = "wrappers\raylib_shim\wrapper.c"
+     .\fuji.exe run examples\raylib_shim_demo.fuji
+
+5) Ship your game: copy **raylib.dll** (and, if needed, **libgcc_s_seh-1.dll**, **libstdc++-6.dll**, **libwinpthread-1.dll**) next to your **.exe** when you use the Raylib DLL or MinGW-linked output.
+
+Full layout notes: README_OFFLINE.txt (inside bin).
+"@ | Set-Content -Path (Join-Path $bundleParent "START_HERE.txt")
+
+if (!$NoZip) {
+    $zipFolderName = "fuji-$releaseVersion-windows-amd64-offline"
+    $zipStageRoot = Join-Path $RepoRoot "dist\_ship_zip_stage"
+    if (Test-Path $zipStageRoot) {
+        Remove-Item -Recurse -Force $zipStageRoot
+    }
+    $zipInner = Join-Path $zipStageRoot $zipFolderName
+    New-Item -ItemType Directory -Force $zipInner | Out-Null
+    Get-ChildItem -Path $bundleParent -Force | ForEach-Object {
+        Copy-Item -Recurse -Force $_.FullName (Join-Path $zipInner $_.Name)
+    }
+    $zipPath = Join-Path $RepoRoot "dist\$zipFolderName.zip"
+    if (Test-Path $zipPath) {
+        Remove-Item -Force $zipPath
+    }
+    Write-Host "Writing shippable zip: $zipPath"
+    Compress-Archive -Path $zipInner -DestinationPath $zipPath -Force
+    Remove-Item -Recurse -Force $zipStageRoot
+}
 
 Write-Host ""
-Write-Host "Done. Test with:"
-Write-Host "  .\fuji-release.exe build tests\hello.fuji -o hello.exe"
+Write-Host "Done. Test from bin folder:"
+Write-Host "  cd `"$BinDir`""
+Write-Host "  .\fuji.exe build `"$RepoRoot\tests\hello.fuji`" -o hello.exe"
 Write-Host "  .\hello.exe"
 Write-Host ""
-Write-Host "Offline bundle:"
-Write-Host "  $OutputDir"
+Write-Host "Offline bundle folder:"
+Write-Host "  $BinDir"
+if (!$NoZip) {
+    Write-Host "Ship this zip (unzip = ready):"
+    Write-Host "  $(Join-Path $RepoRoot "dist\fuji-$releaseVersion-windows-amd64-offline.zip")"
+}

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+## [0.3.0] - 2026-05-10
+
+Third release: **`stdlib/vec3`**, parser per-file parse cache, GC control builtins, runtime and lexer hardening, codegen loop and method-lowering fixes, and expanded CI (stress, fuzz).
+
+### Added
+
 - **`stdlib/vec3.fuji`** — 3D **`{x, y, z}`** helpers (**`create`**, **`add`**, **`sub`**, **`scale`**, **`dot`**, **`cross`**, **`length`**, **`normalize`**, …); **`lerp`** now uses **`math.lerp`** per component after namespace-call lowering was fixed.
 - **`tests/vec3_test.fuji`**, **`tests/incremental_gc_test.fuji`** — stdlib **`vec3`** coverage; incremental GC (**`gcCollectIncremental`** + **`gcFrameStep`**) loop stability (Linux CI runs incremental test with **`fuji run --no-opt`** for time-bounded safety).
 - **Parser — per-file parse cache** — **`internal/parser/loader.go`** caches parsed programs by **absolute path** + **`mtime`** nanoseconds; overlays skip the cache; **`internal/parser/loader_parse_cache_test.go`** (**`TestParseCacheUsesMtime`**).

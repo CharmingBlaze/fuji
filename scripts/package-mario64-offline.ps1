@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$OutputDir = "dist\fuji-mario64-offline"
 )
 
@@ -34,13 +34,17 @@ $scriptsDir = Join-Path $outAbs "scripts"
 
 New-Item -ItemType Directory -Force $binDir,$compilerDir,$raylibDir,$raylibLibDir,$raylibIncludeDir,$wrappersDir,$examplesDir,$scriptsDir | Out-Null
 
-# 3) Copy compiler + wrappers from offline bundle.
-$offlineBundle = Join-Path $repoRoot "dist\offline-release"
+# 3) Copy compiler + wrappers from offline bundle (see scripts/build-release.ps1 layout).
+$offlineBundle = Join-Path $repoRoot "dist\offline-release\bin"
 Copy-Item -Force (Join-Path $offlineBundle "fuji.exe") (Join-Path $compilerDir "fuji.exe")
 Copy-Item -Force (Join-Path $offlineBundle "fujiwrap.exe") (Join-Path $compilerDir "fujiwrap.exe")
 Copy-Item -Force (Join-Path $offlineBundle "kujiwrap.exe") (Join-Path $compilerDir "kujiwrap.exe")
 Copy-Item -Recurse -Force (Join-Path $offlineBundle "stdlib") (Join-Path $compilerDir "stdlib")
-Copy-Item -Recurse -Force (Join-Path $offlineBundle "runtime") (Join-Path $compilerDir "runtime")
+if (Test-Path (Join-Path $offlineBundle "runtime")) {
+    Copy-Item -Recurse -Force (Join-Path $offlineBundle "runtime") (Join-Path $compilerDir "runtime")
+} else {
+    Copy-Item -Recurse -Force (Join-Path $repoRoot "runtime") (Join-Path $compilerDir "runtime")
+}
 
 # 4) Copy raylib SDK bits and DLL (no download required).
 $raylibRoot = Join-Path $repoRoot "raylib_lib\raylib-5.0_win64_mingw-w64"

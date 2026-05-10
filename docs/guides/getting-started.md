@@ -2,9 +2,11 @@
 
 This guide is only about **using Fuji**.
 
+**You do not install Go or LLVM** to use Fuji. Download the release **`fuji`** and **`fujiwrap`** (and unpack an SDK zip so **`stdlib/`** sits next to them). The release binaries embed what they need to compile `.fuji`; that is separate from the Go + LLVM setup **only maintainers** use to build Fuji from this repo.
+
 ## 1) Install Fuji the easy way
 
-Download the latest `fuji` binary from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases), then run:
+Download the latest `fuji` (and `fujiwrap`) from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases), use an SDK zip so **`stdlib/`** is beside the executables, then run:
 
 ```bash
 fuji version

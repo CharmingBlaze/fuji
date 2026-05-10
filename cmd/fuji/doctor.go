@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -19,8 +19,11 @@ func runDoctor() error {
 	fmt.Println("=== fuji doctor ===")
 	fmt.Println()
 
+	releaseToolchain := false
 	if embedDir, err := fujembed.Extract(); err == nil {
-		fmt.Printf("Release build — embedded toolchain at %s\n", embedDir)
+		releaseToolchain = true
+		fmt.Printf("Release build ΓÇö embedded toolchain at %s\n", embedDir)
+		fmt.Println("You only need fuji + fujiwrap (and stdlib next to them). No Go install and no LLVM install on your machine.")
 		clang, _ := fujembed.ClangPath()
 		lib, _ := fujembed.RuntimeLibPath()
 		fmt.Printf("  clang:   %s\n", clang)
@@ -31,14 +34,14 @@ func runDoctor() error {
 			}
 		}
 	} else if errors.Is(err, fujembed.ErrDevelopmentBuild) {
-		fmt.Println("Development build — system toolchain")
+		fmt.Println("Development build ΓÇö system toolchain")
 
 		tc, err := fujihome.FindToolchain()
 		if err != nil {
-			fmt.Printf("✗ toolchain: %v\n", err)
+			fmt.Printf("Γ£ù toolchain: %v\n", err)
 		} else {
-			fmt.Printf("✓ clang:   %s\n", tc.Clang)
-			fmt.Printf("✓ runtime: %s\n", tc.RuntimeLib)
+			fmt.Printf("Γ£ô clang:   %s\n", tc.Clang)
+			fmt.Printf("Γ£ô runtime: %s\n", tc.RuntimeLib)
 			fmt.Printf("  llc:     %s\n", tc.LLC)
 			if tc.LLD != "" {
 				fmt.Printf("  lld:     %s\n", tc.LLD)
@@ -113,7 +116,11 @@ func runDoctor() error {
 
 	fmt.Println()
 	fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
-	fmt.Printf("Go version: %s\n", runtime.Version())
+	if releaseToolchain {
+		fmt.Println("fuji is a normal native program; you do not install Go separately to use it.")
+	} else {
+		fmt.Printf("Go version (this fuji binary was built with): %s\n", runtime.Version())
+	}
 	fmt.Println()
 	fmt.Println("Doctor finished.")
 	return nil

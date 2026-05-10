@@ -7,8 +7,14 @@
 1. **`CHANGELOG.md`** — Move notes from **`[Unreleased]`** into a dated **`[X.Y.Z]`** section (see **`[0.2.0]`** as a template).
 2. **Version strings** — Align **`cmd/fuji/main.go`** `version` and **`cmd/wrapgen/wrapgen_version.go`** `WrapgenVersion` with the tag (release builds may also pass `-ldflags "-X main.version=..."` if you use that flow).
 3. **CI green** — **`go vet ./...`**, **`go test ./...`**, and **`fuji fmt --check`** (see **[CONTRIBUTING.md](../CONTRIBUTING.md)**).
-4. **Tag** — `git tag v0.2.0 && git push origin v0.2.0` (example). The workflow builds **`-tags release`** `fuji` binaries with embedded Clang + **`libfuji_runtime.a`** (and **lld** on Windows).
-5. **Post-release** — Open **`[Unreleased]`** again; bump dev versions (e.g. **`0.3.0-dev`**) if you ship nightlies from `main`.
+4. **Tag** — From a **git clone** of `main` with the version bump merged:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/push-release-tag.ps1 -Tag v0.3.0
+   git push origin main
+   git push origin v0.3.0
+   ```
+   Or manually: `git tag -a v0.3.0 -m "Release v0.3.0"` then `git push origin v0.3.0`. The workflow builds **`-tags release`** `fuji` binaries with embedded Clang + **`libfuji_runtime.a`** (and **lld** on Windows).
+5. **Post-release** — Open **`[Unreleased]`** again; bump dev versions (e.g. **`0.4.0-dev`**) on `main` if you ship nightlies after **`v0.3.0`**.
 
 ## Notes
 
