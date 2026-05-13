@@ -79,8 +79,16 @@ jobs:
 
       - name: Build C runtime
         run: |
-          CLANG_BIN="$(command -v clang-18 || command -v clang)"
-          LLVM_AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar)"
+          CLANG_BIN="$(command -v clang-18 || command -v clang || command -v cc || true)"
+          LLVM_AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar || command -v ar || true)"
+          if [[ -z "$CLANG_BIN" ]]; then
+            echo "no clang/cc found on PATH" >&2
+            exit 1
+          fi
+          if [[ -z "$LLVM_AR_BIN" ]]; then
+            echo "no llvm-ar/ar found on PATH" >&2
+            exit 1
+          fi
           mkdir -p runtime/obj_linux
           "$CLANG_BIN" -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/value.o
           "$CLANG_BIN" -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj_linux/object.o
@@ -90,8 +98,16 @@ jobs:
 
       - name: Populate embed/linux/amd64
         run: |
-          CLANG_BIN="$(command -v clang-18 || command -v clang)"
-          LLC_BIN="$(command -v llc-18 || command -v llc)"
+          CLANG_BIN="$(command -v clang-18 || command -v clang || command -v cc || true)"
+          LLC_BIN="$(command -v llc-18 || command -v llc || true)"
+          if [[ -z "$CLANG_BIN" ]]; then
+            echo "no clang/cc found on PATH" >&2
+            exit 1
+          fi
+          if [[ -z "$LLC_BIN" ]]; then
+            echo "no llc found on PATH" >&2
+            exit 1
+          fi
           mkdir -p internal/embed/linux/amd64
           cp "$CLANG_BIN"                internal/embed/linux/amd64/clang
           cp "$LLC_BIN"                  internal/embed/linux/amd64/llc
@@ -133,8 +149,16 @@ jobs:
 
       - name: Build C runtime
         run: |
-          CLANG_BIN="$(command -v clang-18 || command -v clang)"
-          LLVM_AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar)"
+          CLANG_BIN="$(command -v clang-18 || command -v clang || command -v cc || true)"
+          LLVM_AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar || command -v ar || true)"
+          if [[ -z "$CLANG_BIN" ]]; then
+            echo "no clang/cc found on PATH" >&2
+            exit 1
+          fi
+          if [[ -z "$LLVM_AR_BIN" ]]; then
+            echo "no llvm-ar/ar found on PATH" >&2
+            exit 1
+          fi
           mkdir -p runtime/obj_linux_arm64
           "$CLANG_BIN" -c runtime/src/value.c        -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/value.o
           "$CLANG_BIN" -c runtime/src/object.c       -O2 -std=c11 -Iruntime/src -o runtime/obj_linux_arm64/object.o
@@ -144,8 +168,16 @@ jobs:
 
       - name: Populate embed/linux/arm64
         run: |
-          CLANG_BIN="$(command -v clang-18 || command -v clang)"
-          LLC_BIN="$(command -v llc-18 || command -v llc)"
+          CLANG_BIN="$(command -v clang-18 || command -v clang || command -v cc || true)"
+          LLC_BIN="$(command -v llc-18 || command -v llc || true)"
+          if [[ -z "$CLANG_BIN" ]]; then
+            echo "no clang/cc found on PATH" >&2
+            exit 1
+          fi
+          if [[ -z "$LLC_BIN" ]]; then
+            echo "no llc found on PATH" >&2
+            exit 1
+          fi
           mkdir -p internal/embed/linux/arm64
           cp "$CLANG_BIN"                internal/embed/linux/arm64/clang
           cp "$LLC_BIN"                  internal/embed/linux/arm64/llc
@@ -307,7 +339,7 @@ jobs:
             | **`fuji-${{ github.ref_name }}-sdk-darwin-amd64.zip`** | Intel macOS |
             | **`fuji-${{ github.ref_name }}-sdk-darwin-arm64.zip`** | Apple Silicon |
 
-            Extract anywhere; keep **`stdlib/`** next to **`fuji`**. Embedded **Clang + llc + runtime** (and Windows `lld`) ship **inside** the `fuji` binary — **no LLVM install** for compiling Fuji programs. Wrapping/linking external C libs still uses your SDKs (see `docs/wrappers.md` in the zip).
+            Extract anywhere; keep **`stdlib/`** next to **`fuji`**. Embedded **Clang + llc + runtime** (and Windows `lld`) ship **inside** the `fuji` binary — **no LLVM install** and **`fuji` does not download anything from the internet** when you compile; tools unpack from the binary to a **local temp directory** on first use only. Raylib (where included in the zip) is already on disk under **`third_party/raylib_static/stage/`**. Wrapping/linking **other** external C libs still uses libraries you provide (see `docs/wrappers.md` in the zip).
 
             ### Loose binaries only
 

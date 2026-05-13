@@ -2,7 +2,7 @@
 
 ## ⚠️ This is for contributors only
 
-If you want to **use** Fuji to make games or applications, **do not build from source**. Download a release binary from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases) instead. The release binary is self-contained and does not require any of the toolchain described in this document.
+If you want to **use** Fuji to make games or applications, **do not build from source**. On [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases), download the **SDK zip** for your platform (one unzip gets **`fuji`**, **`fujiwrap`**, **`stdlib/`**, docs, examples, and vendored Raylib where applicable). That layout works **fully offline** after download — the compiler does not fetch LLVM or libraries from the network. Loose **`fuji-*`** binaries are also listed if you supply **`stdlib/`** yourself.
 
 Building from source requires Go 1.22+, Clang + llc on PATH, and a C toolchain. The embedded-toolchain release build (`-tags release`) additionally requires having the LLVM binaries available to embed. This is a non-trivial setup that is only worth doing if you are modifying the compiler itself.
 
@@ -21,6 +21,8 @@ Build the C runtime archive when linking native binaries (needed for **`go test`
 
 ## Tests
 
+GitHub Actions **CI** runs on **Ubuntu** and **macOS** on every push and pull request (`go vet`, `go test`, **`fuji fmt --check ./...`**, native smoke, GC soak, wrapgen Raylib link). From the repo root locally:
+
 ```bash
 go vet ./...
 go test ./... -count=1
@@ -29,6 +31,16 @@ go test ./... -count=1
 ## Releases
 
 See **[docs/releasing.md](docs/releasing.md)** for version bumps, changelog, and tagging **`v*`** so **`.github/workflows/release.yml`** runs.
+
+### Offline SDK folder (Windows maintainers)
+
+GitHub Releases attach **`fuji-<tag>-sdk-windows-amd64.zip`** (compiler + **fujiwrap** + stdlib + **docs** + **wrappers** + **examples** + vendored **raylib 5.0**). CI builds that zip on Linux; locally on Windows you can reproduce the same tree:
+
+```powershell
+powershell -File scripts/build-release.ps1 -PackageSdk
+```
+
+That runs **`scripts/assemble-offline-sdk.ps1`**, which downloads the official raylib Windows prebuild into **`third_party/raylib_static/stage`**. Add **`-PackageSdkZip`** to also write **`dist/fuji-<version>-sdk-windows-amd64.zip`**. See **`docs/distribution.md`** §7.
 
 ## Git: commit and push to `main`
 

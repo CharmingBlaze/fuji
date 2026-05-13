@@ -8,7 +8,9 @@ param(
     [string]$LLVMBin = "C:\Program Files\LLVM\bin",
     [string]$MinGWBin = "C:\ProgramData\mingw64\mingw64\bin",
     [string]$OutputDir = "dist\offline-release",
-    [switch]$NoZip
+    [switch]$NoZip,
+    [switch]$PackageSdk,
+    [switch]$PackageSdkZip
 )
 
 $ErrorActionPreference = "Stop"
@@ -89,7 +91,7 @@ Write-Host "Building fuji.exe..."
 go build -trimpath -tags release -ldflags="-s -w -X main.version=$releaseVersion" -o fuji-release.exe .\cmd\fuji
 if ($LASTEXITCODE -ne 0) { throw "Failed building fuji-release.exe" }
 
-Write-Host "Building kujiwrap/fujiwrap (embedded Clang like fuji ΓÇö no system compiler needed at runtime)..."
+Write-Host "Building kujiwrap/fujiwrap (embedded Clang like fuji -- no system compiler needed at runtime)..."
 go build -trimpath -tags release -ldflags="-s -w -X main.WrapgenVersion=$releaseVersion" -o fujiwrap.exe .\cmd\wrapgen
 if ($LASTEXITCODE -ne 0) { throw "Failed building fujiwrap.exe" }
 Copy-Item -Force .\fujiwrap.exe .\kujiwrap.exe
@@ -299,4 +301,13 @@ Write-Host "  $BinDir"
 if (!$NoZip) {
     Write-Host "Ship this zip (unzip = ready):"
     Write-Host "  $(Join-Path $RepoRoot "dist\fuji-$releaseVersion-windows-amd64-offline.zip")"
+}
+
+if ($PackageSdk -or $PackageSdkZip) {
+    $assemble = Join-Path $PSScriptRoot "assemble-offline-sdk.ps1"
+    Write-Host ""
+    Write-Host "Packaging full SDK (docs, stdlib, wrappers, examples, raylib download unless -SkipRaylib)..."
+    $zipArg = @()
+    if ($PackageSdkZip) { $zipArg = @("-Zip") }
+    & $assemble -FujiExe (Join-Path $RepoRoot "fuji-release.exe") -FujiwrapExe (Join-Path $RepoRoot "fujiwrap.exe") -Version $releaseVersion @zipArg
 }

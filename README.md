@@ -10,7 +10,7 @@ Write familiar syntax — C-style control flow, JavaScript-style objects and clo
 
 **Do not compile this repository from source.** That path is for maintainers only and expects **Go** and **LLVM** on the machine that builds Fuji.
 
-**To use Fuji you only need the release downloads:** **`fuji`** and **`fujiwrap`** from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases), plus the **`stdlib/`** folder from the same **SDK zip** (keep it next to the executables). Those binaries are self-contained — they embed the native compiler pieces they need. **You do not install Go, LLVM, or any other compiler** on the computer where you only write and build `.fuji` programs.
+**To use Fuji you only need the release downloads:** **`fuji`** and **`fujiwrap`** from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases), plus the **`stdlib/`** folder from the same **SDK zip** (keep it next to the executables). Those binaries are **already compiled** and self-contained — they embed the native compiler pieces they need. **You do not install Go, LLVM, or any other compiler** on the computer where you only write and build `.fuji` programs, and **`fuji` does not download LLVM or Raylib** when you compile (embedded tools unpack to a local temp folder on first use only).
 
 Then read:
 - [`language.md`](language.md) — everything you can write in Fuji, with examples
@@ -46,7 +46,7 @@ print(state);
 
 ---
 
-## Quick start (after downloading the release binary)
+## Quick start (after unpacking the SDK zip or placing `fuji` next to `stdlib/`)
 
 ```bash
 # Run a program directly
@@ -72,7 +72,7 @@ fuji bundle mygame.fuji -o dist/MyGame
 
 ## SDK downloads
 
-Each release includes self-contained SDK zips. **You only add `fuji`, `fujiwrap`, and the shipped folders (e.g. `stdlib/`) — no Go install and no LLVM install** on the machine where you write Fuji code.
+Each release includes self-contained SDK zips (**`fuji`** and **`fujiwrap`** are prebuilt native binaries). **You only add the shipped folders (`stdlib/`, `docs/`, …) — no Go install and no LLVM install** on the machine where you write Fuji code.
 
 | Platform | Download |
 |---|---|

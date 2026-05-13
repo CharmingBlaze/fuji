@@ -158,6 +158,22 @@ Each zip unpacks to a single folder containing **`fuji`** (or **`fuji.exe`**), *
 
 Maintainers reproduce the archives by pushing a version tag; the workflow is **[`.github/workflows/release.yml`](.github/workflows/release.yml)** and **`scripts/package-release-sdk.sh`**.
 
+### 7.1 Local Windows SDK (same layout as the release zip)
+
+After you have release **`fuji.exe`** / **`fujiwrap.exe`** (embedded Clang + llc + lld + runtime), assemble the full distributable folder:
+
+```powershell
+powershell -File scripts/assemble-offline-sdk.ps1 -FujiExe .\fuji-release.exe -FujiwrapExe .\fujiwrap.exe -Zip
+```
+
+Or build the compiler then package in one step:
+
+```powershell
+powershell -File scripts/build-release.ps1 -PackageSdk -PackageSdkZip
+```
+
+Options: **`-SkipRaylib`** (no download; add **`third_party/raylib_static/stage`** yourself), **`-RaylibZipPath`** (use a downloaded **`raylib-5.0_win64_mingw-w64.zip`** offline). The result matches what users get from **Releases** for Windows amd64: static **`libraylib.a`** for linking plus **`raylib.dll`** from the official prebuild when you need it beside shipped **`.exe`** files.
+
 ### Manual “toolchain folder” layout (maintainers)
 
 If you build from source locally, mirror the same layout next to **`fuji`**:

@@ -117,6 +117,8 @@ Fuji SDK ${VERSION} (${slug})
 Platforms: Windows, Linux, and macOS each have dedicated release zips (this archive is ${slug}).
 Everything offline: compiler, fujiwrap, stdlib, docs, examples — no Go or LLVM install required to compile .fuji.
 
+The compiler never fetches LLVM, Raylib, or other dependencies from the network. Release builds embed Clang + llc + the Fuji runtime; they unpack to a local temp directory on first use only. Raylib (where included in this zip) lives under third_party/raylib_static/stage/.
+
 Layout
 ------
   $(printf '%s' "$fj_out")     — Fuji compiler (${slug})

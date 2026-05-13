@@ -16,6 +16,16 @@
    Or manually: `git tag -a v0.3.0 -m "Release v0.3.0"` then `git push origin v0.3.0`. The workflow builds **`-tags release`** `fuji` binaries with embedded Clang + **`libfuji_runtime.a`** (and **lld** on Windows).
 5. **Post-release** — Open **`[Unreleased]`** again; bump dev versions (e.g. **`0.4.0-dev`**) on `main` if you ship nightlies after **`v0.3.0`**.
 
+## Windows: test the SDK layout before tagging
+
+From repo root, after LLVM + MinGW paths match **`scripts/build-release.ps1`** defaults:
+
+```powershell
+powershell -File scripts/build-release.ps1 -PackageSdk
+```
+
+This mirrors the **`fuji-*-sdk-windows-amd64`** folder inside the release zip (see **`scripts/assemble-offline-sdk.ps1`**).
+
 ## Notes
 
 - **Linux CI** (**`ci.yml`**) does not embed the toolchain; **`release.yml`** repopulates **`internal/embed/...`** per job from the runner’s Clang/LLVM before **`go build -tags release`**.

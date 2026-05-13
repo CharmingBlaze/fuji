@@ -17,6 +17,7 @@ var fmtSkipDirNames = map[string]bool{
 	"bin":                 true,
 	"node_modules":        true,
 	"vendor":              true,
+	"_legacy":             true,
 	"_wg_legacy":          true,
 	"_wg_out":             true,
 	"raylib_full_wrapper": true,

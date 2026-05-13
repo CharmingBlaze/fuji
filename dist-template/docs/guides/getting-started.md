@@ -4,11 +4,17 @@ This guide is only about **using Fuji**.
 
 ## 1) Install Fuji the easy way
 
-Download the latest `fuji` binary from [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases), then run:
+On [GitHub Releases](https://github.com/CharmingBlaze/fuji/releases), download **one** file: the **SDK zip** for your OS (for example **`fuji-vX.Y.Z-sdk-windows-amd64.zip`** on Windows 64-bit). Unzip it; inside you get **`fuji`** (or **`fuji.exe`**), **`fujiwrap`**, **`stdlib/`**, **`docs/`**, **`wrappers/`**, **`examples/`**, and (on most platforms) **`third_party/raylib_static/stage/`** with Raylib already vendored.
+
+That is the full, **offline** toolchain: **`fuji` does not download LLVM, Raylib, or anything else** when you compile. Embedded Clang/llc live inside the release binary and are written to a **local temp folder** the first time you build or run — still no network.
+
+Then:
 
 ```bash
 fuji version
 ```
+
+(Loose **`fuji-*`** binaries without the zip are also on the release page if you only want the compiler and will arrange **`stdlib/`** yourself.)
 
 Do not compile Fuji from source for normal usage. The source tree is maintainer-focused and not the intended beginner install route.
 

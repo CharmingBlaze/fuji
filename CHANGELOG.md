@@ -9,7 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CI — Linux + macOS** — **`.github/workflows/ci.yml`** now runs the same pipeline on **`ubuntu-latest`** and **`macos-latest`** (GNU **`timeout`** via Homebrew **coreutils** on macOS). **`scripts/ci-wrapgen-raylib.sh`** installs native Raylib for linking on both OSes when using the vendored header.
+- **Docs / GitHub** — README and getting-started emphasize the **SDK zip** and that **`fuji` does not download LLVM or Raylib** at compile time (embedded toolchain unpacks locally only).
+- **`scripts/assemble-offline-sdk.ps1`** — Windows maintainers can assemble the same **offline SDK folder** as GitHub **`fuji-*-sdk-windows-amd64.zip`**. **`scripts/build-release.ps1`** supports **`-PackageSdk`** / **`-PackageSdkZip`** alongside **`-NoZip`**.
+
 ### Fixed
+
+- **`fuji fmt ./...`** — **`_legacy/`** is skipped (like **`_wg_*`** trees) so **`fuji fmt --check ./...`** passes when a legacy mirror exists in the tree.
 
 ## [0.3.0] - 2026-05-10
 
