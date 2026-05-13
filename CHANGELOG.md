@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.3.2] - 2026-05-13
+
+Fixes **`.github/workflows/release.yml`** so tagged releases build on current GitHub runners: LLVM **clang/llc/llvm-ar** version fallbacks on Linux, resilient **`llc*.exe`** discovery on Windows (Chocolatey LLVM), and **`chmod +x`** before macOS smoke tests.
+
 ## [0.3.1] - 2026-05-13
 
 Cross-platform CI (Windows + Linux + macOS), LF-safe workflows, offline SDK packaging helpers, and contributor docs for GitHub downloads.

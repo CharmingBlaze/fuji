@@ -37,11 +37,26 @@ jobs:
 
       - name: Populate embed/windows/amd64
         run: |
+          $llvmBin = "C:\Program Files\LLVM\bin"
+          $clang = Join-Path $llvmBin "clang.exe"
+          if (!(Test-Path $clang)) { throw "missing $clang" }
+          $lld = Join-Path $llvmBin "lld.exe"
+          if (!(Test-Path $lld)) { throw "missing $lld" }
+          $llc = $null
+          foreach ($n in @("llc.exe", "llc-20.exe", "llc-19.exe", "llc-18.exe", "llc-17.exe")) {
+            $c = Join-Path $llvmBin $n
+            if (Test-Path $c) { $llc = $c; break }
+          }
+          if (-not $llc) {
+            $found = Get-ChildItem -Path $llvmBin -Filter "llc*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $llc = $found.FullName }
+          }
+          if (-not $llc) { throw "no llc*.exe under $llvmBin (LLVM package layout changed)" }
           New-Item -ItemType Directory -Force internal\embed\windows\amd64 | Out-Null
-          Copy-Item "C:\Program Files\LLVM\bin\clang.exe" internal\embed\windows\amd64\
-          Copy-Item "C:\Program Files\LLVM\bin\llc.exe" internal\embed\windows\amd64\
-          Copy-Item "C:\Program Files\LLVM\bin\lld.exe" internal\embed\windows\amd64\
-          Copy-Item runtime\libfuji_runtime.a             internal\embed\windows\amd64\
+          Copy-Item $clang internal\embed\windows\amd64\clang.exe
+          Copy-Item $llc   internal\embed\windows\amd64\llc.exe
+          Copy-Item $lld   internal\embed\windows\amd64\lld.exe
+          Copy-Item runtime\libfuji_runtime.a internal\embed\windows\amd64\
 
       - name: Build fuji.exe
         run: go build -trimpath -tags release -ldflags="-s -w" -o fuji-windows-amd64.exe ./cmd/fuji
@@ -78,9 +93,11 @@ jobs:
           sudo apt-get install -y clang llvm
 
       - name: Build C runtime
+        shell: bash
         run: |
-          CLANG_BIN="$(command -v clang-18 || command -v clang || command -v cc || true)"
-          LLVM_AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar || command -v ar || true)"
+          set -euo pipefail
+          CLANG_BIN="$(command -v clang-20 || command -v clang-19 || command -v clang-18 || command -v clang || command -v cc || true)"
+          LLVM_AR_BIN="$(command -v llvm-ar-20 || command -v llvm-ar-19 || command -v llvm-ar-18 || command -v llvm-ar || command -v ar || true)"
           if [[ -z "$CLANG_BIN" ]]; then
             echo "no clang/cc found on PATH" >&2
             exit 1
@@ -97,9 +114,11 @@ jobs:
           "$LLVM_AR_BIN" rcs runtime/libfuji_runtime.a runtime/obj_linux/*.o
 
       - name: Populate embed/linux/amd64
+        shell: bash
         run: |
-          CLANG_BIN="$(command -v clang-18 || command -v clang || command -v cc || true)"
-          LLC_BIN="$(command -v llc-18 || command -v llc || true)"
+          set -euo pipefail
+          CLANG_BIN="$(command -v clang-20 || command -v clang-19 || command -v clang-18 || command -v clang || command -v cc || true)"
+          LLC_BIN="$(command -v llc-20 || command -v llc-19 || command -v llc-18 || command -v llc || true)"
           if [[ -z "$CLANG_BIN" ]]; then
             echo "no clang/cc found on PATH" >&2
             exit 1
@@ -120,7 +139,10 @@ jobs:
         run: go build -trimpath -tags release -ldflags="-s -w" -o fujiwrap-linux-amd64 ./cmd/wrapgen
 
       - name: Test
+        shell: bash
         run: |
+          set -euo pipefail
+          chmod +x fuji-linux-amd64 fujiwrap-linux-amd64
           ./fuji-linux-amd64 version
           ./fuji-linux-amd64 build tests/hello.fuji -o hello
           ./hello
@@ -148,9 +170,11 @@ jobs:
           sudo apt-get install -y clang llvm
 
       - name: Build C runtime
+        shell: bash
         run: |
-          CLANG_BIN="$(command -v clang-18 || command -v clang || command -v cc || true)"
-          LLVM_AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar || command -v ar || true)"
+          set -euo pipefail
+          CLANG_BIN="$(command -v clang-20 || command -v clang-19 || command -v clang-18 || command -v clang || command -v cc || true)"
+          LLVM_AR_BIN="$(command -v llvm-ar-20 || command -v llvm-ar-19 || command -v llvm-ar-18 || command -v llvm-ar || command -v ar || true)"
           if [[ -z "$CLANG_BIN" ]]; then
             echo "no clang/cc found on PATH" >&2
             exit 1
@@ -167,9 +191,11 @@ jobs:
           "$LLVM_AR_BIN" rcs runtime/libfuji_runtime.a runtime/obj_linux_arm64/*.o
 
       - name: Populate embed/linux/arm64
+        shell: bash
         run: |
-          CLANG_BIN="$(command -v clang-18 || command -v clang || command -v cc || true)"
-          LLC_BIN="$(command -v llc-18 || command -v llc || true)"
+          set -euo pipefail
+          CLANG_BIN="$(command -v clang-20 || command -v clang-19 || command -v clang-18 || command -v clang || command -v cc || true)"
+          LLC_BIN="$(command -v llc-20 || command -v llc-19 || command -v llc-18 || command -v llc || true)"
           if [[ -z "$CLANG_BIN" ]]; then
             echo "no clang/cc found on PATH" >&2
             exit 1
@@ -190,8 +216,10 @@ jobs:
         run: go build -trimpath -tags release -ldflags="-s -w" -o fujiwrap-linux-arm64 ./cmd/wrapgen
 
       - name: Test
+        shell: bash
         run: |
-          chmod +x fuji-linux-arm64
+          set -euo pipefail
+          chmod +x fuji-linux-arm64 fujiwrap-linux-arm64
           ./fuji-linux-arm64 version
           ./fuji-linux-arm64 build tests/hello.fuji -o hello
           ./hello
@@ -264,7 +292,10 @@ jobs:
         run: GOOS=darwin GOARCH=amd64 go build -trimpath -tags release -ldflags="-s -w" -o fujiwrap-darwin-amd64 ./cmd/wrapgen
 
       - name: Test
+        shell: bash
         run: |
+          set -euo pipefail
+          chmod +x fuji-darwin-arm64 fuji-darwin-amd64 fujiwrap-darwin-arm64 fujiwrap-darwin-amd64
           ./fuji-darwin-arm64 version
           ./fuji-darwin-arm64 build tests/hello.fuji -o hello
           ./hello
