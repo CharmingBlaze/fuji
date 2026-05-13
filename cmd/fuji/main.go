@@ -74,7 +74,7 @@ func parseRunCommandArgs(args []string) (src string, noOpt bool, err error) {
 }
 
 // version is set by release builds, e.g. -ldflags "-X main.version=1.0.0"
-var version = "0.3.2"
+var version = "0.4.0-dev"
 
 func main() {
 	args := os.Args[1:]
