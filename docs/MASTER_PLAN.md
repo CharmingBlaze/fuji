@@ -80,7 +80,7 @@ Legend: **Done** = meets plan intent in tree today · **Partial** = exists but m
 | **G5** | `fuji doctor` depth | **Partial** | Extend probes (disk, lld freshness, etc.) |
 | **H1** | Parser fuzzing | **Partial** | **`internal/parser/FuzzParse`** + Linux CI smoke (**`-fuzztime=5s`**); extend corpus/time |
 | **H2** | ASAN / Valgrind CI | **Open** | |
-| **H3** | Final integrated smoke script | **Partial** | **`.github/workflows/ci.yml`** runs the same native smoke on **Linux + macOS**; unify doc list |
+| **H3** | Final integrated smoke script | **Partial** | **`.github/workflows/ci.yml`** runs native smoke on **Ubuntu, macOS, and Windows**; unify doc list |
 
 ---
 

@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
       CGO_ENABLED: "0"
@@ -22,6 +22,14 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.22.x"
+
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm -y
+
+      - name: Add LLVM to PATH (Windows)
+        if: runner.os == 'Windows'
+        run: echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
 
       - name: Install GNU timeout (macOS)
         if: runner.os == 'macOS'
@@ -35,7 +43,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang llvm build-essential
 
-      - name: Build C runtime
+      - name: Build C runtime (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force runtime\obj_win | Out-Null
+          clang -c runtime\src\value.c        -O2 -std=c11 -Iruntime\src -D_AMD64_=1 -o runtime\obj_win\value.o
+          clang -c runtime\src\object.c       -O2 -std=c11 -Iruntime\src -D_AMD64_=1 -o runtime\obj_win\object.o
+          clang -c runtime\src\gc.c           -O2 -std=c11 -Iruntime\src -D_AMD64_=1 -o runtime\obj_win\gc.o
+          clang -c runtime\src\fuji_runtime.c -O2 -std=c11 -Iruntime\src -D_AMD64_=1 -o runtime\obj_win\fuji_runtime.o
+          llvm-ar rcs runtime\libfuji_runtime.a runtime\obj_win\value.o runtime\obj_win\object.o runtime\obj_win\gc.o runtime\obj_win\fuji_runtime.o
+
+      - name: Build C runtime (Linux / macOS)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
@@ -43,8 +62,16 @@ jobs:
             CC_BIN="$(xcrun --find clang)"
             AR_BIN="ar"
           else
-            CC_BIN="$(command -v clang-18 || command -v clang || command -v gcc)"
-            AR_BIN="$(command -v llvm-ar-18 || command -v llvm-ar || command -v ar)"
+            CC_BIN="$(command -v clang-20 || command -v clang-19 || command -v clang-18 || command -v clang || command -v gcc)"
+            AR_BIN="$(command -v llvm-ar-20 || command -v llvm-ar-19 || command -v llvm-ar-18 || command -v llvm-ar || command -v ar)"
+          fi
+          if [[ -z "$CC_BIN" || ! -x "$CC_BIN" ]]; then
+            echo "no C compiler found (tried clang-20 … gcc)" >&2
+            exit 1
+          fi
+          if [[ -z "$AR_BIN" || ! -x "$AR_BIN" ]]; then
+            echo "no archiver found (tried llvm-ar-20 … ar)" >&2
+            exit 1
           fi
           echo "Using CC: $CC_BIN"
           echo "Using AR: $AR_BIN"
@@ -55,6 +82,24 @@ jobs:
           "$CC_BIN" -c runtime/src/fuji_runtime.c -O2 -std=c11 -Iruntime/src -o runtime/obj/fuji_runtime.o
           "$AR_BIN" rcs runtime/libfuji_runtime.a runtime/obj/value.o runtime/obj/object.o runtime/obj/gc.o runtime/obj/fuji_runtime.o
 
+      - name: Export CI paths (GITHUB_ENV)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "FUJI_CI_BIN=$RUNNER_TEMP/fuji.exe" >> "$GITHUB_ENV"
+            echo "CI_ARTIFACT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+            echo "WRAPGEN_SMOKE_OUT=$RUNNER_TEMP/ci-out/raylib_wrapgen_smoke" >> "$GITHUB_ENV"
+          else
+            echo "FUJI_CI_BIN=/tmp/fuji" >> "$GITHUB_ENV"
+            echo "CI_ARTIFACT_DIR=/tmp/ci-out" >> "$GITHUB_ENV"
+            echo "WRAPGEN_SMOKE_OUT=/tmp/ci-out/raylib_wrapgen_smoke" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create CI artifact directory
+        shell: bash
+        run: mkdir -p "$CI_ARTIFACT_DIR"
+
       - name: Go vet
         run: go vet ./...
 
@@ -62,76 +107,58 @@ jobs:
         run: go test ./... -count=1
 
       - name: Build CLIs
+        shell: bash
         run: |
-          go build -trimpath -o /tmp/fuji ./cmd/fuji
-          go build -trimpath -o /tmp/fujiwrap ./cmd/wrapgen
-          go build -trimpath -o /tmp/wrapgen ./cmd/wrapgen
+          set -euo pipefail
+          go build -trimpath -o "$FUJI_CI_BIN" ./cmd/fuji
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            go build -trimpath -o "$RUNNER_TEMP/fujiwrap.exe" ./cmd/wrapgen
+          else
+            go build -trimpath -o /tmp/fujiwrap ./cmd/wrapgen
+            go build -trimpath -o /tmp/wrapgen ./cmd/wrapgen
+          fi
 
       - name: fuji fmt --check
-        run: /tmp/fuji fmt --check ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$FUJI_CI_BIN" fmt --check ./...
 
       - name: fuji check (sema, no LLVM)
         shell: bash
         run: |
           set -euo pipefail
-          /tmp/fuji check tests/hello.fuji
-          if /tmp/fuji check tests/undefined_var.fuji 2>/dev/null; then echo "expected check to fail"; exit 1; fi
-          if /tmp/fuji check tests/sema_errors.fuji 2>/dev/null; then echo "expected sema_errors check to fail"; exit 1; fi
-          if /tmp/fuji check tests/struct_typo_test.fuji 2>/dev/null; then echo "expected struct field typo check to fail"; exit 1; fi
+          "$FUJI_CI_BIN" check tests/hello.fuji
+          if "$FUJI_CI_BIN" check tests/undefined_var.fuji 2>/dev/null; then echo "expected check to fail"; exit 1; fi
+          if "$FUJI_CI_BIN" check tests/sema_errors.fuji 2>/dev/null; then echo "expected sema_errors check to fail"; exit 1; fi
+          if "$FUJI_CI_BIN" check tests/struct_typo_test.fuji 2>/dev/null; then echo "expected struct field typo check to fail"; exit 1; fi
 
-      - name: Native smoke (fuji build)
+      - name: Native smoke (fuji build / run)
+        shell: bash
+        run: bash scripts/ci-native-smoke.sh
+
+      - name: GC soak + stress smoke (Linux / macOS)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
-          /tmp/fuji build tests/smoke_native.fuji -o /tmp/smoke_native
-          test -x /tmp/smoke_native
-          /tmp/smoke_native | head -n 5
-          /tmp/fuji build tests/for_of_pairs.fuji -o /tmp/for_of_pairs
-          test -x /tmp/for_of_pairs
-          /tmp/for_of_pairs | head -n 10
-          /tmp/fuji build tests/nullish_assign.fuji -o /tmp/nullish_assign
-          /tmp/nullish_assign | head -n 5
-          /tmp/fuji build tests/for_of_dynamic_range.fuji -o /tmp/for_of_dynamic_range
-          /tmp/for_of_dynamic_range | head -n 5
-          /tmp/fuji build tests/defer_test.fuji -o /tmp/defer_test
-          /tmp/defer_test | head -n 5
-          /tmp/fuji build tests/assert_string_eq.fuji -o /tmp/assert_string_eq
-          /tmp/assert_string_eq | head -n 5
-          /tmp/fuji build tests/unary_plus_fold.fuji -o /tmp/unary_plus_fold
-          /tmp/unary_plus_fold | head -n 5
-          /tmp/fuji build tests/gc_shadow_multi_return_pop.fuji -o /tmp/gc_shadow_multi_return_pop
-          /tmp/gc_shadow_multi_return_pop | head -n 5
-          /tmp/fuji build tests/gc_control_test.fuji -o /tmp/gc_control_test
-          /tmp/gc_control_test | head -n 5
-          /tmp/fuji run tests/vec3_test.fuji
-          /tmp/fuji run tests/vec3_math_lerp_direct_test.fuji
-          /tmp/fuji run tests/math_lerp_member_test.fuji
-          /tmp/fuji run tests/array_push_growth_test.fuji
-          /tmp/fuji run tests/multi_while_flow_test.fuji
-          /tmp/fuji build --debug tests/hello.fuji -o /tmp/hello_debug
-          test -x /tmp/hello_debug
+          timeout 90s "$FUJI_CI_BIN" run tests/gc_pressure_expr.fuji
+          timeout 90s "$FUJI_CI_BIN" run tests/globals_perf.fuji
+          timeout 90s "$FUJI_CI_BIN" run tests/gc_soak.fuji
+          timeout 120s "$FUJI_CI_BIN" run --no-opt tests/nursery_test.fuji
+          timeout 120s "$FUJI_CI_BIN" run --no-opt tests/incremental_gc_test.fuji
+          timeout 90s "$FUJI_CI_BIN" run tests/stress/stress_mixed_alloc.fuji
+          timeout 120s "$FUJI_CI_BIN" run --no-opt tests/stress/large_game_sim.fuji
 
-      - name: GC soak (serialized, time-bounded)
-        shell: bash
-        run: |
-          set -euo pipefail
-          timeout 90s /tmp/fuji run tests/gc_pressure_expr.fuji
-          timeout 90s /tmp/fuji run tests/globals_perf.fuji
-          timeout 90s /tmp/fuji run tests/gc_soak.fuji
-          timeout 120s /tmp/fuji run --no-opt tests/nursery_test.fuji
-          timeout 120s /tmp/fuji run --no-opt tests/incremental_gc_test.fuji
-
-      - name: Stress smoke (time-bounded)
-        shell: bash
-        run: |
-          set -euo pipefail
-          timeout 90s /tmp/fuji run tests/stress/stress_mixed_alloc.fuji
-          timeout 120s /tmp/fuji run --no-opt tests/stress/large_game_sim.fuji
+      - name: GC soak + stress smoke (Windows)
+        if: runner.os == 'Windows'
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci-gc-stress-timed.ps1
 
       - name: Parser fuzz (smoke, 5s)
         run: go test ./internal/parser -fuzz=FuzzParse -fuzztime=5s -count=1
 
       - name: Wrapgen Raylib + link smoke
         env:
-          FUJI_BIN: /tmp/fuji
+          FUJI_BIN: ${{ env.FUJI_CI_BIN }}
+        shell: bash
         run: bash scripts/ci-wrapgen-raylib.sh

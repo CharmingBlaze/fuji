@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# PR CI: Raylib header + wrapgen + fuji link smoke.
-# Linux: apt installs lib when needed; macOS: Homebrew. Vendored stdlib/sys-include/raylib.h
-# supplies the header, but the native lib is still required to link the smoke binary.
+# PR CI: Raylib header + wrapgen + fuji link smoke (Linux, macOS, Windows Git Bash / MSYS).
+# Vendored stdlib/sys-include/raylib.h supplies the header; a matching native Raylib is
+# required to link the smoke binary (apt / brew / official MinGW prebuild zip on Windows).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,13 +12,19 @@ if [[ ! -f "runtime/libfuji_runtime.a" ]]; then
   exit 1
 fi
 
+uname_s="$(uname -s)"
+is_windows_msys=0
+case "$uname_s" in
+  MINGW* | MSYS* | CYGWIN*) is_windows_msys=1 ;;
+esac
+
 HDR=""
 if [[ -f "$ROOT/stdlib/sys-include/raylib.h" ]]; then
   HDR="$ROOT/stdlib/sys-include/raylib.h"
   echo "==> Using vendored raylib header: $HDR"
 else
-  echo "==> No stdlib/sys-include/raylib.h — installing system Raylib (Linux only path here)"
-  case "$(uname -s)" in
+  echo "==> No stdlib/sys-include/raylib.h — installing system Raylib where supported"
+  case "$uname_s" in
     Linux)
       sudo apt-get update -qq
       sudo apt-get install -y libraylib-dev pkg-config
@@ -33,6 +39,10 @@ else
         HDR="$_rb/include/raylib.h"
       fi
       ;;
+    *)
+      echo "raylib.h not found for OS: $uname_s (install dev package or restore stdlib/sys-include/raylib.h)" >&2
+      exit 1
+      ;;
   esac
   if [[ -z "$HDR" ]]; then
     echo "raylib.h not found (add stdlib/sys-include/raylib.h or install Raylib dev)"
@@ -41,12 +51,14 @@ else
   echo "    header: $HDR"
 fi
 
+RAYLIB_STAGE_WIN=""
+
 ensure_raylib_for_link() {
   if pkg-config --exists raylib 2>/dev/null; then
     echo "==> raylib pkg-config ok"
     return 0
   fi
-  case "$(uname -s)" in
+  case "$uname_s" in
     Linux)
       echo "==> Installing libraylib-dev for link (Linux)"
       sudo apt-get update -qq
@@ -61,8 +73,26 @@ ensure_raylib_for_link() {
         export PKG_CONFIG_PATH="${_pc}${PKG_CONFIG_PATH:+:}${PKG_CONFIG_PATH:-}"
       fi
       ;;
+    MINGW* | MSYS* | CYGWIN*)
+      echo "==> Windows MSYS: stage official raylib MinGW prebuild for link"
+      RAYLIB_VER="5.0"
+      RAYLIB_URL="https://github.com/raysan5/raylib/releases/download/${RAYLIB_VER}"
+      st="${RUNNER_TEMP:-${TMP:-/tmp}}/fuji-raylib-stage-$$"
+      mkdir -p "$st"
+      curl -fsSL "${RAYLIB_URL}/raylib-${RAYLIB_VER}_win64_mingw-w64.zip" -o "$st/dl.zip"
+      unzip -q "$st/dl.zip" -d "$st/out"
+      inner=""
+      for d in "$st/out"/*; do
+        [[ -d "${d}/include" && -d "${d}/lib" ]] && inner="$d" && break
+      done
+      if [[ -z "$inner" ]]; then
+        echo "unexpected raylib zip layout" >&2
+        exit 1
+      fi
+      RAYLIB_STAGE_WIN="$inner"
+      ;;
     *)
-      echo "Unsupported OS: $(uname -s)" >&2
+      echo "Unsupported OS for Raylib link: $uname_s" >&2
       exit 1
       ;;
   esac
@@ -89,10 +119,19 @@ if pkg-config --exists raylib 2>/dev/null; then
   export FUJI_LINKFLAGS
   FUJI_LINKFLAGS="$(pkg-config --libs --cflags raylib)"
 else
-  case "$(uname -s)" in
+  case "$uname_s" in
     Darwin)
       _rb="$(brew --prefix raylib)"
       export FUJI_LINKFLAGS="-I${_rb}/include -L${_rb}/lib -lraylib"
+      ;;
+    MINGW* | MSYS* | CYGWIN*)
+      if [[ -z "$RAYLIB_STAGE_WIN" ]]; then
+        echo "internal error: RAYLIB_STAGE_WIN empty" >&2
+        exit 1
+      fi
+      inc="$RAYLIB_STAGE_WIN/include"
+      lib="$RAYLIB_STAGE_WIN/lib"
+      export FUJI_LINKFLAGS="-I${inc} -L${lib} -lraylib -lopengl32 -lgdi32 -lwinmm"
       ;;
     *)
       export FUJI_LINKFLAGS="-I/usr/include -lraylib"
@@ -106,6 +145,14 @@ if [[ -z "$FUJI_BIN" || ! -x "$FUJI_BIN" ]]; then
   go build -trimpath -o "$FUJI_BIN" ./cmd/fuji
 fi
 
-"$FUJI_BIN" build "$ROOT/tests/raylib_wrapgen_smoke.fuji" -o /tmp/raylib_wrapgen_smoke
-test -x /tmp/raylib_wrapgen_smoke
-echo "==> OK: /tmp/raylib_wrapgen_smoke linked successfully"
+SMOKE_BASE="${WRAPGEN_SMOKE_OUT:-/tmp/raylib_wrapgen_smoke}"
+SMOKE_BASE="${SMOKE_BASE%.exe}"
+EXE=""
+if [[ "$is_windows_msys" -eq 1 ]]; then
+  EXE=.exe
+fi
+OUT_BIN="${SMOKE_BASE}${EXE}"
+
+"$FUJI_BIN" build "$ROOT/tests/raylib_wrapgen_smoke.fuji" -o "$OUT_BIN"
+test -x "$OUT_BIN"
+echo "==> OK: linked $OUT_BIN"

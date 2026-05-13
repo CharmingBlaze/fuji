@@ -21,7 +21,7 @@ Build the C runtime archive when linking native binaries (needed for **`go test`
 
 ## Tests
 
-GitHub Actions **CI** runs on **Ubuntu** and **macOS** on every push and pull request (`go vet`, `go test`, **`fuji fmt --check ./...`**, native smoke, GC soak, wrapgen Raylib link). From the repo root locally:
+GitHub Actions **CI** runs on **Ubuntu**, **macOS**, and **Windows** on every push and pull request (`go vet`, `go test`, **`fuji fmt --check ./...`**, native smoke, GC soak, stress smoke, parser fuzz, wrapgen Raylib link). See **`.github/workflows/ci.yml`** and **`scripts/ci-native-smoke.sh`**, **`scripts/ci-wrapgen-raylib.sh`**, **`scripts/ci-gc-stress-timed.ps1`**. From the repo root locally:
 
 ```bash
 go vet ./...

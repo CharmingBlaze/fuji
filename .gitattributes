@@ -1,0 +1,10 @@
+# Line endings: GitHub Actions runs bash on Linux/macOS from checked-out files.
+# CRLF in workflow `run: |` blocks or in *.sh scripts breaks the shell (`$'\r': command not found`, etc.).
+* text=auto
+
+.gitattributes text eol=lf
+.github/workflows/**/*.yml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+scripts/ci-*.ps1 text eol=lf

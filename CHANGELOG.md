@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **CI — Linux + macOS** — **`.github/workflows/ci.yml`** now runs the same pipeline on **`ubuntu-latest`** and **`macos-latest`** (GNU **`timeout`** via Homebrew **coreutils** on macOS). **`scripts/ci-wrapgen-raylib.sh`** installs native Raylib for linking on both OSes when using the vendored header.
+- **CI — Ubuntu, macOS, Windows** — **`.github/workflows/ci.yml`** matrix (**`ubuntu-latest`**, **`macos-latest`**, **`windows-latest`**) runs the same checks on every push/PR: C runtime build, **`go vet` / `go test`**, **`fuji fmt --check`**, **`fuji check`**, native compile/run smoke (**`scripts/ci-native-smoke.sh`**), time-bounded GC + stress (**GNU `timeout`** on Unix; **`scripts/ci-gc-stress-timed.ps1`** on Windows), parser fuzz, and Raylib wrapgen + link (**`scripts/ci-wrapgen-raylib.sh`**, including MinGW Raylib fetch on Windows Git Bash).
+- **Local C runtime (Unix)** — **`scripts/build-runtime.sh`** builds **`runtime/libfuji_runtime.a`** with the same compiler discovery as CI (clang-20 … gcc / llvm-ar … ar; Xcode **`clang`** on macOS).
 - **Docs / GitHub** — README and getting-started emphasize the **SDK zip** and that **`fuji` does not download LLVM or Raylib** at compile time (embedded toolchain unpacks locally only).
 - **`scripts/assemble-offline-sdk.ps1`** — Windows maintainers can assemble the same **offline SDK folder** as GitHub **`fuji-*-sdk-windows-amd64.zip`**. **`scripts/build-release.ps1`** supports **`-PackageSdk`** / **`-PackageSdkZip`** alongside **`-NoZip`**.
 
 ### Fixed
 
+- **CI (Linux / macOS / Windows)** — workflow YAML and repository **`*.sh`** scripts are normalized to **LF** line endings and **`.gitattributes`** forces **`eol=lf`** for them. CRLF in **`run: |`** blocks previously made bash fail immediately on GitHub-hosted runners (e.g. **`$'\r': command not found`**).
 - **`fuji fmt ./...`** — **`_legacy/`** is skipped (like **`_wg_*`** trees) so **`fuji fmt --check ./...`** passes when a legacy mirror exists in the tree.
 
 ## [0.3.0] - 2026-05-10

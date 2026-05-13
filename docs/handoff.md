@@ -56,7 +56,7 @@ Release builds (`**-tags release**`) embed **llc** / **clang** (and **lld** on W
 
 ## 4. Session checklist
 
-1. **`go test ./...`** (and **`go vet ./...`**) — same as **`.github/workflows/ci.yml`** (Linux + macOS).
+1. **`go test ./...`** (and **`go vet ./...`**) — same coverage as **`.github/workflows/ci.yml`** (Ubuntu, macOS, Windows).
 2. **`go build -o fuji ./cmd/fuji`** then **`fuji run tests/hello.fuji`**
 3. After runtime C changes: rebuild **`runtime/libfuji_runtime.a`** (see **`scripts/build-runtime.ps1`** / **`.sh`**)
 4. **`CHANGELOG.md`** — update **`[Unreleased]`** for user-visible compiler or runtime changes; see **[releasing.md](releasing.md)** to cut **`v*`** tags.
