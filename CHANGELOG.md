@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+## [0.3.1] - 2026-05-13
+
+Cross-platform CI (Windows + Linux + macOS), LF-safe workflows, offline SDK packaging helpers, and contributor docs for GitHub downloads.
+
+### Added
+
 - **CI — Ubuntu, macOS, Windows** — **`.github/workflows/ci.yml`** matrix (**`ubuntu-latest`**, **`macos-latest`**, **`windows-latest`**) runs the same checks on every push/PR: C runtime build, **`go vet` / `go test`**, **`fuji fmt --check`**, **`fuji check`**, native compile/run smoke (**`scripts/ci-native-smoke.sh`**), time-bounded GC + stress (**GNU `timeout`** on Unix; **`scripts/ci-gc-stress-timed.ps1`** on Windows), parser fuzz, and Raylib wrapgen + link (**`scripts/ci-wrapgen-raylib.sh`**, including MinGW Raylib fetch on Windows Git Bash).
 - **Local C runtime (Unix)** — **`scripts/build-runtime.sh`** builds **`runtime/libfuji_runtime.a`** with the same compiler discovery as CI (clang-20 … gcc / llvm-ar … ar; Xcode **`clang`** on macOS).
 - **Docs / GitHub** — README and getting-started emphasize the **SDK zip** and that **`fuji` does not download LLVM or Raylib** at compile time (embedded toolchain unpacks locally only).
